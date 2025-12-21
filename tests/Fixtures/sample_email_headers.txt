@@ -1,0 +1,18 @@
+Received: from mail.example.com ([192.0.2.1])
+	by mx.mxscan.me with ESMTP id abc123
+	for <test@mxscan.me>; Mon, 1 Oct 2025 05:00:00 +0000
+Return-Path: <sender@example.com>
+From: "Test Sender" <sender@example.com>
+To: test@mxscan.me
+Subject: Test Email for SPF/DKIM/DMARC
+Message-ID: <test123@example.com>
+Date: Mon, 1 Oct 2025 05:00:00 +0000
+DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed;
+ d=example.com; s=default;
+ h=from:to:subject:date:message-id;
+ bh=frcCV1k9oG9oKj3dpUqdJg1PxRT2RSN/XKdLCPjaYaY=;
+ b=InvalidSignatureForTestingPurposes
+Authentication-Results: mx.mxscan.me;
+ spf=pass smtp.mailfrom=sender@example.com;
+ dkim=pass header.d=example.com;
+ dmarc=pass header.from=example.com

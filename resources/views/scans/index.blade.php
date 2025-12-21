@@ -1,0 +1,124 @@
+@extends('layouts.app')
+
+@section('title', 'Scan History')
+
+@section('content')
+<div class="space-y-6">
+    <!-- Header -->
+    <div class="flex justify-between items-center">
+        <div>
+            <h1 class="text-2xl font-bold text-gray-900">Scan History</h1>
+            <p class="text-gray-600 mt-1">View all your domain security scans</p>
+        </div>
+        <a href="{{ route('dashboard.domains') }}" 
+           class="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+            <i data-lucide="plus" class="w-4 h-4 mr-2"></i>
+            New Scan
+        </a>
+    </div>
+
+    <!-- Scans List -->
+    <div class="bg-white rounded-lg shadow">
+        @if($scans->count() > 0)
+            <div class="overflow-hidden">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Domain
+                            </th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Status
+                            </th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Score
+                            </th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Date
+                            </th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Actions
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody class="bg-white divide-y divide-gray-200">
+                        @foreach($scans as $scan)
+                            <tr class="hover:bg-gray-50">
+                                <td class="px-6 py-4 whitespace-nowrap">
+                                    <div class="text-sm font-medium text-gray-900">
+                                        {{ $scan->domain->domain }}
+                                    </div>
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap">
+                                    @if($scan->status === 'finished')
+                                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                            <i data-lucide="check" class="w-3 h-3 mr-1"></i>
+                                            Completed
+                                        </span>
+                                    @elseif($scan->status === 'running')
+                                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                            <i data-lucide="loader" class="w-3 h-3 mr-1 animate-spin"></i>
+                                            Running
+                                        </span>
+                                    @elseif($scan->status === 'failed')
+                                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                                            <i data-lucide="x" class="w-3 h-3 mr-1"></i>
+                                            Failed
+                                        </span>
+                                    @else
+                                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                                            <i data-lucide="clock" class="w-3 h-3 mr-1"></i>
+                                            {{ ucfirst($scan->status) }}
+                                        </span>
+                                    @endif
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap">
+                                    @if($scan->score !== null)
+                                        <div class="text-sm font-medium 
+                                            @if($scan->score >= 80) text-green-600
+                                            @elseif($scan->score >= 60) text-yellow-600
+                                            @else text-red-600
+                                            @endif">
+                                            {{ $scan->score }}%
+                                        </div>
+                                    @else
+                                        <span class="text-gray-400">--</span>
+                                    @endif
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                    {{ $scan->created_at->format('M j, Y g:i A') }}
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                    <a href="{{ route('scans.show', $scan->id) }}" 
+                                       class="text-blue-600 hover:text-blue-900">
+                                        View Results
+                                    </a>
+                                </td>
+                            </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Pagination -->
+            <div class="px-6 py-4 border-t border-gray-200">
+                {{ $scans->links() }}
+            </div>
+        @else
+            <!-- Empty State -->
+            <div class="text-center py-12">
+                <div class="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <i data-lucide="search" class="w-8 h-8 text-gray-400"></i>
+                </div>
+                <h3 class="text-lg font-medium text-gray-900 mb-2">No scans yet</h3>
+                <p class="text-gray-600 mb-6">Start your first domain security scan to see results here.</p>
+                <a href="{{ route('dashboard.domains') }}" 
+                   class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700">
+                    <i data-lucide="plus" class="w-4 h-4 mr-2"></i>
+                    Add Domain & Scan
+                </a>
+            </div>
+        @endif
+    </div>
+</div>
+@endsection
