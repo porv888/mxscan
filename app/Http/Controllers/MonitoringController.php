@@ -22,7 +22,7 @@ class MonitoringController extends Controller
     {
         // Check if user can access monitoring features
         if (!Auth::user()->canUseMonitoring()) {
-            return redirect()->route('pricing')->with('error', 'Monitoring features are available with Premium and Ultra plans. Please upgrade to access incident tracking.');
+            return redirect()->route('billing')->with('error', 'Monitoring features are available with Premium and Ultra plans. Please upgrade to access incident tracking.');
         }
 
         $query = Incident::whereHas('domain', function ($q) {
@@ -66,7 +66,7 @@ class MonitoringController extends Controller
     {
         // Check if user can access monitoring features
         if (!Auth::user()->canUseMonitoring()) {
-            return redirect()->route('pricing')->with('error', 'Monitoring features are available with Premium and Ultra plans.');
+            return redirect()->route('billing')->with('error', 'Monitoring features are available with Premium and Ultra plans.');
         }
 
         // Check if user owns this incident's domain
@@ -86,7 +86,7 @@ class MonitoringController extends Controller
     {
         // Check if user can access monitoring features
         if (!Auth::user()->canUseMonitoring()) {
-            return redirect()->route('pricing')->with('error', 'Monitoring features are available with Premium and Ultra plans.');
+            return redirect()->route('billing')->with('error', 'Monitoring features are available with Premium and Ultra plans.');
         }
 
         $query = ScanSnapshot::whereHas('domain', function ($q) {
@@ -118,7 +118,7 @@ class MonitoringController extends Controller
     {
         // Check if user can access monitoring features
         if (!Auth::user()->canUseMonitoring()) {
-            return redirect()->route('pricing')->with('error', 'Monitoring features are available with Premium and Ultra plans.');
+            return redirect()->route('billing')->with('error', 'Monitoring features are available with Premium and Ultra plans.');
         }
 
         // Check if user owns this snapshot's domain
