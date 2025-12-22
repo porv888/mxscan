@@ -11,8 +11,25 @@ class PlanController extends Controller
 {
     public function pricing()
     {
-        $plans = Plan::where('active', true)->orderBy('domain_limit')->get();
-        return view('billing.pricing', compact('plans'));
+        $dbPlans = Plan::where('active', true)->orderBy('domain_limit')->get();
+        
+        $plans = $dbPlans->map(function ($plan) {
+            return [
+                'id' => $plan->id,
+                'name' => $plan->name,
+                'key' => strtolower($plan->name),
+                'limit' => $plan->domain_limit,
+                'price' => $plan->price,
+                'currency' => $plan->currency,
+                'interval' => $plan->interval,
+                'has_monthly' => true,
+                'has_yearly' => false,
+            ];
+        });
+        
+        $enableYearly = false;
+        
+        return view('billing.pricing', compact('plans', 'enableYearly'));
     }
 
     public function change(Request $request)
