@@ -18,10 +18,8 @@
                 @csrf
                 <input type="hidden" name="mode" value="full">
                 <button class="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-600 transition-colors">
-                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
-                    </svg>
-                    Re-scan
+                    <i data-lucide="scan" class="w-4 h-4 mr-2"></i>
+                    Scan
                 </button>
             </form>
             <button onclick="downloadReport()" class="inline-flex items-center px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-600 dark:hover:bg-gray-700 transition-colors">
@@ -71,6 +69,7 @@
                     'records' => $records,
                     'spfLookupCount' => $spfLookupCount,
                     'domain' => $domain,
+                    'dmarcStatus' => $dmarcStatus ?? null,
                 ])
             @endif
 
@@ -135,10 +134,8 @@
                     </div>
                     
                     <button type="submit" class="w-full inline-flex items-center justify-center px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-600 transition-colors">
-                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
-                        </svg>
-                        Re-scan Selected
+                        <i data-lucide="scan" class="w-4 h-4 mr-2"></i>
+                        Scan Selected
                     </button>
                 </form>
 

@@ -19,14 +19,43 @@ class ScanController extends Controller
     /**
      * Display a listing of scans.
      */
-    public function index()
+    public function index(Request $request)
     {
-        $scans = Scan::with('domain')
-            ->where('user_id', Auth::id())
-            ->orderBy('created_at', 'desc')
-            ->paginate(20);
+        $query = Scan::with('domain')
+            ->where('user_id', Auth::id());
 
-        return view('scans.index', compact('scans'));
+        // Apply filters
+        $filter = $request->get('filter');
+        if ($filter === 'failed') {
+            $query->where('status', 'failed');
+        } elseif ($filter === 'dropped') {
+            // Scans where score dropped compared to previous
+            $query->whereRaw('score < (SELECT s2.score FROM ' . (new Scan)->getTable() . ' s2 WHERE s2.domain_id = ' . (new Scan)->getTable() . '.domain_id AND s2.id < ' . (new Scan)->getTable() . '.id ORDER BY s2.id DESC LIMIT 1)');
+        } elseif ($filter === 'week') {
+            $query->where('created_at', '>=', now()->subDays(7));
+        }
+
+        $scans = $query->orderBy('created_at', 'desc')->paginate(20);
+
+        // Calculate score deltas for each scan
+        foreach ($scans as $scan) {
+            $previousScan = Scan::where('domain_id', $scan->domain_id)
+                ->where('id', '<', $scan->id)
+                ->whereNotNull('score')
+                ->orderBy('id', 'desc')
+                ->first();
+            
+            $scan->score_delta = $previousScan && $scan->score !== null 
+                ? $scan->score - $previousScan->score 
+                : null;
+        }
+
+        // Get filter counts for badges
+        $totalCount = Scan::where('user_id', Auth::id())->count();
+        $failedCount = Scan::where('user_id', Auth::id())->where('status', 'failed')->count();
+        $weekCount = Scan::where('user_id', Auth::id())->where('created_at', '>=', now()->subDays(7))->count();
+
+        return view('scans.index', compact('scans', 'filter', 'totalCount', 'failedCount', 'weekCount'));
     }
 
     // Cooldown in seconds between scans per domain
@@ -346,6 +375,9 @@ class ScanController extends Controller
             $cadence = $frequency === 'daily' ? 'daily' : ($frequency === 'weekly' ? 'weekly' : 'off');
         }
 
+        // Get unified DMARC setup status for the DMARC Visibility block
+        $dmarcStatus = app(\App\Services\Dmarc\DmarcStatusService::class)->getStatus($domain);
+
         return view('scans.show', compact(
             'scan',
             'domain',
@@ -373,7 +405,8 @@ class ScanController extends Controller
             'sslDays',
             'incidents',
             'deliveries',
-            'cadence'
+            'cadence',
+            'dmarcStatus'
         ));
     }
 

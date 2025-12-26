@@ -77,13 +77,20 @@ class DmarcIngestService
                     'status' => 'stored',
                 ]);
 
-                // forward to parser or queue a job
+                // Queue job to process the report
                 try {
-                    $this->forward($ingest);
-                    $ingest->update(['status' => 'forwarded']);
+                    \App\Jobs\ProcessDmarcReport::dispatch($ingest);
+                    $ingest->update(['status' => 'queued']);
                 } catch (\Throwable $e) {
-                    Log::error('DMARC forward failed', ['id' => $ingest->id, 'e' => $e->getMessage()]);
-                    $ingest->update(['status' => 'failed', 'error' => $e->getMessage()]);
+                    Log::error('DMARC job dispatch failed', ['id' => $ingest->id, 'e' => $e->getMessage()]);
+                    // Try forwarding as fallback
+                    try {
+                        $this->forward($ingest);
+                        $ingest->update(['status' => 'forwarded']);
+                    } catch (\Throwable $e2) {
+                        Log::error('DMARC forward failed', ['id' => $ingest->id, 'e' => $e2->getMessage()]);
+                        $ingest->update(['status' => 'failed', 'error' => $e2->getMessage()]);
+                    }
                 }
 
                 $storedCount++;

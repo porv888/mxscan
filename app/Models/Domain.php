@@ -24,7 +24,15 @@ class Domain extends Model
         'ssl_expires_at',
         'ssl_expiry_source',
         'ssl_expiry_detected_at',
+        'dmarc_token',
+        'dmarc_last_report_at',
+        'dmarc_rua_verified_at',
     ];
+
+    // DMARC Activity state constants
+    const DMARC_STATE_ACTION_REQUIRED = 'action_required';
+    const DMARC_STATE_DNS_CONFIRMED_WAITING = 'dns_confirmed_waiting';
+    const DMARC_STATE_ACTIVE = 'active';
 
     protected function casts(): array
     {
@@ -36,6 +44,8 @@ class Domain extends Model
             'domain_expiry_detected_at' => 'datetime',
             'ssl_expires_at' => 'datetime',
             'ssl_expiry_detected_at' => 'datetime',
+            'dmarc_last_report_at' => 'datetime',
+            'dmarc_rua_verified_at' => 'datetime',
         ];
     }
 
@@ -297,5 +307,313 @@ class Domain extends Model
         }
 
         return 'green'; // Safe
+    }
+
+    /**
+     * Get the DMARC reports for the domain.
+     */
+    public function dmarcReports()
+    {
+        return $this->hasMany(DmarcReport::class);
+    }
+
+    /**
+     * Get the DMARC records for the domain.
+     */
+    public function dmarcRecords()
+    {
+        return $this->hasMany(DmarcRecord::class);
+    }
+
+    /**
+     * Get the DMARC daily stats for the domain.
+     */
+    public function dmarcDailyStats()
+    {
+        return $this->hasMany(DmarcDailyStat::class);
+    }
+
+    /**
+     * Get the DMARC senders for the domain.
+     */
+    public function dmarcSenders()
+    {
+        return $this->hasMany(DmarcSender::class);
+    }
+
+    /**
+     * Get the DMARC events for the domain.
+     */
+    public function dmarcEvents()
+    {
+        return $this->hasMany(DmarcEvent::class);
+    }
+
+    /**
+     * Get the DMARC alert settings for the domain.
+     */
+    public function dmarcAlertSettings()
+    {
+        return $this->hasMany(DmarcAlertSetting::class);
+    }
+
+    /**
+     * Generate or get the DMARC token for this domain.
+     */
+    public function getDmarcToken(): string
+    {
+        if (!$this->dmarc_token) {
+            $this->dmarc_token = $this->generateDmarcToken();
+            $this->save();
+        }
+        return $this->dmarc_token;
+    }
+
+    /**
+     * Generate a unique DMARC token.
+     */
+    protected function generateDmarcToken(): string
+    {
+        do {
+            $token = bin2hex(random_bytes(12)); // 24 char hex string
+        } while (static::where('dmarc_token', $token)->exists());
+        
+        return $token;
+    }
+
+    /**
+     * Get the full DMARC RUA email address.
+     */
+    public function getDmarcRuaEmailAttribute(): string
+    {
+        return 'dmarc+' . $this->getDmarcToken() . '@mxscan.me';
+    }
+
+    /**
+     * Check if DMARC reports are being received (within last 48 hours).
+     */
+    public function isDmarcActive(): bool
+    {
+        if (!$this->dmarc_last_report_at) {
+            return false;
+        }
+        return $this->dmarc_last_report_at->gte(now()->subHours(48));
+    }
+
+    /**
+     * Check if the MXScan RUA address is configured in the domain's DMARC DNS record.
+     */
+    public function isDmarcRuaConfigured(): bool
+    {
+        $latestScan = $this->scans()->where('status', 'completed')->latest()->first();
+        
+        if (!$latestScan || !isset($latestScan->facts_json['dmarc'])) {
+            return false;
+        }
+        
+        $dmarcRecord = $latestScan->facts_json['dmarc'];
+        if (!$dmarcRecord) {
+            return false;
+        }
+        
+        // Check if our RUA address is in the DMARC record
+        return str_contains(strtolower($dmarcRecord), strtolower($this->dmarc_rua_email));
+    }
+
+    /**
+     * Get the current DMARC record from DNS (from latest scan).
+     */
+    public function getDmarcRecordAttribute(): ?string
+    {
+        $latestScan = $this->scans()->where('status', 'completed')->latest()->first();
+        
+        if (!$latestScan || !isset($latestScan->facts_json['dmarc'])) {
+            return null;
+        }
+        
+        return $latestScan->facts_json['dmarc'];
+    }
+
+    /**
+     * Get DMARC status label.
+     */
+    public function getDmarcStatusAttribute(): string
+    {
+        if (!$this->dmarc_last_report_at) {
+            return 'waiting';
+        }
+        return $this->isDmarcActive() ? 'active' : 'inactive';
+    }
+
+    /**
+     * Get the DMARC Activity state for this domain.
+     * 
+     * States:
+     * - ACTION_REQUIRED: No DMARC record OR DMARC exists but doesn't include our RUA
+     * - DNS_CONFIRMED_WAITING: DMARC record exists with our RUA, but no reports received yet
+     * - ACTIVE: At least one DMARC report has been ingested
+     */
+    public function getDmarcActivityState(): string
+    {
+        // State C: ACTIVE - Reports have been received
+        if ($this->dmarc_last_report_at) {
+            return self::DMARC_STATE_ACTIVE;
+        }
+
+        // State B: DNS_CONFIRMED_WAITING - RUA verified but no reports yet
+        if ($this->dmarc_rua_verified_at || $this->isDmarcRuaConfigured()) {
+            return self::DMARC_STATE_DNS_CONFIRMED_WAITING;
+        }
+
+        // State A: ACTION_REQUIRED - Need to add/update DNS record
+        return self::DMARC_STATE_ACTION_REQUIRED;
+    }
+
+    /**
+     * Check if DMARC record exists in DNS (regardless of RUA).
+     */
+    public function hasDmarcRecord(): bool
+    {
+        $latestScan = $this->scans()->where('status', 'finished')->latest()->first();
+        
+        if (!$latestScan) {
+            return false;
+        }
+
+        // Check facts_json first
+        $factsJson = $latestScan->facts_json;
+        if (is_array($factsJson) && !empty($factsJson['dmarc'])) {
+            return true;
+        }
+
+        // Check result_json (alternative format)
+        $resultJson = $latestScan->result_json;
+        if (is_array($resultJson)) {
+            $dmarcData = $resultJson['dns']['records']['DMARC'] ?? $resultJson['DMARC'] ?? null;
+            if ($dmarcData && isset($dmarcData['status']) && $dmarcData['status'] === 'found') {
+                return true;
+            }
+        }
+        
+        return false;
+    }
+
+    /**
+     * Check if DMARC record exists but RUA points elsewhere (not to our token).
+     */
+    public function hasDmarcButNotOurRua(): bool
+    {
+        if (!$this->hasDmarcRecord()) {
+            return false;
+        }
+        
+        return !$this->isDmarcRuaConfigured();
+    }
+
+    /**
+     * Verify DMARC RUA configuration from DNS and update verification timestamp.
+     * Returns true if our RUA is configured.
+     */
+    public function verifyAndSyncDmarcRua(): bool
+    {
+        $isConfigured = $this->isDmarcRuaConfigured();
+        
+        if ($isConfigured && !$this->dmarc_rua_verified_at) {
+            // RUA is configured but we haven't recorded verification yet
+            $this->update(['dmarc_rua_verified_at' => now()]);
+        } elseif (!$isConfigured && $this->dmarc_rua_verified_at) {
+            // RUA was removed from DNS, clear verification
+            $this->update(['dmarc_rua_verified_at' => null]);
+        }
+        
+        return $isConfigured;
+    }
+
+    /**
+     * Perform a fresh DNS check for DMARC RUA configuration.
+     * This bypasses cached scan results and checks DNS directly.
+     */
+    public function checkDmarcRuaFromDns(): bool
+    {
+        try {
+            $dmarcRecords = dns_get_record("_dmarc.{$this->domain}", DNS_TXT);
+            $dmarcRecord = !empty($dmarcRecords) ? $dmarcRecords[0]['txt'] ?? null : null;
+            
+            if (!$dmarcRecord) {
+                // No DMARC record found
+                if ($this->dmarc_rua_verified_at) {
+                    $this->update(['dmarc_rua_verified_at' => null]);
+                }
+                return false;
+            }
+            
+            // Check if our RUA address is in the DMARC record
+            $isConfigured = str_contains(strtolower($dmarcRecord), strtolower($this->dmarc_rua_email));
+            
+            if ($isConfigured && !$this->dmarc_rua_verified_at) {
+                $this->update(['dmarc_rua_verified_at' => now()]);
+            } elseif (!$isConfigured && $this->dmarc_rua_verified_at) {
+                $this->update(['dmarc_rua_verified_at' => null]);
+            }
+            
+            return $isConfigured;
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::warning('DMARC DNS check failed', [
+                'domain' => $this->domain,
+                'error' => $e->getMessage()
+            ]);
+            return false;
+        }
+    }
+
+    /**
+     * Get DMARC Activity state label for display.
+     */
+    public function getDmarcActivityStateLabelAttribute(): string
+    {
+        return match ($this->getDmarcActivityState()) {
+            self::DMARC_STATE_ACTION_REQUIRED => 'Needs DNS Record',
+            self::DMARC_STATE_DNS_CONFIRMED_WAITING => 'Waiting for Reports',
+            self::DMARC_STATE_ACTIVE => 'Active',
+            default => 'Unknown',
+        };
+    }
+
+    /**
+     * Get DMARC Activity state badge color for display.
+     */
+    public function getDmarcActivityStateBadgeColorAttribute(): string
+    {
+        return match ($this->getDmarcActivityState()) {
+            self::DMARC_STATE_ACTION_REQUIRED => 'amber',
+            self::DMARC_STATE_DNS_CONFIRMED_WAITING => 'blue',
+            self::DMARC_STATE_ACTIVE => 'green',
+            default => 'gray',
+        };
+    }
+
+    /**
+     * Get the unified DMARC setup status using DmarcStatusService.
+     * This is the single source of truth for DMARC status across all pages.
+     * 
+     * @param int $staleThresholdDays Days after which reports are considered stale
+     * @return array
+     */
+    public function getDmarcSetupStatus(int $staleThresholdDays = 7): array
+    {
+        return app(\App\Services\Dmarc\DmarcStatusService::class)->getStatus($this, $staleThresholdDays);
+    }
+
+    /**
+     * Check if DMARC record has any RUA address (regardless of destination).
+     */
+    public function hasDmarcRua(): bool
+    {
+        $dmarcRecord = $this->dmarc_record;
+        if (!$dmarcRecord) {
+            return false;
+        }
+        
+        return (bool) preg_match('/rua\s*=\s*mailto:/i', $dmarcRecord);
     }
 }

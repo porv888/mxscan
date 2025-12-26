@@ -15,12 +15,91 @@
             showUpgrade: false,
             showToast: false,
             toastText: '',
-            toastType: 'info'
+            toastType: 'info',
+            sidebarOpen: false
          }"
          @open-upgrade.window="showUpgrade = true"
          @toast.window="showToast = true; toastText = $event.detail.text; toastType = $event.detail.type; setTimeout(() => showToast = false, 3000)">
+        
+        <!-- Mobile sidebar overlay -->
+        <div x-show="sidebarOpen" 
+             x-transition:enter="transition-opacity ease-linear duration-300"
+             x-transition:enter-start="opacity-0"
+             x-transition:enter-end="opacity-100"
+             x-transition:leave="transition-opacity ease-linear duration-300"
+             x-transition:leave-start="opacity-100"
+             x-transition:leave-end="opacity-0"
+             class="fixed inset-0 bg-gray-600 bg-opacity-75 z-40 md:hidden"
+             @click="sidebarOpen = false"
+             x-cloak></div>
+
+        <!-- Mobile sidebar -->
+        <div x-show="sidebarOpen"
+             x-transition:enter="transition ease-in-out duration-300 transform"
+             x-transition:enter-start="-translate-x-full"
+             x-transition:enter-end="translate-x-0"
+             x-transition:leave="transition ease-in-out duration-300 transform"
+             x-transition:leave-start="translate-x-0"
+             x-transition:leave-end="-translate-x-full"
+             class="fixed inset-y-0 left-0 z-50 w-64 bg-white shadow-xl md:hidden"
+             x-cloak>
+            <div class="flex items-center justify-between px-4 pt-5 pb-4 border-b border-gray-200">
+                <div class="flex items-center">
+                    <i data-lucide="shield-check" class="h-8 w-8 text-blue-600"></i>
+                    <h1 class="ml-3 text-xl font-bold text-gray-900">EmailSec</h1>
+                </div>
+                <button @click="sidebarOpen = false" class="p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100">
+                    <i data-lucide="x" class="h-6 w-6"></i>
+                </button>
+            </div>
+            <nav class="flex-1 px-2 py-4 space-y-1 overflow-y-auto">
+                <a href="{{ route('dashboard') }}" 
+                   class="group flex items-center px-2 py-2 text-sm font-medium rounded-md {{ request()->routeIs('dashboard') ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900' }}">
+                    <i data-lucide="layout-dashboard" class="mr-3 h-5 w-5 {{ request()->routeIs('dashboard') ? 'text-blue-500' : 'text-gray-400' }}"></i>
+                    Dashboard
+                </a>
+                <a href="{{ route('dashboard.domains') }}" 
+                   class="group flex items-center px-2 py-2 text-sm font-medium rounded-md {{ request()->routeIs('dashboard.domains*') ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900' }}">
+                    <i data-lucide="globe" class="mr-3 h-5 w-5 {{ request()->routeIs('dashboard.domains*') ? 'text-blue-500' : 'text-gray-400' }}"></i>
+                    Domains
+                </a>
+                <a href="{{ route('schedules.index') }}" 
+                   class="group flex items-center px-2 py-2 text-sm font-medium rounded-md {{ request()->routeIs('schedules*') ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900' }}">
+                    <i data-lucide="calendar" class="mr-3 h-5 w-5 {{ request()->routeIs('schedules*') ? 'text-blue-500' : 'text-gray-400' }}"></i>
+                    Schedules
+                </a>
+                <a href="{{ route('dashboard.scans') }}" 
+                   class="group flex items-center px-2 py-2 text-sm font-medium rounded-md {{ request()->routeIs('dashboard.scans*') ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900' }}">
+                    <i data-lucide="search" class="mr-3 h-5 w-5 {{ request()->routeIs('dashboard.scans*') ? 'text-blue-500' : 'text-gray-400' }}"></i>
+                    Scans
+                </a>
+                @if(auth()->user()->canUseMonitoring())
+                    <a href="{{ route('monitoring.incidents') }}" 
+                       class="group flex items-center px-2 py-2 text-sm font-medium rounded-md {{ request()->routeIs('monitoring.*') ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900' }}">
+                        <i data-lucide="alert-triangle" class="mr-3 h-5 w-5 {{ request()->routeIs('monitoring.*') ? 'text-blue-500' : 'text-gray-400' }}"></i>
+                        Monitoring
+                    </a>
+                @endif
+                <a href="{{ route('delivery-monitoring.index') }}" 
+                   class="group flex items-center px-2 py-2 text-sm font-medium rounded-md {{ request()->routeIs('delivery-monitoring.*') ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900' }}">
+                    <i data-lucide="mail" class="mr-3 h-5 w-5 {{ request()->routeIs('delivery-monitoring.*') ? 'text-blue-500' : 'text-gray-400' }}"></i>
+                    Delivery
+                </a>
+                <a href="{{ route('dmarc.index') }}" 
+                   class="group flex items-center px-2 py-2 text-sm font-medium rounded-md {{ request()->routeIs('dmarc.*') ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900' }}">
+                    <i data-lucide="file-bar-chart" class="mr-3 h-5 w-5 {{ request()->routeIs('dmarc.*') ? 'text-blue-500' : 'text-gray-400' }}"></i>
+                    DMARC Activity
+                </a>
+                <a href="{{ route('dashboard.profile') }}" 
+                   class="group flex items-center px-2 py-2 text-sm font-medium rounded-md {{ request()->routeIs('dashboard.profile') ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900' }}">
+                    <i data-lucide="user" class="mr-3 h-5 w-5 {{ request()->routeIs('dashboard.profile') ? 'text-blue-500' : 'text-gray-400' }}"></i>
+                    Profile
+                </a>
+            </nav>
+        </div>
+
         <div class="flex">
-            <!-- Sidebar -->
+            <!-- Desktop Sidebar -->
             <div class="hidden md:flex md:w-64 md:flex-col">
                 <div class="flex flex-col flex-grow pt-5 overflow-y-auto bg-white border-r border-gray-200">
                     <div class="flex items-center flex-shrink-0 px-4">
@@ -58,9 +137,16 @@
                             
                             @if(auth()->user()->canUseMonitoring())
                                 <a href="{{ route('monitoring.incidents') }}" 
-                                   class="group flex items-center px-2 py-2 text-sm font-medium rounded-md {{ request()->routeIs('monitoring.incidents*') || request()->routeIs('monitoring.snapshots*') ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900' }}">
-                                    <i data-lucide="alert-triangle" class="mr-3 h-5 w-5 {{ request()->routeIs('monitoring.incidents*') || request()->routeIs('monitoring.snapshots*') ? 'text-blue-500' : 'text-gray-400 group-hover:text-gray-500' }}"></i>
-                                    Monitoring
+                                   class="group flex items-center justify-between px-2 py-2 text-sm font-medium rounded-md {{ request()->routeIs('monitoring.incidents*') || request()->routeIs('monitoring.snapshots*') ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900' }}">
+                                    <span class="flex items-center">
+                                        <i data-lucide="alert-triangle" class="mr-3 h-5 w-5 {{ request()->routeIs('monitoring.incidents*') || request()->routeIs('monitoring.snapshots*') ? 'text-blue-500' : 'text-gray-400 group-hover:text-gray-500' }}"></i>
+                                        Monitoring
+                                    </span>
+                                    @if(($sidebarIncidentCount ?? 0) > 0)
+                                        <span class="inline-flex items-center justify-center px-2 py-0.5 text-xs font-bold rounded-full bg-red-100 text-red-700">
+                                            {{ $sidebarIncidentCount > 99 ? '99+' : $sidebarIncidentCount }}
+                                        </span>
+                                    @endif
                                 </a>
                             @endif
                             
@@ -68,6 +154,12 @@
                                class="group flex items-center px-2 py-2 text-sm font-medium rounded-md {{ request()->routeIs('delivery-monitoring.*') ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900' }}">
                                 <i data-lucide="mail" class="mr-3 h-5 w-5 {{ request()->routeIs('delivery-monitoring.*') ? 'text-blue-500' : 'text-gray-400 group-hover:text-gray-500' }}"></i>
                                 Delivery
+                            </a>
+                            
+                            <a href="{{ route('dmarc.index') }}" 
+                               class="group flex items-center px-2 py-2 text-sm font-medium rounded-md {{ request()->routeIs('dmarc.*') ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900' }}">
+                                <i data-lucide="file-bar-chart" class="mr-3 h-5 w-5 {{ request()->routeIs('dmarc.*') ? 'text-blue-500' : 'text-gray-400 group-hover:text-gray-500' }}"></i>
+                                DMARC Activity
                             </a>
                             
                             <a href="{{ route('dashboard.profile') }}" 
@@ -88,8 +180,7 @@
                         <!-- Mobile menu button -->
                         <button type="button" 
                                 class="md:hidden inline-flex items-center justify-center p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500"
-                                x-data="{ sidebarOpen: false }" 
-                                @click="sidebarOpen = !sidebarOpen">
+                                @click="sidebarOpen = true">
                             <i data-lucide="menu" class="h-6 w-6"></i>
                         </button>
 

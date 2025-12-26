@@ -37,59 +37,147 @@
                     $latestSpfCheck = $domain->latestSpfCheck;
                     $daysDomain = $domain->getDaysUntilDomainExpiry();
                     $daysSsl = $domain->getDaysUntilSslExpiry();
-                    $incidentCount = $domain->scans()
-                        ->where('created_at', '>=', now()->subDays(30))
-                        ->where('score', '<', 80)
-                        ->count();
-                    $statusConfig = [
-                        'active' => ['bg-green-100', 'text-green-700', 'check-circle'],
-                        'pending' => ['bg-yellow-100', 'text-yellow-700', 'clock'],
-                        'error' => ['bg-red-100', 'text-red-700', 'alert-circle'],
-                        'scanning' => ['bg-blue-100', 'text-blue-700', 'loader']
-                    ];
-                    $config = $statusConfig[$domain->status] ?? $statusConfig['pending'];
+                    
+                    // Determine worst issue for this domain (priority order)
+                    $worstIssue = null;
+                    $worstSeverity = 'ok';
+                    $worstIcon = 'check-circle';
+                    $worstAction = null;
+                    $worstActionUrl = null;
+                    
+                    // Priority 1: Blacklisted (critical)
+                    if ($domain->blacklist_status === 'listed') {
+                        $worstIssue = $domain->blacklist_count . ' blacklist' . ($domain->blacklist_count > 1 ? 's' : '');
+                        $worstSeverity = 'critical';
+                        $worstIcon = 'shield-alert';
+                        $worstAction = 'Delist Now';
+                        $latestScan = $domain->scans()->latest()->first();
+                        $worstActionUrl = $latestScan ? route('scans.show', $latestScan) : null;
+                    }
+                    // Priority 2: Low score (critical if <60, warning if <80)
+                    elseif ($domain->score_last !== null && $domain->score_last < 60) {
+                        $worstIssue = 'Score ' . $domain->score_last . '% - needs attention';
+                        $worstSeverity = 'critical';
+                        $worstIcon = 'trending-down';
+                        $worstAction = 'View Report';
+                        $latestScan = $domain->scans()->latest()->first();
+                        $worstActionUrl = $latestScan ? route('scans.show', $latestScan) : null;
+                    }
+                    // Priority 3: Domain/SSL expiring soon
+                    elseif (($daysDomain !== null && $daysDomain < 7) || ($daysSsl !== null && $daysSsl < 7)) {
+                        $expiringWhat = ($daysDomain !== null && $daysDomain < 7) ? 'Domain' : 'SSL';
+                        $expiringDays = ($daysDomain !== null && $daysDomain < 7) ? $daysDomain : $daysSsl;
+                        $worstIssue = $expiringWhat . ' expires in ' . $expiringDays . ' days';
+                        $worstSeverity = 'critical';
+                        $worstIcon = 'calendar-x';
+                        $worstAction = 'Renew';
+                        $worstActionUrl = route('dashboard.domains.edit', $domain);
+                    }
+                    // Priority 4: SPF over limit
+                    elseif ($latestSpfCheck && $latestSpfCheck->lookup_count >= 10) {
+                        $worstIssue = 'SPF exceeds 10 lookups (' . $latestSpfCheck->lookup_count . ')';
+                        $worstSeverity = 'warning';
+                        $worstIcon = 'mail-warning';
+                        $worstAction = 'Fix SPF';
+                        $worstActionUrl = route('spf.show', $domain);
+                    }
+                    // Priority 5: Score warning (60-79)
+                    elseif ($domain->score_last !== null && $domain->score_last < 80) {
+                        $worstIssue = 'Score ' . $domain->score_last . '% - room to improve';
+                        $worstSeverity = 'warning';
+                        $worstIcon = 'alert-circle';
+                        $worstAction = 'View Report';
+                        $latestScan = $domain->scans()->latest()->first();
+                        $worstActionUrl = $latestScan ? route('scans.show', $latestScan) : null;
+                    }
+                    // Priority 6: Expiring within 30 days
+                    elseif (($daysDomain !== null && $daysDomain < 30) || ($daysSsl !== null && $daysSsl < 30)) {
+                        $expiringWhat = ($daysDomain !== null && $daysDomain < 30) ? 'Domain' : 'SSL';
+                        $expiringDays = ($daysDomain !== null && $daysDomain < 30) ? $daysDomain : $daysSsl;
+                        $worstIssue = $expiringWhat . ' expires in ' . $expiringDays . ' days';
+                        $worstSeverity = 'warning';
+                        $worstIcon = 'calendar';
+                        $worstAction = 'Renew';
+                        $worstActionUrl = route('dashboard.domains.edit', $domain);
+                    }
+                    // Priority 7: Never scanned
+                    elseif (!$domain->scans()->exists()) {
+                        $worstIssue = 'Never scanned';
+                        $worstSeverity = 'info';
+                        $worstIcon = 'scan';
+                        $worstAction = 'Scan';
+                        $worstActionUrl = null; // Will use form
+                    }
                 @endphp
 
-                <div class="bg-white rounded-xl border border-gray-200 hover:border-gray-300 hover:shadow-md transition-all duration-200 overflow-hidden">
-                    <!-- Card Header -->
-                    <div class="p-4 border-b border-gray-100">
-                        <div class="flex items-start justify-between gap-3">
+                <div class="bg-white rounded-xl border overflow-hidden transition-all duration-200 hover:shadow-md
+                    {{ $worstSeverity === 'critical' ? 'border-red-200 hover:border-red-300' : 
+                       ($worstSeverity === 'warning' ? 'border-amber-200 hover:border-amber-300' : 
+                       'border-gray-200 hover:border-gray-300') }}">
+                    
+                    <!-- Worst Issue Banner (Main Visual Anchor) -->
+                    @if($worstIssue)
+                    <div class="px-4 py-2.5 flex items-center justify-between
+                        {{ $worstSeverity === 'critical' ? 'bg-red-50' : 
+                           ($worstSeverity === 'warning' ? 'bg-amber-50' : 'bg-blue-50') }}">
+                        <div class="flex items-center gap-2">
+                            <i data-lucide="{{ $worstIcon }}" class="w-4 h-4 
+                                {{ $worstSeverity === 'critical' ? 'text-red-600' : 
+                                   ($worstSeverity === 'warning' ? 'text-amber-600' : 'text-blue-600') }}"></i>
+                            <span class="text-sm font-medium 
+                                {{ $worstSeverity === 'critical' ? 'text-red-800' : 
+                                   ($worstSeverity === 'warning' ? 'text-amber-800' : 'text-blue-800') }}">
+                                {{ $worstIssue }}
+                            </span>
+                        </div>
+                        @if($worstAction && $worstActionUrl)
+                            <a href="{{ $worstActionUrl }}" class="text-xs font-semibold px-2 py-1 rounded transition-colors
+                                {{ $worstSeverity === 'critical' ? 'bg-red-600 hover:bg-red-700 text-white' : 
+                                   ($worstSeverity === 'warning' ? 'bg-amber-600 hover:bg-amber-700 text-white' : 'bg-blue-600 hover:bg-blue-700 text-white') }}">
+                                {{ $worstAction }}
+                            </a>
+                        @elseif($worstAction === 'Scan')
+                            <form action="{{ route('domains.scan.now', $domain) }}" method="POST" class="inline">
+                                @csrf
+                                <input type="hidden" name="mode" value="full">
+                                <button type="submit" class="text-xs font-semibold px-2 py-1 rounded bg-blue-600 hover:bg-blue-700 text-white transition-colors">
+                                    {{ $worstAction }}
+                                </button>
+                            </form>
+                        @endif
+                    </div>
+                    @else
+                    <!-- All Good Banner -->
+                    <div class="px-4 py-2.5 bg-green-50 flex items-center gap-2">
+                        <i data-lucide="check-circle" class="w-4 h-4 text-green-600"></i>
+                        <span class="text-sm font-medium text-green-800">All checks passed</span>
+                    </div>
+                    @endif
+
+                    <!-- Card Header (Compact) -->
+                    <div class="p-4">
+                        <div class="flex items-center justify-between gap-3">
                             <div class="flex items-center gap-3 min-w-0">
-                                <!-- Score Circle -->
-                                <div class="flex-shrink-0 w-12 h-12 rounded-full flex items-center justify-center
+                                <!-- Score Circle (smaller) -->
+                                <div class="flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold
                                     @if($domain->score_last)
-                                        @if($domain->score_last >= 80) bg-green-100
-                                        @elseif($domain->score_last >= 60) bg-yellow-100
-                                        @else bg-red-100 @endif
-                                    @else bg-gray-100 @endif">
-                                    @if($domain->score_last)
-                                        <span class="text-lg font-bold
-                                            @if($domain->score_last >= 80) text-green-700
-                                            @elseif($domain->score_last >= 60) text-yellow-700
-                                            @else text-red-700 @endif">
-                                            {{ $domain->score_last }}
-                                        </span>
-                                    @else
-                                        <i data-lucide="minus" class="w-5 h-5 text-gray-400"></i>
-                                    @endif
+                                        @if($domain->score_last >= 80) bg-green-100 text-green-700
+                                        @elseif($domain->score_last >= 60) bg-yellow-100 text-yellow-700
+                                        @else bg-red-100 text-red-700 @endif
+                                    @else bg-gray-100 text-gray-400 @endif">
+                                    {{ $domain->score_last ?? '—' }}
                                 </div>
                                 <!-- Domain Name -->
                                 <div class="min-w-0">
                                     @if($domain->scans()->exists())
                                         @php $latestScanForLink = $domain->scans()->latest()->first(); @endphp
-                                        <a href="{{ route('scans.show', $latestScanForLink) }}" class="group flex items-center gap-1.5 font-semibold text-blue-600 hover:text-blue-700 truncate transition-colors">
+                                        <a href="{{ route('scans.show', $latestScanForLink) }}" class="font-semibold text-gray-900 hover:text-blue-600 truncate block transition-colors">
                                             {{ $domain->domain }}
-                                            <i data-lucide="external-link" class="w-3.5 h-3.5 opacity-50 group-hover:opacity-100 flex-shrink-0"></i>
                                         </a>
                                     @else
                                         <h3 class="font-semibold text-gray-900 truncate">{{ $domain->domain }}</h3>
                                     @endif
-                                    <div class="flex items-center gap-2 mt-0.5">
-                                        <span class="text-xs text-gray-500">{{ $domain->provider_guess }}</span>
-                                        <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium {{ $config[0] }} {{ $config[1] }}">
-                                            {{ ucfirst($domain->status) }}
-                                        </span>
-                                    </div>
+                                    <p class="text-xs text-gray-500">{{ $domain->provider_guess ?: 'Unknown provider' }}</p>
                                 </div>
                             </div>
                             <!-- Actions Menu -->
@@ -135,113 +223,7 @@
                         </div>
                     </div>
 
-                    <!-- Status Indicators -->
-                    <div class="px-4 py-3 grid grid-cols-4 gap-2 text-center bg-gray-50/50">
-                        <!-- Blacklist -->
-                        <div class="group relative">
-                            @if($domain->blacklist_status === 'clean')
-                                <div class="flex flex-col items-center">
-                                    <i data-lucide="shield-check" class="w-4 h-4 text-green-600"></i>
-                                    <span class="text-xs text-gray-500 mt-1">Clean</span>
-                                </div>
-                            @elseif($domain->blacklist_status === 'listed')
-                                <div class="flex flex-col items-center">
-                                    <i data-lucide="shield-alert" class="w-4 h-4 text-red-600"></i>
-                                    <span class="text-xs text-red-600 font-medium mt-1">{{ $domain->blacklist_count }}</span>
-                                </div>
-                            @else
-                                <div class="flex flex-col items-center">
-                                    <i data-lucide="shield" class="w-4 h-4 text-gray-400"></i>
-                                    <span class="text-xs text-gray-400 mt-1">—</span>
-                                </div>
-                            @endif
-                            <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-gray-900 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
-                                Blacklist
-                            </div>
-                        </div>
-
-                        <!-- SPF -->
-                        <div class="group relative">
-                            @if($latestSpfCheck)
-                                <div class="flex flex-col items-center">
-                                    <i data-lucide="mail" class="w-4 h-4 
-                                        @if($latestSpfCheck->lookup_status === 'safe') text-green-600
-                                        @elseif($latestSpfCheck->lookup_status === 'warning') text-yellow-600
-                                        @else text-red-600 @endif"></i>
-                                    <span class="text-xs mt-1
-                                        @if($latestSpfCheck->lookup_status === 'safe') text-green-600
-                                        @elseif($latestSpfCheck->lookup_status === 'warning') text-yellow-600
-                                        @else text-red-600 @endif">
-                                        {{ $latestSpfCheck->lookup_count }}/10
-                                    </span>
-                                </div>
-                            @else
-                                <div class="flex flex-col items-center">
-                                    <i data-lucide="mail" class="w-4 h-4 text-gray-400"></i>
-                                    <span class="text-xs text-gray-400 mt-1">—</span>
-                                </div>
-                            @endif
-                            <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-gray-900 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
-                                SPF Lookups
-                            </div>
-                        </div>
-
-                        <!-- Domain Expiry -->
-                        <div class="group relative">
-                            @if($daysDomain !== null)
-                                @php $domainColor = $domain->getExpiryBadgeColor($daysDomain); @endphp
-                                <div class="flex flex-col items-center">
-                                    <i data-lucide="calendar" class="w-4 h-4 
-                                        @if($domainColor === 'red') text-red-600
-                                        @elseif($domainColor === 'amber') text-amber-600
-                                        @else text-green-600 @endif"></i>
-                                    <span class="text-xs mt-1
-                                        @if($domainColor === 'red') text-red-600
-                                        @elseif($domainColor === 'amber') text-amber-600
-                                        @else text-gray-600 @endif">
-                                        {{ $daysDomain < 0 ? 'Exp' : $daysDomain . 'd' }}
-                                    </span>
-                                </div>
-                            @else
-                                <div class="flex flex-col items-center">
-                                    <i data-lucide="calendar" class="w-4 h-4 text-gray-400"></i>
-                                    <span class="text-xs text-gray-400 mt-1">—</span>
-                                </div>
-                            @endif
-                            <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-gray-900 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
-                                Domain Expiry
-                            </div>
-                        </div>
-
-                        <!-- SSL Expiry -->
-                        <div class="group relative">
-                            @if($daysSsl !== null)
-                                @php $sslColor = $domain->getExpiryBadgeColor($daysSsl); @endphp
-                                <div class="flex flex-col items-center">
-                                    <i data-lucide="lock" class="w-4 h-4 
-                                        @if($sslColor === 'red') text-red-600
-                                        @elseif($sslColor === 'amber') text-amber-600
-                                        @else text-green-600 @endif"></i>
-                                    <span class="text-xs mt-1
-                                        @if($sslColor === 'red') text-red-600
-                                        @elseif($sslColor === 'amber') text-amber-600
-                                        @else text-gray-600 @endif">
-                                        {{ $daysSsl < 0 ? 'Exp' : $daysSsl . 'd' }}
-                                    </span>
-                                </div>
-                            @else
-                                <div class="flex flex-col items-center">
-                                    <i data-lucide="lock" class="w-4 h-4 text-gray-400"></i>
-                                    <span class="text-xs text-gray-400 mt-1">—</span>
-                                </div>
-                            @endif
-                            <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-gray-900 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
-                                SSL Expiry
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Card Footer - Actions -->
+                    <!-- Card Footer - Simplified Actions -->
                     <div class="p-3 border-t border-gray-100 flex items-center gap-2">
                         <!-- Primary Scan Button -->
                         <form action="{{ route('domains.scan.now', $domain) }}" method="POST" class="flex-1">
@@ -249,7 +231,7 @@
                             <input type="hidden" name="mode" value="full">
                             <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-lg text-sm font-medium inline-flex items-center justify-center gap-2 transition-colors">
                                 <i data-lucide="scan" class="w-4 h-4"></i>
-                                Scan Now
+                                Scan
                             </button>
                         </form>
                         

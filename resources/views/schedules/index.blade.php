@@ -107,13 +107,13 @@
                                 </td>
                                 <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                                     <div class="flex items-center justify-end space-x-2">
-                                        <!-- Run Now -->
+                                        <!-- Scan Now -->
                                         <form action="{{ route('schedules.run-now', $schedule) }}" method="POST" class="inline">
                                             @csrf
                                             <button type="submit" 
                                                     class="text-green-600 hover:text-green-900 bg-green-50 hover:bg-green-100 px-3 py-1 rounded-md border border-green-200 hover:border-green-300">
-                                                <i data-lucide="play" class="w-4 h-4 inline mr-1"></i>
-                                                Run Now
+                                                <i data-lucide="scan" class="w-4 h-4 inline mr-1"></i>
+                                                Scan
                                             </button>
                                         </form>
                                         

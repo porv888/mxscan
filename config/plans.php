@@ -26,7 +26,7 @@ return [
     ],
 
     'limits' => [
-        'freemium' => (int) env('PLAN_LIMIT_FREEMIUM', 1),
+        'freemium' => (int) env('PLAN_LIMIT_FREEMIUM', 3),
         'premium'  => (int) env('PLAN_LIMIT_PREMIUM', 10),
         'ultra'    => (int) env('PLAN_LIMIT_ULTRA', 50),
     ],

@@ -41,12 +41,12 @@
                     @if($dmarcPolicy === 'none')
                     <x-copy-row 
                         label="Upgrade to Quarantine" 
-                        value="v=DMARC1; p=quarantine; rua=mailto:dmarc@{{ $domain->domain }}; pct=100; adkim=r; aspf=r;" 
+                        :value="'v=DMARC1; p=quarantine; rua=mailto:' . $domain->dmarc_rua_email . '; pct=100; adkim=r; aspf=r;'" 
                     />
                     @else
                     <x-copy-row 
-                        label="Add DMARC Record (_dmarc.{{ $domain->domain }})" 
-                        value="v=DMARC1; p=quarantine; rua=mailto:dmarc@{{ $domain->domain }}; pct=100; adkim=r; aspf=r;" 
+                        :label="'Add DMARC Record (_dmarc.' . $domain->domain . ')'" 
+                        :value="'v=DMARC1; p=quarantine; rua=mailto:' . $domain->dmarc_rua_email . '; pct=100; adkim=r; aspf=r;'" 
                         action="https://dmarc.org/overview/"
                     />
                     @endif

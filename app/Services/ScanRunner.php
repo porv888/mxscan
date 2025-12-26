@@ -197,6 +197,33 @@ class ScanRunner
                 // Don't fail the scan if monitoring fails
             }
 
+            // Sync DMARC RUA verification state based on scan results
+            // This ensures DMARC Activity page reflects DNS confirmation from scans
+            try {
+                $domain->refresh(); // Ensure we have latest scan data
+                $wasVerified = $domain->dmarc_rua_verified_at !== null;
+                $isConfigured = $domain->verifyAndSyncDmarcRua();
+                
+                if ($isConfigured && !$wasVerified) {
+                    Log::info('DMARC RUA verified from scan', [
+                        'scan_id' => $scan->id,
+                        'domain' => $domain->domain,
+                    ]);
+                } elseif (!$isConfigured && $wasVerified) {
+                    Log::info('DMARC RUA no longer configured', [
+                        'scan_id' => $scan->id,
+                        'domain' => $domain->domain,
+                    ]);
+                }
+            } catch (Exception $e) {
+                Log::warning('Failed to sync DMARC RUA verification', [
+                    'scan_id' => $scan->id,
+                    'domain' => $domain->domain,
+                    'error' => $e->getMessage()
+                ]);
+                // Don't fail the scan if DMARC sync fails
+            }
+
         } catch (Exception $e) {
             Log::error('Synchronous scan failed', [
                 'scan_id' => $scan->id,

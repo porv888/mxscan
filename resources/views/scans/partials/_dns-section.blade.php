@@ -25,8 +25,8 @@
         </button>
     </header>
 
-    @if($allGreen && !$open)
-        <div class="text-sm text-green-700 dark:text-green-300">✓ All configured. Great job!</div>
+    @if($allGreen)
+        <div x-show="!open" class="text-sm text-green-700 dark:text-green-300">✓ All configured. Great job!</div>
     @endif
 
     <div x-show="open" x-collapse class="space-y-4">
@@ -149,6 +149,56 @@
             </div>
             @endif
         </div>
+
+        {{-- DMARC Visibility Block (using unified status) --}}
+        @if(isset($dmarcStatus))
+        @php
+            $badgeClasses = match($dmarcStatus['badge_color']) {
+                'green' => 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
+                'blue' => 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
+                'amber' => 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200',
+                'gray' => 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200',
+                default => 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200',
+            };
+            $borderClasses = match($dmarcStatus['badge_color']) {
+                'green' => 'border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900/20',
+                'blue' => 'border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20',
+                'amber' => 'border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20',
+                'gray' => 'border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50',
+                default => 'border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50',
+            };
+        @endphp
+        <div>
+            <div class="flex items-center justify-between mb-2">
+                <h3 class="text-sm font-semibold text-gray-900 dark:text-gray-100">DMARC Reports (Visibility)</h3>
+                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium {{ $badgeClasses }}">
+                    @if($dmarcStatus['status'] === 'active')
+                        <span class="w-1.5 h-1.5 rounded-full bg-green-500 mr-1 animate-pulse"></span>
+                    @endif
+                    {{ $dmarcStatus['label'] }}
+                </span>
+            </div>
+            <div class="border rounded-lg p-3 {{ $borderClasses }}">
+                <div class="flex items-center justify-between">
+                    @if($dmarcStatus['status'] === 'active' || $dmarcStatus['status'] === 'enabled_mxscan_waiting')
+                        @if($domain->dmarc_last_report_at)
+                            <span class="text-xs text-gray-600 dark:text-gray-400">Last report: {{ $domain->dmarc_last_report_at->diffForHumans() }}</span>
+                        @else
+                            <span class="text-xs text-gray-600 dark:text-gray-400">Waiting for first report...</span>
+                        @endif
+                        <a href="{{ route('dmarc.show', $domain) }}" class="text-xs font-medium text-blue-600 dark:text-blue-400 hover:underline">
+                            Open DMARC Activity →
+                        </a>
+                    @else
+                        <span class="text-xs text-gray-600 dark:text-gray-400">Add MXScan RUA to receive reports</span>
+                        <a href="{{ route('dmarc.show', $domain) }}" class="text-xs font-medium text-blue-600 dark:text-blue-400 hover:underline">
+                            Setup →
+                        </a>
+                    @endif
+                </div>
+            </div>
+        </div>
+        @endif
 
         {{-- TLS-RPT --}}
         <div>

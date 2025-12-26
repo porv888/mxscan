@@ -211,6 +211,19 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // API endpoint for delivery check details
     Route::get('/api/delivery-checks/{check}', [App\Http\Controllers\DeliveryMonitorController::class, 'getCheckDetails']);
 
+    // DMARC Visibility Routes
+    Route::get('/dmarc', [App\Http\Controllers\DmarcController::class, 'index'])->name('dmarc.index');
+    Route::prefix('domains/{domain}/dmarc')->name('dmarc.')->group(function () {
+        Route::get('/', [App\Http\Controllers\DmarcController::class, 'show'])->name('show');
+        Route::post('/check-dns', [App\Http\Controllers\DmarcController::class, 'checkDns'])->name('check-dns');
+        Route::post('/upload', [App\Http\Controllers\DmarcController::class, 'upload'])->name('upload');
+        Route::put('/alerts', [App\Http\Controllers\DmarcController::class, 'updateAlertSettings'])->name('alerts.update');
+        Route::post('/events/{event}/acknowledge', [App\Http\Controllers\DmarcController::class, 'acknowledgeEvent'])->name('events.acknowledge');
+        Route::get('/chart-data', [App\Http\Controllers\DmarcController::class, 'chartData'])->name('chart-data');
+        Route::get('/senders-data', [App\Http\Controllers\DmarcController::class, 'sendersData'])->name('senders-data');
+        Route::get('/senders/{sender}', [App\Http\Controllers\DmarcController::class, 'getSender'])->name('senders.show');
+    });
+
     // Profile routes (new simplified route)
     Route::get('/profile', [App\Http\Controllers\ProfileController::class, 'edit'])->name('profile');
 });

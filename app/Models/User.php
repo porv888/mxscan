@@ -315,4 +315,29 @@ class User extends Authenticatable implements MustVerifyEmail
         // Return array of unique emails
         return array_unique($emails);
     }
+
+    /**
+     * Check if user can use DMARC visibility features.
+     * Free users get limited access, paid users get full access.
+     */
+    public function canUseDmarcFull(): bool
+    {
+        return $this->canUseMonitoring();
+    }
+
+    /**
+     * Get the DMARC history limit in days based on plan.
+     */
+    public function dmarcHistoryDays(): int
+    {
+        return $this->canUseDmarcFull() ? 90 : 7;
+    }
+
+    /**
+     * Get the DMARC sender limit based on plan.
+     */
+    public function dmarcSenderLimit(): int
+    {
+        return $this->canUseDmarcFull() ? 100 : 5;
+    }
 }

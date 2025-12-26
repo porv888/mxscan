@@ -68,8 +68,8 @@
     <div class="border-t border-gray-200 px-4 py-5 sm:p-6 space-y-3">
       <form action="{{ route('admin.domains.scan',$domain) }}" method="post">@csrf
         <button class="w-full inline-flex justify-center items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700">
-          <i data-lucide="search" class="w-4 h-4 mr-2"></i>
-          Run Scan
+          <i data-lucide="scan" class="w-4 h-4 mr-2"></i>
+          Scan
         </button>
       </form>
       <form action="{{ route('admin.domains.blacklist',$domain) }}" method="post">@csrf

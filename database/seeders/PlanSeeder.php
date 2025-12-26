@@ -16,7 +16,7 @@ class PlanSeeder extends Seeder
                 'currency' => 'EUR',
                 'interval' => 'monthly',
                 'scan_limit' => 10,
-                'domain_limit' => 1,
+                'domain_limit' => 3,
                 'active' => true,
             ],
             [

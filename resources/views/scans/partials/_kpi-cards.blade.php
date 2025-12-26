@@ -22,12 +22,17 @@
   <div class="rounded-xl border border-gray-200 dark:border-gray-700 p-4">
     <div class="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Blacklist Status</div>
     <div class="mt-2 flex items-baseline gap-2">
-      <div class="text-3xl font-semibold {{ ($blacklistHits ?? 0) > 0 ? 'text-red-600 dark:text-red-400' : 'text-green-700 dark:text-green-300' }}">
-        {{ $blacklistHits ?? 0 }}
-      </div>
-      <div class="text-sm text-gray-500">/ {{ $blacklistTotal ?? 0 }}</div>
       @if(($blacklistHits ?? 0) > 0)
-        <a href="#blacklist" class="ml-auto text-xs underline text-red-600 dark:text-red-400">Resolve issues</a>
+        <div class="text-2xl font-semibold text-red-600 dark:text-red-400">
+          {{ $blacklistHits }} listed
+        </div>
+        <div class="text-sm text-gray-500">of {{ $blacklistTotal ?? 0 }} checked</div>
+        <a href="#blacklist" class="ml-auto text-xs underline text-red-600 dark:text-red-400">Fix now</a>
+      @else
+        <div class="text-2xl font-semibold text-green-700 dark:text-green-300">
+          Clean
+        </div>
+        <div class="text-sm text-gray-500">{{ $blacklistTotal ?? 0 }} lists checked</div>
       @endif
     </div>
   </div>
@@ -35,17 +40,20 @@
 
   {{-- SPF Lookups --}}
   @if(($enabled['spf'] ?? true) || ($enabled['dns'] ?? true))
-  @php $spfTone = $spfLookupCount === null ? 'gray' : ($spfLookupCount >= 10 ? 'red' : ($spfLookupCount >= 7 ? 'amber' : 'green')); @endphp
+  @php 
+    $spfTone = $spfLookupCount === null ? 'gray' : ($spfLookupCount >= 10 ? 'red' : ($spfLookupCount >= 7 ? 'amber' : 'green'));
+    $spfStatus = $spfLookupCount === null ? 'Unknown' : ($spfLookupCount >= 10 ? 'Over limit' : ($spfLookupCount >= 7 ? 'Near limit' : 'OK'));
+  @endphp
   <div class="rounded-xl border border-gray-200 dark:border-gray-700 p-4">
     <div class="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">SPF Lookups</div>
     <div class="mt-2 flex items-baseline gap-2">
-      <div class="text-3xl font-semibold
+      <div class="text-2xl font-semibold
         {{ $spfTone === 'red' ? 'text-red-600 dark:text-red-400' : ($spfTone === 'amber' ? 'text-amber-600 dark:text-amber-400' : 'text-green-700 dark:text-green-300') }}">
-        {{ $spfLookupCount ?? '—' }}
+        {{ $spfStatus }}
       </div>
-      <div class="text-sm text-gray-500">/ {{ $spfMax ?? 10 }}</div>
+      <div class="text-sm text-gray-500">{{ $spfLookupCount ?? '—' }} of 10 max</div>
       @if(($spfLookupCount ?? 0) >= 7)
-        <a href="#fix-pack" class="ml-auto text-xs underline">Optimize SPF</a>
+        <a href="#fix-pack" class="ml-auto text-xs underline">Fix SPF</a>
       @endif
     </div>
   </div>
@@ -72,23 +80,29 @@
   {{-- TLS-RPT --}}
   <div class="rounded-xl border border-gray-200 dark:border-gray-700 p-4">
     <div class="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">TLS-RPT</div>
-    <div class="mt-2 text-lg font-medium {{ $tlsrptOk ? 'text-green-700 dark:text-green-300' : 'text-red-600 dark:text-red-400' }}">
-      {{ $tlsrptOk ? 'Configured' : 'Missing' }}
+    <div class="mt-2 flex items-baseline gap-2">
+      <div class="text-lg font-medium {{ $tlsrptOk ? 'text-green-700 dark:text-green-300' : 'text-amber-600 dark:text-amber-400' }}">
+        {{ $tlsrptOk ? 'Active' : 'Not set up' }}
+      </div>
+      @unless($tlsrptOk)
+        <a href="#fix-pack" class="ml-auto text-xs underline">Add record</a>
+      @endunless
     </div>
-    @unless($tlsrptOk)
-      <a href="#fix-pack" class="text-xs underline">Add Record</a>
-    @endunless
+    <div class="text-xs text-gray-500 mt-1">{{ $tlsrptOk ? 'Receiving TLS failure reports' : 'Optional: Get notified of TLS issues' }}</div>
   </div>
 
   {{-- MTA-STS --}}
   <div class="rounded-xl border border-gray-200 dark:border-gray-700 p-4">
     <div class="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">MTA-STS</div>
-    <div class="mt-2 text-lg font-medium {{ $mtastsOk ? 'text-green-700 dark:text-green-300' : 'text-red-600 dark:text-red-400' }}">
-      {{ $mtastsOk ? 'Configured' : 'Missing' }}
+    <div class="mt-2 flex items-baseline gap-2">
+      <div class="text-lg font-medium {{ $mtastsOk ? 'text-green-700 dark:text-green-300' : 'text-amber-600 dark:text-amber-400' }}">
+        {{ $mtastsOk ? 'Active' : 'Not set up' }}
+      </div>
+      @unless($mtastsOk)
+        <a href="#fix-pack" class="ml-auto text-xs underline">Add policy</a>
+      @endunless
     </div>
-    @unless($mtastsOk)
-      <a href="#fix-pack" class="text-xs underline">Add Policy</a>
-    @endunless
+    <div class="text-xs text-gray-500 mt-1">{{ $mtastsOk ? 'Enforcing secure mail transport' : 'Optional: Enforce TLS for incoming mail' }}</div>
   </div>
 
   {{-- Domain Renewal --}}

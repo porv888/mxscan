@@ -7,8 +7,8 @@
     <!-- Header -->
     <div class="flex items-center justify-between">
         <div>
-            <h1 class="text-2xl font-bold text-gray-900">Delivery Monitoring</h1>
-            <p class="text-gray-600 mt-1">Monitor email delivery and authentication ({{ $used }} / {{ $limit }} used)</p>
+            <h1 class="text-2xl font-bold text-gray-900">Delivery Testing</h1>
+            <p class="text-gray-600 mt-1">Send test emails to verify SPF, DKIM & DMARC are working ({{ $used }} / {{ $limit }} used)</p>
         </div>
         <div class="flex items-center space-x-4">
             @if($used >= $limit)
@@ -87,12 +87,12 @@
                                     @if($incidents === 0)
                                         <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
                                             <i data-lucide="check-circle" class="w-3 h-3 mr-1"></i>
-                                            All clear
+                                            All passing
                                         </span>
                                     @else
-                                        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
-                                            <i data-lucide="alert-circle" class="w-3 h-3 mr-1"></i>
-                                            {{ $incidents }} incident{{ $incidents > 1 ? 's' : '' }}
+                                        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800" title="Test failures detected - review to see if action needed">
+                                            <i data-lucide="alert-triangle" class="w-3 h-3 mr-1"></i>
+                                            {{ $incidents }} test issue{{ $incidents > 1 ? 's' : '' }}
                                         </span>
                                     @endif
                                 </td>

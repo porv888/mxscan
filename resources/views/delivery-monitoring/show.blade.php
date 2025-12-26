@@ -94,12 +94,30 @@
         </div>
     @endif
 
+    <!-- What This Test Proves - Educational Banner -->
+    <div class="bg-white border border-gray-200 rounded-lg p-4 mb-4">
+        <div class="flex items-start gap-3">
+            <div class="p-2 bg-blue-100 rounded-lg flex-shrink-0">
+                <i data-lucide="info" class="w-5 h-5 text-blue-600"></i>
+            </div>
+            <div>
+                <h3 class="text-sm font-semibold text-gray-900 mb-1">What this test proves</h3>
+                <p class="text-sm text-gray-600">When you send a test email here, we verify that your mail server is correctly configured:</p>
+                <ul class="mt-2 text-sm text-gray-600 space-y-1">
+                    <li class="flex items-center gap-2"><span class="w-1.5 h-1.5 rounded-full bg-blue-500"></span><strong>SPF</strong> — Your server is authorized to send for your domain</li>
+                    <li class="flex items-center gap-2"><span class="w-1.5 h-1.5 rounded-full bg-blue-500"></span><strong>DKIM</strong> — Email signature is valid and wasn't tampered with</li>
+                    <li class="flex items-center gap-2"><span class="w-1.5 h-1.5 rounded-full bg-blue-500"></span><strong>DMARC</strong> — Your domain policy is being applied correctly</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
     <!-- Send a Test Card -->
     <div class="bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-6">
         <div class="flex items-start justify-between mb-4">
             <div>
                 <h2 class="text-lg font-semibold text-gray-900 mb-1">Send a Test Email</h2>
-                <p class="text-sm text-gray-600">Send to this address to monitor your email delivery</p>
+                <p class="text-sm text-gray-600">Send from your actual mail server (not Gmail/Outlook personal) to test authentication</p>
             </div>
             <div class="relative" x-data="{ open: false }">
                 <button @click="open = !open" 
@@ -205,7 +223,7 @@
 
         <!-- Auth Pass Rates (24h) -->
         <div class="bg-white rounded-lg shadow-sm p-6">
-            <h3 class="text-sm font-medium text-gray-500 mb-2">Auth Pass Rate (24h)</h3>
+            <h3 class="text-sm font-medium text-gray-500 mb-2">Test Results (24h)</h3>
             <div class="space-y-2">
                 <div class="flex items-center justify-between">
                     <span class="text-xs text-gray-600">SPF</span>
@@ -258,6 +276,39 @@
             </div>
         </div>
     </div>
+
+    <!-- Test Failure vs Real Risk Explainer -->
+    @php
+        $hasFailures = ($stats['spf_pass_rate'] ?? 100) < 100 || ($stats['dkim_pass_rate'] ?? 100) < 100 || ($stats['dmarc_pass_rate'] ?? 100) < 100;
+    @endphp
+    @if($hasFailures)
+    <div class="bg-amber-50 border border-amber-200 rounded-lg p-4">
+        <div class="flex items-start gap-3">
+            <div class="p-2 bg-amber-100 rounded-lg flex-shrink-0">
+                <i data-lucide="help-circle" class="w-5 h-5 text-amber-600"></i>
+            </div>
+            <div>
+                <h3 class="text-sm font-semibold text-amber-900 mb-1">Test failure ≠ Deliverability problem</h3>
+                <p class="text-sm text-amber-800 mb-2">A failed test doesn't always mean your emails won't be delivered. Common causes:</p>
+                <ul class="text-sm text-amber-700 space-y-1">
+                    <li class="flex items-start gap-2">
+                        <span class="text-amber-500 mt-0.5">•</span>
+                        <span><strong>Sent from wrong server</strong> — Personal Gmail/Outlook won't pass SPF for your domain</span>
+                    </li>
+                    <li class="flex items-start gap-2">
+                        <span class="text-amber-500 mt-0.5">•</span>
+                        <span><strong>DKIM not configured</strong> — Your mail server may not sign emails (common with shared hosting)</span>
+                    </li>
+                    <li class="flex items-start gap-2">
+                        <span class="text-amber-500 mt-0.5">•</span>
+                        <span><strong>DMARC policy = none</strong> — Failures are reported but emails still delivered</span>
+                    </li>
+                </ul>
+                <p class="text-sm text-amber-800 mt-2"><strong>Action needed?</strong> Only if you see consistent failures from your production mail server.</p>
+            </div>
+        </div>
+    </div>
+    @endif
 
     <!-- Collapsible Legend -->
     <div class="bg-white rounded-lg shadow-sm overflow-hidden" x-data="{ open: false }">
