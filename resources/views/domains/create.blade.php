@@ -216,7 +216,7 @@
         <h3 class="text-sm font-medium text-gray-900 mb-2">Need help?</h3>
         <div class="text-sm text-gray-600 space-y-1">
             <p>• Make sure you own or manage the domain you're adding</p>
-            <p>• Domain names should not include subdomains (use example.com, not mail.example.com)</p>
+            <p>• You can add subdomains (e.g., app.example.com) if you already have the parent domain</p>
             <p>• You can add multiple domains to monitor different email configurations</p>
         </div>
     </div>

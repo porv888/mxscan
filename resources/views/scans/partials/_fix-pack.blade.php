@@ -95,8 +95,8 @@
                     <h3 class="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-1">Add TLS-RPT Record</h3>
                     <p class="text-xs text-gray-600 dark:text-gray-400 mb-3">Get reports about TLS connection failures to your mail servers.</p>
                     <x-copy-row 
-                        label="TLS-RPT Record (_smtp._tls.{{ $domain->domain }})" 
-                        value="v=TLSRPTv1; rua=mailto:tlsrpt@{{ $domain->domain }}" 
+                        :label="'TLS-RPT Record (_smtp._tls.' . $domain->domain . ')'" 
+                        :value="'v=TLSRPTv1; rua=mailto:tlsrpt@' . $domain->domain" 
                         action="https://tools.ietf.org/html/rfc8460"
                     />
                 </div>
@@ -117,8 +117,8 @@
                     
                     <div class="space-y-3">
                         <x-copy-row 
-                            label="DNS Record (_mta-sts.{{ $domain->domain }})" 
-                            value="v=STSv1; id={{ date('Ymd') }}01" 
+                            :label="'DNS Record (_mta-sts.' . $domain->domain . ')'" 
+                            :value="'v=STSv1; id=' . date('Ymd') . '01'" 
                         />
                         
                         <div x-data="{ expanded: false }" class="mt-3">
@@ -131,11 +131,11 @@
                             
                             <div x-show="expanded" x-cloak class="mt-2">
                                 <x-copy-row 
-                                    label="Create file: https://mta-sts.{{ $domain->domain }}/.well-known/mta-sts.txt" 
-                                    value="version: STSv1
+                                    :label="'Create file: https://mta-sts.' . $domain->domain . '/.well-known/mta-sts.txt'" 
+                                    :value="'version: STSv1
 mode: enforce
-mx: *.{{ $domain->domain }}
-max_age: 86400" 
+mx: *.' . $domain->domain . '
+max_age: 86400'" 
                                     action="https://tools.ietf.org/html/rfc8461"
                                 />
                             </div>
