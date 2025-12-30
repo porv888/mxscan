@@ -122,9 +122,9 @@ $${formatted}";
         $user  = $request->user();
         $price = (string) $request->input('price');
 
-        // If user already has an active sub, redirect to swap
-        if ($user->subscribed('default')) {
-            return redirect()->route('billing')->with('error', 'You already have a subscription.');
+        // If user already has an active paid subscription (internal check), redirect to swap
+        if ($user->currentPlanKey() !== 'freemium') {
+            return redirect()->route('billing')->with('error', 'You already have a subscription. Use swap to change plans.');
         }
 
         try {
