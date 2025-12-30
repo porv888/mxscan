@@ -50,6 +50,12 @@ class BillingController extends Controller
         // Keep Stripe price IDs available for checkout/swap actions, but do not
         // use Stripe to decide what to display as the current plan on the page.
 
+        // Get domain limits from database
+        $plans = \App\Models\Plan::all()->keyBy(fn($p) => strtolower($p->name));
+        $freemiumLimit = $plans['freemium']->domain_limit ?? 3;
+        $premiumLimit = $plans['premium']->domain_limit ?? 9;
+        $ultraLimit = $plans['ultra']->domain_limit ?? 19;
+
         return view('billing.show', [
             'user'             => $user,
             // Internal subscription/plan data (display)
@@ -65,6 +71,10 @@ class BillingController extends Controller
             'onFreemium'       => $planKey === 'freemium',
             'isPremium'        => $planKey === 'premium',
             'isUltra'          => $planKey === 'ultra',
+            // Domain limits from database
+            'freemiumLimit'    => $freemiumLimit,
+            'premiumLimit'     => $premiumLimit,
+            'ultraLimit'       => $ultraLimit,
         ]);
     }
 

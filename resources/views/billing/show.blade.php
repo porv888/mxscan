@@ -27,7 +27,7 @@
                 <div><strong>Renews:</strong> {{ optional($appSubscription?->renews_at)?->toDayDateTimeString() ?? '—' }}</div>
             </div>
         @else
-            <div class="text-slate-700">You are on the <strong>Freemium</strong> plan (1 domain).</div>
+            <div class="text-slate-700">You are on the <strong>Freemium</strong> plan ({{ $freemiumLimit ?? 3 }} domains).</div>
         @endif
     </div>
 
@@ -38,9 +38,10 @@
             <div class="text-sm uppercase text-slate-500">Premium</div>
             <div class="text-3xl font-bold mt-1">{{ $displayPremium ?? '€19' }}<span class="text-base font-medium text-slate-500">/mo</span></div>
             <ul class="mt-3 text-sm text-slate-600 space-y-1">
-                <li>Up to 10 domains</li>
-                <li>Scheduling</li>
+                <li>Up to {{ $premiumLimit ?? 9 }} domains</li>
+                <li>Scheduled scans</li>
                 <li>Blacklist monitoring</li>
+                <li>DMARC visibility (30 days)</li>
             </ul>
 
             @if($onFreemium)
@@ -68,9 +69,10 @@
             <div class="text-sm uppercase text-slate-500">Ultra</div>
             <div class="text-3xl font-bold mt-1">{{ $displayUltra ?? '€49' }}<span class="text-base font-medium text-slate-500">/mo</span></div>
             <ul class="mt-3 text-sm text-slate-600 space-y-1">
-                <li>Up to 50 domains</li>
-                <li>Priority queue</li>
-                <li>CSV & API</li>
+                <li>Up to {{ $ultraLimit ?? 19 }} domains</li>
+                <li>Everything in Premium</li>
+                <li>DMARC visibility (90 days)</li>
+                <li>Priority support</li>
             </ul>
 
             @if($onFreemium)
