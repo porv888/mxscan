@@ -66,6 +66,24 @@
                                class="mt-1 appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm" 
                                placeholder="Confirm your password">
                     </div>
+
+                    <div class="flex items-start">
+                        <div class="flex items-center h-5">
+                            <input id="terms" name="terms" type="checkbox" required
+                                   class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded @error('terms') border-red-300 @enderror">
+                        </div>
+                        <div class="ml-3 text-sm">
+                            <label for="terms" class="font-medium text-gray-700">
+                                I agree to the 
+                                <a href="/terms" target="_blank" class="text-blue-600 hover:text-blue-500">Terms of Service</a>
+                                and 
+                                <a href="/privacy" target="_blank" class="text-blue-600 hover:text-blue-500">Privacy Policy</a>
+                            </label>
+                        </div>
+                    </div>
+                    @error('terms')
+                        <p class="text-sm text-red-600">{{ $message }}</p>
+                    @enderror
                 </div>
 
                 <div>
