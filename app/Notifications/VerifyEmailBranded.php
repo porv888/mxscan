@@ -34,7 +34,7 @@ class VerifyEmailBranded extends BaseVerifyEmail
         return (new MailMessage)
             ->from(config('mail.from.address'), config('mail.from.name'))
             ->subject('Verify your email · MXScan')
-            ->greeting('Welcome to MXScan 👋')
+            ->greeting('Welcome to MXScan')
             ->line('Please confirm your email address to start scanning your domain for MX, SPF, DMARC, TLS-RPT, and MTA-STS.')
             ->action('Verify email', $url)
             ->line('If you did not create an account, no further action is required.')

@@ -38,7 +38,7 @@ class ExpiryReminderMail extends Mailable
         $typeLabel = $this->type === 'domain' ? 'Domain' : 'SSL Certificate';
         
         return new Envelope(
-            subject: "[MXScan] {$this->domain->domain} {$typeLabel} expires in {$this->days} day" . ($this->days !== 1 ? 's' : ''),
+            subject: "MXScan notice: {$this->domain->domain} {$typeLabel} expires in {$this->days} day" . ($this->days !== 1 ? 's' : ''),
         );
     }
 
@@ -49,6 +49,7 @@ class ExpiryReminderMail extends Mailable
     {
         return new Content(
             view: 'emails.expiry-reminder',
+            text: 'emails.expiry-reminder-text',
             with: [
                 'domain' => $this->domain,
                 'type' => $this->type,

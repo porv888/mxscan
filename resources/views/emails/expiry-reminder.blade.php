@@ -104,12 +104,12 @@
 </head>
 <body>
     <div class="header">
-        <h1>🔔 {{ $typeLabel }} Expiry Alert</h1>
+        <h1>{{ $typeLabel }} Expiry Notice</h1>
     </div>
 
     <div class="content">
         <div class="alert-box alert-{{ $urgency }}">
-            <strong>⚠️ Action Required:</strong> Your {{ strtolower($typeLabel) }} for <strong>{{ $domain->domain }}</strong> will expire in <strong>{{ $days }} day{{ $days !== 1 ? 's' : '' }}</strong>.
+            <strong>Notice:</strong> Your {{ strtolower($typeLabel) }} for <strong>{{ $domain->domain }}</strong> will expire in <strong>{{ $days }} day{{ $days !== 1 ? 's' : '' }}</strong>.
         </div>
 
         <table class="info-table">
@@ -126,24 +126,24 @@
                 <td><strong>{{ $days }} day{{ $days !== 1 ? 's' : '' }}</strong></td>
             </tr>
             <tr>
-                <td>Urgency Level</td>
+                <td>Status</td>
                 <td>
                     @if($urgency === 'critical')
-                        <span style="color: #dc2626;">🔴 Critical</span>
+                        <span style="color: #dc2626;">Critical</span>
                     @elseif($urgency === 'high')
-                        <span style="color: #eab308;">🟡 High</span>
+                        <span style="color: #eab308;">High</span>
                     @else
-                        <span style="color: #3b82f6;">🔵 Medium</span>
+                        <span style="color: #3b82f6;">Medium</span>
                     @endif
                 </td>
             </tr>
         </table>
 
         <div class="recommendations">
-            <h3>📋 Recommended Actions</h3>
+            <h3>Recommended Actions</h3>
             @if($type === 'domain')
                 <ul>
-                    <li><strong>Renew your domain registration</strong> with your registrar immediately</li>
+                    <li><strong>Renew your domain registration</strong> with your registrar soon</li>
                     <li>Enable auto-renewal to prevent future expiration</li>
                     <li>Verify your contact information is up to date</li>
                     <li>Check for renewal notices in your registrar account</li>
@@ -166,12 +166,12 @@
 
         <center>
             <a href="{{ route('domains.hub', $domain) }}" class="button">
-                View Domain Details →
+                View domain status
             </a>
         </center>
 
         <p style="margin-top: 30px; color: #6b7280; font-size: 14px;">
-            This is an automated reminder from MXScan. You're receiving this because you have expiry monitoring enabled for this domain.
+            You're receiving this because expiry monitoring is enabled for this domain.
         </p>
     </div>
 
