@@ -354,6 +354,110 @@
             </div>
         </div>
 
+        <!-- Help Widget -->
+        <div x-data="{ 
+            helpOpen: false, 
+            helpMessage: '', 
+            helpSending: false, 
+            helpSent: false,
+            helpError: '',
+            async sendHelp() {
+                if (!this.helpMessage.trim() || this.helpMessage.length < 10) {
+                    this.helpError = 'Please enter at least 10 characters';
+                    return;
+                }
+                this.helpSending = true;
+                this.helpError = '';
+                try {
+                    const response = await fetch('{{ route('support.send') }}', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRF-TOKEN': document.querySelector('meta[name=csrf-token]').content
+                        },
+                        body: JSON.stringify({ message: this.helpMessage })
+                    });
+                    const data = await response.json();
+                    if (data.success) {
+                        this.helpSent = true;
+                        this.helpMessage = '';
+                        setTimeout(() => { this.helpSent = false; this.helpOpen = false; }, 2000);
+                    } else {
+                        this.helpError = data.message || 'Failed to send message';
+                    }
+                } catch (e) {
+                    this.helpError = 'Failed to send message. Please try again.';
+                }
+                this.helpSending = false;
+            }
+        }" class="fixed bottom-6 right-6 z-50">
+            <!-- Help Button -->
+            <button @click="helpOpen = !helpOpen; helpSent = false; helpError = ''"
+                    class="flex items-center justify-center w-14 h-14 bg-blue-600 hover:bg-blue-700 text-white rounded-full shadow-lg transition-all duration-200 hover:scale-105"
+                    :class="{ 'rotate-45': helpOpen }">
+                <i x-show="!helpOpen" data-lucide="help-circle" class="h-6 w-6"></i>
+                <i x-show="helpOpen" data-lucide="x" class="h-6 w-6"></i>
+            </button>
+            
+            <!-- Help Panel -->
+            <div x-show="helpOpen"
+                 x-transition:enter="transition ease-out duration-200"
+                 x-transition:enter-start="opacity-0 translate-y-4"
+                 x-transition:enter-end="opacity-100 translate-y-0"
+                 x-transition:leave="transition ease-in duration-150"
+                 x-transition:leave-start="opacity-100 translate-y-0"
+                 x-transition:leave-end="opacity-0 translate-y-4"
+                 class="absolute bottom-16 right-0 w-80 bg-white rounded-lg shadow-xl border border-gray-200 overflow-hidden">
+                <div class="bg-blue-600 px-4 py-3">
+                    <h3 class="text-white font-semibold flex items-center">
+                        <i data-lucide="message-circle" class="h-5 w-5 mr-2"></i>
+                        Need Help?
+                    </h3>
+                    <p class="text-blue-100 text-sm mt-1">Send us a message and we'll get back to you.</p>
+                </div>
+                
+                <div class="p-4">
+                    <template x-if="helpSent">
+                        <div class="text-center py-4">
+                            <i data-lucide="check-circle" class="h-12 w-12 text-green-500 mx-auto mb-2"></i>
+                            <p class="text-green-600 font-medium">Message sent!</p>
+                            <p class="text-gray-500 text-sm">We'll reply to your email soon.</p>
+                        </div>
+                    </template>
+                    
+                    <template x-if="!helpSent">
+                        <div>
+                            <textarea x-model="helpMessage"
+                                      @keydown.enter.ctrl="sendHelp()"
+                                      @keydown.enter.meta="sendHelp()"
+                                      placeholder="Describe your question or issue..."
+                                      rows="4"
+                                      class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none text-sm"
+                                      :disabled="helpSending"></textarea>
+                            
+                            <p x-show="helpError" x-text="helpError" class="text-red-500 text-xs mt-1"></p>
+                            
+                            <div class="mt-3 flex items-center justify-between">
+                                <span class="text-xs text-gray-400">Ctrl+Enter to send</span>
+                                <button @click="sendHelp()"
+                                        :disabled="helpSending || helpMessage.length < 10"
+                                        class="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center">
+                                    <span x-show="!helpSending">Send</span>
+                                    <span x-show="helpSending" class="flex items-center">
+                                        <svg class="animate-spin h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24">
+                                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                        </svg>
+                                        Sending...
+                                    </span>
+                                </button>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+            </div>
+        </div>
+
         <!-- Upgrade Modal -->
         <div x-show="showUpgrade" 
              x-transition:enter="transition ease-out duration-300"

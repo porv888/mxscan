@@ -226,6 +226,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     // Profile routes (new simplified route)
     Route::get('/profile', [App\Http\Controllers\ProfileController::class, 'edit'])->name('profile');
+    
+    // Support/Help route
+    Route::post('/support/send', [App\Http\Controllers\SupportController::class, 'send'])->name('support.send');
 });
 
 Route::get('/home', [App\Http\Controllers\HomeController::class, 'index'])->name('home');
