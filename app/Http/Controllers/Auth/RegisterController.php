@@ -84,6 +84,9 @@ class RegisterController extends Controller
      */
     protected function registered(Request $request, $user)
     {
+        // Set session flag for Google Ads conversion tracking
+        session(['just_registered' => true]);
+        
         // Redirect to verification notice since email verification is required
         return redirect()->route('verification.notice');
     }

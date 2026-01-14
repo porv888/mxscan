@@ -7,6 +7,26 @@
     <title>{{ config('app.name', 'MXScan') }} - Verify Email</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+    
+    <!-- Google Ads Tag -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=AW-1066529764"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'AW-1066529764');
+    </script>
+    
+    @if(session()->pull('just_registered'))
+    <!-- Google Ads Conversion - Registration -->
+    <script>
+        gtag('event', 'conversion', {
+            'send_to': 'AW-1066529764/RMn3COjtuQEQ5OfH_AM',
+            'value': 1.0,
+            'currency': 'USD'
+        });
+    </script>
+    @endif
 </head>
 <body class="bg-gray-50">
     <div class="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
