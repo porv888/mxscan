@@ -16,6 +16,8 @@ Route::get('/', function () {
 
 // Public routes
 Route::get('/pricing', [PlanController::class, 'pricing'])->name('pricing');
+Route::get('/terms', fn() => view('legal.terms'))->name('terms');
+Route::get('/privacy', fn() => view('legal.privacy'))->name('privacy');
 
 // Notification email verification (public route)
 Route::get('/notification-email/verify/{token}', [App\Http\Controllers\NotificationEmailController::class, 'verify'])->name('notification-emails.verify');
