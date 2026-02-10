@@ -5,6 +5,7 @@ return [
         'google',                           // Google Workspace
         'selector1', 'selector2',           // Microsoft 365
         'k1', 'k2', 'k3',                  // Mailchimp / Mandrill
+        'mte1', 'mte2',                    // Mandrill (transactional)
         'default', 'mail', 'dkim',          // Generic
         's1', 's2',                         // Generic
         'smtp', 'email',                    // Generic

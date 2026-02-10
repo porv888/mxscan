@@ -191,8 +191,10 @@ class ToolsController extends Controller
         foreach ($selectors as $sel) {
             try {
                 $dnsName = "{$sel}._domainkey.{$domain}";
-                $records = @dns_get_record($dnsName, DNS_TXT);
+                $found = false;
 
+                // Try TXT lookup first
+                $records = @dns_get_record($dnsName, DNS_TXT);
                 if (!empty($records)) {
                     foreach ($records as $rec) {
                         if (isset($rec['txt']) && str_contains($rec['txt'], 'p=')) {
@@ -205,8 +207,37 @@ class ToolsController extends Controller
                                 'key_bits' => $keyInfo['bits'],
                                 'status' => $this->dkimKeyStatus($keyInfo),
                             ];
+                            $found = true;
                             break;
                         }
+                    }
+                }
+
+                // Fallback: check for CNAME (Mandrill, SendGrid, etc.)
+                if (!$found) {
+                    $cnameRecords = @dns_get_record($dnsName, DNS_CNAME);
+                    if (!empty($cnameRecords)) {
+                        $target = $cnameRecords[0]['target'] ?? '';
+                        $targetTxt = @dns_get_record($target, DNS_TXT);
+                        $txtValue = '';
+                        if (!empty($targetTxt)) {
+                            foreach ($targetTxt as $rec) {
+                                if (isset($rec['txt']) && str_contains($rec['txt'], 'p=')) {
+                                    $txtValue = $rec['txt'];
+                                    break;
+                                }
+                            }
+                        }
+                        $keyInfo = $txtValue ? $this->parseDkimPublicKey($txtValue) : ['type' => 'unknown', 'bits' => 0];
+                        $results[] = [
+                            'selector' => $sel,
+                            'dns_name' => $dnsName,
+                            'record' => $txtValue ?: "CNAME → {$target}",
+                            'key_type' => $keyInfo['type'],
+                            'key_bits' => $keyInfo['bits'],
+                            'status' => $txtValue ? $this->dkimKeyStatus($keyInfo) : 'cname',
+                            'cname_target' => $target,
+                        ];
                     }
                 }
             } catch (\Exception $e) {

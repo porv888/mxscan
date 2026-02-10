@@ -41,12 +41,15 @@ class ScannerService
                 }
             }
 
-            // Check DKIM selectors
+            // Check DKIM selectors (TXT records and CNAME-delegated setups)
             $dkimSelectors = config('dkim.selectors', []);
             $dkimFound = [];
             foreach ($dkimSelectors as $selector) {
                 try {
                     $dkimDomain = "{$selector}._domainkey.{$domain}";
+
+                    // First try TXT lookup (works for direct TXT and some CNAME chains)
+                    $foundViaTxt = false;
                     $dkimRecords = @dns_get_record($dkimDomain, DNS_TXT);
                     if (!empty($dkimRecords)) {
                         foreach ($dkimRecords as $rec) {
@@ -55,9 +58,37 @@ class ScannerService
                                     'selector' => $selector,
                                     'record' => $rec['txt'],
                                 ];
+                                $foundViaTxt = true;
                                 break;
                             }
                         }
+                    }
+
+                    if ($foundViaTxt) {
+                        continue; // found via TXT, skip CNAME check for this selector
+                    }
+
+                    // Fallback: check for CNAME (providers like Mandrill, SendGrid use CNAMEs)
+                    $cnameRecords = @dns_get_record($dkimDomain, DNS_CNAME);
+                    if (!empty($cnameRecords)) {
+                        $target = $cnameRecords[0]['target'] ?? '';
+                        // Resolve the CNAME target for the actual TXT key
+                        $targetTxt = @dns_get_record($target, DNS_TXT);
+                        $txtValue = '';
+                        if (!empty($targetTxt)) {
+                            foreach ($targetTxt as $rec) {
+                                if (isset($rec['txt']) && str_contains($rec['txt'], 'p=')) {
+                                    $txtValue = $rec['txt'];
+                                    break;
+                                }
+                            }
+                        }
+                        $dkimFound[] = [
+                            'selector' => $selector,
+                            'record' => $txtValue ?: "CNAME → {$target}",
+                            'type' => 'cname',
+                            'target' => $target,
+                        ];
                     }
                 } catch (\Exception $e) {
                     // Skip failed selector lookups silently
