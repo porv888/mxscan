@@ -8,6 +8,7 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Messages\SlackMessage;
 use Illuminate\Notifications\Notification;
+use App\Channels\WebhookChannel;
 
 class IncidentRaised extends Notification implements ShouldQueue
 {
@@ -32,6 +33,10 @@ class IncidentRaised extends Notification implements ShouldQueue
 
         if ($prefs->isSlackConfigured()) {
             $channels[] = 'slack';
+        }
+
+        if ($prefs->isWebhookConfigured()) {
+            $channels[] = WebhookChannel::class;
         }
 
         return $channels;
@@ -79,6 +84,24 @@ class IncidentRaised extends Notification implements ShouldQueue
                         'Time' => $this->incident->created_at->format('M j, Y \a\t g:i A'),
                     ]);
             });
+    }
+
+    /**
+     * Get the webhook representation of the notification.
+     */
+    public function toWebhook($notifiable): array
+    {
+        $domain = $this->incident->domain;
+
+        return [
+            'event' => 'incident.raised',
+            'timestamp' => $this->incident->created_at->toISOString(),
+            'severity' => $this->incident->severity,
+            'domain' => $domain->domain,
+            'kind' => $this->incident->kind,
+            'message' => $this->incident->message,
+            'url' => url("/domains/{$domain->id}"),
+        ];
     }
 
     /**

@@ -79,6 +79,56 @@
                     </div>
                 </div>
 
+                <!-- Webhook Notifications -->
+                <div class="bg-gray-50 p-4 rounded-lg">
+                    <div class="flex items-start">
+                        <div class="flex items-center h-5">
+                            <input id="webhook_enabled" name="webhook_enabled" type="checkbox" 
+                                   class="focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300 rounded"
+                                   {{ $prefs->webhook_enabled ? 'checked' : '' }} value="1"
+                                   @if(!auth()->user()->canUseSlackNotifications()) disabled @endif>
+                        </div>
+                        <div class="ml-3 text-sm flex-1">
+                            <label for="webhook_enabled" class="font-medium text-gray-700 flex items-center">
+                                <i data-lucide="webhook" class="w-4 h-4 mr-1 inline"></i> Custom Webhook
+                                @if(!auth()->user()->canUseSlackNotifications())
+                                    <span class="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                                        Premium Feature
+                                    </span>
+                                @endif
+                            </label>
+                            <p class="text-gray-500 mb-3">Send JSON alerts to any HTTP endpoint (Discord, Teams, PagerDuty, Zapier, etc.)</p>
+                            
+                            @if(auth()->user()->canUseSlackNotifications())
+                                <div class="mt-2 space-y-3">
+                                    <div>
+                                        <label for="webhook_url" class="block text-sm font-medium text-gray-700">Webhook URL</label>
+                                        <input type="url" name="webhook_url" id="webhook_url" 
+                                               class="mt-1 focus:ring-blue-500 focus:border-blue-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md"
+                                               placeholder="https://your-endpoint.example.com/webhook"
+                                               value="{{ $prefs->webhook_url }}">
+                                    </div>
+                                    <div>
+                                        <label for="webhook_secret" class="block text-sm font-medium text-gray-700">Signing Secret <span class="text-gray-400">(optional)</span></label>
+                                        <input type="text" name="webhook_secret" id="webhook_secret" 
+                                               class="mt-1 focus:ring-blue-500 focus:border-blue-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md"
+                                               placeholder="Used to sign payloads with HMAC-SHA256"
+                                               value="{{ $prefs->webhook_secret }}">
+                                        <p class="mt-1 text-xs text-gray-500">If set, each request includes an <code>X-MXScan-Signature</code> header for verification.</p>
+                                    </div>
+                                </div>
+                            @else
+                                <div class="mt-2 p-3 bg-yellow-50 border border-yellow-200 rounded-md">
+                                    <p class="text-sm text-yellow-700">
+                                        Webhook notifications are available with Premium and Ultra plans.
+                                        <a href="{{ route('pricing') }}" class="font-medium underline">Upgrade now</a>
+                                    </p>
+                                </div>
+                            @endif
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Weekly Reports -->
                 <div class="bg-gray-50 p-4 rounded-lg">
                     <div class="flex items-start">

@@ -15,12 +15,16 @@ class NotificationPref extends Model
         'email_enabled',
         'slack_enabled',
         'slack_webhook',
+        'webhook_enabled',
+        'webhook_url',
+        'webhook_secret',
         'weekly_reports'
     ];
 
     protected $casts = [
         'email_enabled' => 'boolean',
         'slack_enabled' => 'boolean',
+        'webhook_enabled' => 'boolean',
         'weekly_reports' => 'boolean',
     ];
 
@@ -61,6 +65,14 @@ class NotificationPref extends Model
     }
 
     /**
+     * Check if generic webhook is properly configured
+     */
+    public function isWebhookConfigured(): bool
+    {
+        return $this->webhook_enabled && !empty($this->webhook_url);
+    }
+
+    /**
      * Get enabled notification channels
      */
     public function getEnabledChannels(): array
@@ -73,6 +85,10 @@ class NotificationPref extends Model
         
         if ($this->isSlackConfigured()) {
             $channels[] = 'slack';
+        }
+
+        if ($this->isWebhookConfigured()) {
+            $channels[] = \App\Channels\WebhookChannel::class;
         }
         
         return $channels;

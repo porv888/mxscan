@@ -7,12 +7,8 @@ use App\Http\Controllers\StripeWebhookController;
 use Illuminate\Foundation\Auth\EmailVerificationRequest;
 use Illuminate\Http\Request;
 
-Route::get('/', function () {
-    if (auth()->check()) {
-        return redirect()->route('dashboard');
-    }
-    return redirect()->route('login');
-});
+Route::get('/', [App\Http\Controllers\PublicScanController::class, 'index'])->name('public.scan');
+Route::post('/scan', [App\Http\Controllers\PublicScanController::class, 'scan'])->name('public.scan.run')->middleware('throttle:10,1');
 
 // Public routes
 Route::get('/pricing', [PlanController::class, 'pricing'])->name('pricing');
@@ -89,8 +85,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/reports/export', [App\Http\Controllers\ReportController::class, 'export'])->name('reports.export');
     Route::get('/reports/{scan}', [App\Http\Controllers\ReportController::class, 'show'])->name('reports.show');
 
-    // Legacy Scan Routes (for backward compatibility)
-    Route::get('/dashboard/scans', [App\Http\Controllers\ScanController::class, 'index'])->name('dashboard.scans');
+    // Legacy Scan Routes (index redirects to reports, others kept for active use)
+    Route::get('/dashboard/scans', fn() => redirect()->route('reports.index'))->name('dashboard.scans');
     Route::post('/dashboard/domains/{domain}/scan', [App\Http\Controllers\ScanController::class, 'start'])->name('scans.start');
     Route::get('/dashboard/scans/{scan}', [App\Http\Controllers\ScanController::class, 'show'])->name('scans.show');
     Route::get('/dashboard/scans/{scan}/status', [App\Http\Controllers\ScanController::class, 'status'])->name('scans.status');
@@ -143,25 +139,21 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('/domains/{domain}/rbl/submitted', [App\Http\Controllers\RblController::class, 'submitted'])->name('rbl.submitted');
     Route::post('/domains/{domain}/rbl/recheck', [App\Http\Controllers\RblController::class, 'recheck'])->name('rbl.recheck');
     
-    // Quick tools (post back to same page with flash)
-    Route::post('/tools/smtp-test', [App\Http\Controllers\ToolsController::class, 'smtpTest'])->name('tools.smtp');
-    Route::post('/tools/bimi-check', [App\Http\Controllers\ToolsController::class, 'bimiCheck'])->name('tools.bimi');
-    Route::post('/tools/spf-wizard', [App\Http\Controllers\ToolsController::class, 'spfWizard'])->name('tools.spf');
+    // Tools
+    Route::get('/tools', [App\Http\Controllers\ToolsController::class, 'index'])->name('tools.index');
+    Route::get('/tools/smtp-test', [App\Http\Controllers\ToolsController::class, 'smtpTestForm'])->name('tools.smtp');
+    Route::post('/tools/smtp-test', [App\Http\Controllers\ToolsController::class, 'smtpTest'])->name('tools.smtp.run');
+    Route::get('/tools/bimi-check', [App\Http\Controllers\ToolsController::class, 'bimiCheckForm'])->name('tools.bimi');
+    Route::post('/tools/bimi-check', [App\Http\Controllers\ToolsController::class, 'bimiCheck'])->name('tools.bimi.run');
+    Route::get('/tools/spf-wizard', [App\Http\Controllers\ToolsController::class, 'spfWizardForm'])->name('tools.spf');
+    Route::post('/tools/spf-wizard', [App\Http\Controllers\ToolsController::class, 'spfWizard'])->name('tools.spf.run');
+    Route::get('/tools/dkim-lookup', [App\Http\Controllers\ToolsController::class, 'dkimLookupForm'])->name('tools.dkim');
+    Route::post('/tools/dkim-lookup', [App\Http\Controllers\ToolsController::class, 'dkimLookup'])->name('tools.dkim.run');
     
-    // Schedule Management Routes
-    Route::resource('/dashboard/schedules', App\Http\Controllers\ScheduleController::class, [
-        'names' => [
-            'index' => 'schedules.index',
-            'create' => 'schedules.create',
-            'store' => 'schedules.store',
-            'edit' => 'schedules.edit',
-            'update' => 'schedules.update',
-            'destroy' => 'schedules.destroy'
-        ]
-    ]);
-    Route::post('/dashboard/schedules/{schedule}/pause', [App\Http\Controllers\ScheduleController::class, 'pause'])->name('schedules.pause');
-    Route::post('/dashboard/schedules/{schedule}/resume', [App\Http\Controllers\ScheduleController::class, 'resume'])->name('schedules.resume');
-    Route::post('/dashboard/schedules/{schedule}/run-now', [App\Http\Controllers\ScheduleController::class, 'runNow'])->name('schedules.run-now');
+    // Legacy Schedule Routes (redirect to automations)
+    Route::get('/dashboard/schedules', fn() => redirect()->route('automations.index'))->name('schedules.index');
+    Route::get('/dashboard/schedules/create', fn() => redirect()->route('automations.create'))->name('schedules.create');
+    Route::get('/dashboard/schedules/{schedule}/edit', fn($schedule) => redirect()->route('automations.edit', $schedule))->name('schedules.edit');
 
     // Profile routes
     Route::get('/dashboard/profile', [App\Http\Controllers\ProfileController::class, 'edit'])->name('dashboard.profile');
@@ -247,6 +239,11 @@ Route::middleware(['auth', 'verified', 'admin'])->prefix('admin')->name('admin.'
     Route::get('/users/{user}', [App\Http\Controllers\Admin\UsersController::class, 'show'])->name('users.show');
     Route::get('/users/{user}/edit', [App\Http\Controllers\Admin\UsersController::class, 'edit'])->name('users.edit');
     Route::patch('/users/{user}', [App\Http\Controllers\Admin\UsersController::class, 'update'])->name('users.update');
+    Route::post('/users/{user}/ban', [App\Http\Controllers\Admin\UsersController::class, 'ban'])->name('users.ban');
+    Route::post('/users/{user}/suspend', [App\Http\Controllers\Admin\UsersController::class, 'suspend'])->name('users.suspend');
+    Route::post('/users/{user}/reactivate', [App\Http\Controllers\Admin\UsersController::class, 'reactivate'])->name('users.reactivate');
+    Route::post('/users/{user}/terminate-subscription', [App\Http\Controllers\Admin\UsersController::class, 'terminateSubscription'])->name('users.terminate-subscription');
+    Route::post('/users/{user}/reset-password', [App\Http\Controllers\Admin\UsersController::class, 'resetPassword'])->name('users.reset-password');
     Route::delete('/users/{user}', [App\Http\Controllers\Admin\UsersController::class, 'destroy'])->name('users.destroy');
 
     // Impersonation
@@ -285,13 +282,13 @@ Route::middleware(['auth', 'verified', 'admin'])->prefix('admin')->name('admin.'
     // Route::get('/notifications/test', [App\Http\Controllers\Admin\AdminNotificationsController::class, 'test'])->name('notifications.test');
     // Route::post('/notifications/send-test', [App\Http\Controllers\Admin\AdminNotificationsController::class, 'sendTest'])->name('notifications.send-test');
     
-    // Placeholder routes for other admin sections (to be implemented later)
-    Route::get('/scans', function() { return 'Scans management - coming soon'; })->name('scans.index');
-    Route::get('/plans', function() { return 'Plans management - coming soon'; })->name('plans.index');
-    Route::get('/plans/create', function() { return 'Create plan - coming soon'; })->name('plans.create');
-    Route::get('/invoices', function() { return 'Invoices management - coming soon'; })->name('invoices.index');
-    Route::get('/audit', function() { return 'Audit logs - coming soon'; })->name('audit.index');
-    Route::get('/settings', function() { return 'Settings - coming soon'; })->name('settings.index');
+    // Admin placeholder routes (referenced by admin views)
+    Route::get('/scans', [App\Http\Controllers\Admin\AdminScansController::class, 'index'])->name('scans.index');
+    Route::get('/plans', fn() => redirect()->route('admin.dashboard'))->name('plans.index');
+    Route::get('/plans/create', fn() => redirect()->route('admin.dashboard'))->name('plans.create');
+    Route::get('/invoices', fn() => redirect()->route('admin.dashboard'))->name('invoices.index');
+    Route::get('/audit', fn() => redirect()->route('admin.dashboard'))->name('audit.index');
+    Route::get('/settings', fn() => redirect()->route('admin.dashboard'))->name('settings.index');
 });
 
 // Stripe webhook moved to api.php for better CSRF handling

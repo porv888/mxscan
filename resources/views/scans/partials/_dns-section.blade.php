@@ -2,12 +2,14 @@
 @php
     $mxData = $records['MX'] ?? null;
     $spfData = $records['SPF'] ?? null;
+    $dkimData = $records['DKIM'] ?? null;
     $dmarcData = $records['DMARC'] ?? null;
     $tlsrptData = $records['TLS-RPT'] ?? null;
     $mtastsData = $records['MTA-STS'] ?? null;
     
     $allGreen = $mxData && $mxData['status'] === 'found' &&
                 $spfData && $spfData['status'] === 'found' &&
+                $dkimData && $dkimData['status'] === 'found' &&
                 $dmarcData && $dmarcData['status'] === 'found' &&
                 $tlsrptData && $tlsrptData['status'] === 'found' &&
                 $mtastsData && $mtastsData['status'] === 'found';
@@ -112,6 +114,44 @@
                     </svg>
                     No SPF record found
                 </div>
+            </div>
+            @endif
+        </div>
+
+        {{-- DKIM --}}
+        <div>
+            <div class="flex items-center justify-between mb-2">
+                <h3 class="text-sm font-semibold text-gray-900 dark:text-gray-100">DKIM</h3>
+                @if($dkimData && $dkimData['status'] === 'found')
+                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
+                    <svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path>
+                    </svg>
+                    {{ count($dkimData['data']) }} selector{{ count($dkimData['data']) > 1 ? 's' : '' }} found
+                </span>
+                @endif
+            </div>
+            @if($dkimData && $dkimData['status'] === 'found')
+            <div class="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-3 space-y-2">
+                @foreach($dkimData['data'] as $dkim)
+                <div>
+                    <div class="flex items-center gap-2 mb-1">
+                        <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">{{ $dkim['selector'] }}</span>
+                        <span class="text-xs text-gray-500 dark:text-gray-400">{{ $dkim['selector'] }}._domainkey.{{ $domain->domain ?? $domain }}</span>
+                    </div>
+                    <code class="text-xs text-gray-900 dark:text-gray-100 break-all block">{{ \Illuminate\Support\Str::limit($dkim['record'], 120) }}</code>
+                </div>
+                @endforeach
+            </div>
+            @else
+            <div class="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3">
+                <div class="flex items-center text-sm text-amber-800 dark:text-amber-200">
+                    <svg class="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>
+                    </svg>
+                    No DKIM selectors detected (checked {{ count(config('dkim.selectors', [])) }} common selectors)
+                </div>
+                <p class="text-xs text-amber-600 dark:text-amber-400 mt-1 ml-6">Enable DKIM signing in your email provider settings. If using a custom selector, it may not be in our probe list.</p>
             </div>
             @endif
         </div>

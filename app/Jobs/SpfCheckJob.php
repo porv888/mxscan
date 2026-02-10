@@ -40,7 +40,37 @@ class SpfCheckJob implements ShouldQueue
                 ->first();
             
             // Determine if record changed
-            $recordChanged = $previousCheck && $previousCheck->looked_up_record !== $result->currentRecord;
+            // Skip change detection entirely if DNS lookup failed (TIMEOUT warning)
+            // This prevents false positives when DNS lookups fail/timeout
+            $recordChanged = false;
+            $dnsLookupFailed = in_array('TIMEOUT', $result->warnings);
+            
+            if ($previousCheck && !$dnsLookupFailed) {
+                if ($result->currentRecord !== null && $previousCheck->looked_up_record !== null) {
+                    // Both records exist - compare them
+                    $recordChanged = $previousCheck->looked_up_record !== $result->currentRecord;
+                } elseif ($result->currentRecord !== null && $previousCheck->looked_up_record === null) {
+                    // New SPF record added (previous was null, now has record)
+                    $recordChanged = true;
+                } elseif ($result->currentRecord === null && $previousCheck->looked_up_record !== null) {
+                    // Potential SPF removal - wait for second consecutive null to confirm
+                    $recordChanged = false;
+                } elseif ($result->currentRecord === null && $previousCheck->looked_up_record === null) {
+                    // Both current and previous are null
+                    // Check if there was a valid record before these two nulls
+                    $lastValidCheck = SpfCheck::where('domain_id', $this->domainId)
+                        ->whereNotNull('looked_up_record')
+                        ->where('looked_up_record', '!=', '')
+                        ->orderBy('created_at', 'desc')
+                        ->first();
+                    
+                    if ($lastValidCheck && !$previousCheck->changed) {
+                        // There was a valid record before, and previous check didn't already alert
+                        // This is the second consecutive null - confirm as genuine removal
+                        $recordChanged = true;
+                    }
+                }
+            }
             
             // Create new SPF check record
             $spfCheck = SpfCheck::create([

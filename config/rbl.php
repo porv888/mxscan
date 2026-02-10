@@ -231,31 +231,6 @@ return [
                 'Provide your IP and reason for delisting.',
             ],
         ],
-        'njabl' => [
-            'name' => 'NJABL',
-            'host' => 'dnsbl.njabl.org',
-            'site' => 'http://njabl.org/',
-            'delist_url' => 'http://njabl.org/',
-            'contact_email' => null,
-            'requires_evidence' => false,
-            'enabled' => false,
-            'instructions' => [
-                'Visit the NJABL website for delisting information.',
-                'Note: NJABL may no longer be actively maintained.',
-            ],
-        ],
-        'ahbl' => [
-            'name' => 'AHBL',
-            'host' => 'dnsbl.ahbl.org',
-            'site' => 'https://www.ahbl.org/',
-            'delist_url' => 'https://www.ahbl.org/lktool',
-            'contact_email' => null,
-            'requires_evidence' => false,
-            'enabled' => false,
-            'instructions' => [
-                'Submit delist via the official lookup/delist tool.',
-            ],
-        ],
         'manitu' => [
             'name' => 'Manitu',
             'host' => 'ix.dnsbl.manitu.net',
@@ -306,19 +281,6 @@ return [
             'instructions' => [
                 'Visit the GBUdb website for delisting information.',
                 'Follow their removal procedure.',
-            ],
-        ],
-        'dcc' => [
-            'name' => 'DCC',
-            'host' => 'blacklist.woody.ch',
-            'site' => 'http://www.dcc-servers.net/dcc/',
-            'delist_url' => 'http://www.dcc-servers.net/dcc/',
-            'contact_email' => null,
-            'requires_evidence' => false,
-            'enabled' => false,
-            'instructions' => [
-                'Visit the DCC servers website.',
-                'Follow their delisting procedure.',
             ],
         ],
         'rbl_jp' => [

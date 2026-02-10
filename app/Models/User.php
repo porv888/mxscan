@@ -209,12 +209,48 @@ class User extends Authenticatable implements MustVerifyEmail
     }
 
     /**
+     * Check if user is on the Ultra plan.
+     */
+    public function isUltra(): bool
+    {
+        return $this->currentPlanKey() === 'ultra';
+    }
+
+    /**
      * Check if user can use monitoring features (plan-gated).
      */
     public function canUseMonitoring(): bool
     {
         $planKey = $this->currentPlanKey();
         return in_array($planKey, ['premium', 'ultra']);
+    }
+
+    /**
+     * Check if user can use API access (Ultra only).
+     */
+    public function canUseApi(): bool
+    {
+        return $this->isUltra();
+    }
+
+    /**
+     * Check if user has priority support (Ultra only).
+     */
+    public function canUsePrioritySupport(): bool
+    {
+        return $this->isUltra();
+    }
+
+    /**
+     * Get the scan frequency minimum interval in minutes.
+     */
+    public function minScanIntervalMinutes(): int
+    {
+        return match($this->currentPlanKey()) {
+            'ultra' => 60,       // every hour
+            'premium' => 360,    // every 6 hours
+            default => 1440,     // daily
+        };
     }
 
     /**
@@ -330,7 +366,11 @@ class User extends Authenticatable implements MustVerifyEmail
      */
     public function dmarcHistoryDays(): int
     {
-        return $this->canUseDmarcFull() ? 90 : 7;
+        return match($this->currentPlanKey()) {
+            'ultra' => 365,
+            'premium' => 90,
+            default => 7,
+        };
     }
 
     /**
@@ -338,6 +378,22 @@ class User extends Authenticatable implements MustVerifyEmail
      */
     public function dmarcSenderLimit(): int
     {
-        return $this->canUseDmarcFull() ? 100 : 5;
+        return match($this->currentPlanKey()) {
+            'ultra' => 500,
+            'premium' => 100,
+            default => 5,
+        };
+    }
+
+    /**
+     * Get the scan history retention in days.
+     */
+    public function scanRetentionDays(): int
+    {
+        return match($this->currentPlanKey()) {
+            'ultra' => 365,
+            'premium' => 90,
+            default => 30,
+        };
     }
 }

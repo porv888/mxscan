@@ -148,8 +148,17 @@ class SpfResolver
     private function getSpfRecord(string $domain): ?string
     {
         try {
-            $txtRecords = $this->dnsClient->getTxt($domain);
-            
+            $dnsResult = $this->dnsClient->getTxtResult($domain);
+
+            // DNS lookup failed (timeout, network error, etc.)
+            if ($dnsResult->failed()) {
+                Log::warning("SPF TXT lookup failed for {$domain}: " . ($dnsResult->error ?? 'unknown'));
+                $this->warnings[] = self::WARNING_TIMEOUT;
+                return null;
+            }
+
+            $txtRecords = $dnsResult->records;
+
             if (empty($txtRecords)) {
                 return null;
             }

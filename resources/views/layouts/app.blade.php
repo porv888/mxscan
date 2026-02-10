@@ -63,15 +63,15 @@
                     <i data-lucide="globe" class="mr-3 h-5 w-5 {{ request()->routeIs('dashboard.domains*') ? 'text-blue-500' : 'text-gray-400' }}"></i>
                     Domains
                 </a>
-                <a href="{{ route('schedules.index') }}" 
-                   class="group flex items-center px-2 py-2 text-sm font-medium rounded-md {{ request()->routeIs('schedules*') ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900' }}">
-                    <i data-lucide="calendar" class="mr-3 h-5 w-5 {{ request()->routeIs('schedules*') ? 'text-blue-500' : 'text-gray-400' }}"></i>
-                    Schedules
+                <a href="{{ route('automations.index') }}" 
+                   class="group flex items-center px-2 py-2 text-sm font-medium rounded-md {{ request()->routeIs('automations*') ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900' }}">
+                    <i data-lucide="calendar" class="mr-3 h-5 w-5 {{ request()->routeIs('automations*') ? 'text-blue-500' : 'text-gray-400' }}"></i>
+                    Automations
                 </a>
-                <a href="{{ route('dashboard.scans') }}" 
-                   class="group flex items-center px-2 py-2 text-sm font-medium rounded-md {{ request()->routeIs('dashboard.scans*') ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900' }}">
-                    <i data-lucide="search" class="mr-3 h-5 w-5 {{ request()->routeIs('dashboard.scans*') ? 'text-blue-500' : 'text-gray-400' }}"></i>
-                    Scans
+                <a href="{{ route('reports.index') }}" 
+                   class="group flex items-center px-2 py-2 text-sm font-medium rounded-md {{ request()->routeIs('reports*') ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900' }}">
+                    <i data-lucide="search" class="mr-3 h-5 w-5 {{ request()->routeIs('reports*') ? 'text-blue-500' : 'text-gray-400' }}"></i>
+                    Reports
                 </a>
                 @if(auth()->user()->canUseMonitoring())
                     <a href="{{ route('monitoring.incidents') }}" 
@@ -89,6 +89,11 @@
                    class="group flex items-center px-2 py-2 text-sm font-medium rounded-md {{ request()->routeIs('dmarc.*') ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900' }}">
                     <i data-lucide="file-bar-chart" class="mr-3 h-5 w-5 {{ request()->routeIs('dmarc.*') ? 'text-blue-500' : 'text-gray-400' }}"></i>
                     DMARC Activity
+                </a>
+                <a href="{{ route('tools.index') }}" 
+                   class="group flex items-center px-2 py-2 text-sm font-medium rounded-md {{ request()->routeIs('tools.*') ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900' }}">
+                    <i data-lucide="wrench" class="mr-3 h-5 w-5 {{ request()->routeIs('tools.*') ? 'text-blue-500' : 'text-gray-400' }}"></i>
+                    Tools
                 </a>
                 <a href="{{ route('dashboard.profile') }}" 
                    class="group flex items-center px-2 py-2 text-sm font-medium rounded-md {{ request()->routeIs('dashboard.profile') ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900' }}">
@@ -124,15 +129,15 @@
                                 <i data-lucide="globe" class="mr-3 h-5 w-5 {{ request()->routeIs('dashboard.domains*') ? 'text-blue-500' : 'text-gray-400 group-hover:text-gray-500' }}"></i>
                                 Domains
                             </a>
-                            <a href="{{ route('schedules.index') }}" 
-                               class="group flex items-center px-2 py-2 text-sm font-medium rounded-md {{ request()->routeIs('schedules*') ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900' }}">
-                                <i data-lucide="calendar" class="mr-3 h-5 w-5 {{ request()->routeIs('schedules*') ? 'text-blue-500' : 'text-gray-400 group-hover:text-gray-500' }}"></i>
-                                Schedules
+                            <a href="{{ route('automations.index') }}" 
+                               class="group flex items-center px-2 py-2 text-sm font-medium rounded-md {{ request()->routeIs('automations*') ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900' }}">
+                                <i data-lucide="calendar" class="mr-3 h-5 w-5 {{ request()->routeIs('automations*') ? 'text-blue-500' : 'text-gray-400 group-hover:text-gray-500' }}"></i>
+                                Automations
                             </a>
-                            <a href="{{ route('dashboard.scans') }}" 
-                               class="group flex items-center px-2 py-2 text-sm font-medium rounded-md {{ request()->routeIs('dashboard.scans*') ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900' }}">
-                                <i data-lucide="search" class="mr-3 h-5 w-5 {{ request()->routeIs('dashboard.scans*') ? 'text-blue-500' : 'text-gray-400 group-hover:text-gray-500' }}"></i>
-                                Scans
+                            <a href="{{ route('reports.index') }}" 
+                               class="group flex items-center px-2 py-2 text-sm font-medium rounded-md {{ request()->routeIs('reports*') ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900' }}">
+                                <i data-lucide="search" class="mr-3 h-5 w-5 {{ request()->routeIs('reports*') ? 'text-blue-500' : 'text-gray-400 group-hover:text-gray-500' }}"></i>
+                                Reports
                             </a>
                             
                             @if(auth()->user()->canUseMonitoring())
@@ -160,6 +165,12 @@
                                class="group flex items-center px-2 py-2 text-sm font-medium rounded-md {{ request()->routeIs('dmarc.*') ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900' }}">
                                 <i data-lucide="file-bar-chart" class="mr-3 h-5 w-5 {{ request()->routeIs('dmarc.*') ? 'text-blue-500' : 'text-gray-400 group-hover:text-gray-500' }}"></i>
                                 DMARC Activity
+                            </a>
+                            
+                            <a href="{{ route('tools.index') }}" 
+                               class="group flex items-center px-2 py-2 text-sm font-medium rounded-md {{ request()->routeIs('tools.*') ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900' }}">
+                                <i data-lucide="wrench" class="mr-3 h-5 w-5 {{ request()->routeIs('tools.*') ? 'text-blue-500' : 'text-gray-400 group-hover:text-gray-500' }}"></i>
+                                Tools
                             </a>
                             
                             <a href="{{ route('dashboard.profile') }}" 

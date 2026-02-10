@@ -2,6 +2,7 @@
 
 namespace App\Services\Dns;
 
+use App\Services\Dns\DnsResult;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 
@@ -25,23 +26,36 @@ class DnsClient
      */
     public function getTxt(string $domain): array
     {
+        return $this->getTxtResult($domain)->records;
+    }
+
+    /**
+     * Get TXT records as a DnsResult (includes success/failure info).
+     */
+    public function getTxtResult(string $domain): DnsResult
+    {
         $domain = strtolower(trim($domain));
-        
-        // Check in-memory cache first
-        $memoKey = "txt_{$domain}";
+
+        $memoKey = "txt_r_{$domain}";
         if (isset($this->memoCache[$memoKey])) {
             return $this->memoCache[$memoKey];
         }
 
-        // Check Laravel cache
-        $cacheKey = "dns_txt_{$domain}";
-        $result = Cache::remember($cacheKey, 900, function () use ($domain) { // 15 minutes
-            return $this->performTxtLookup($domain);
-        });
+        $cacheKey = "dns_txt_r_{$domain}";
+        $cached = Cache::get($cacheKey);
+        if ($cached instanceof DnsResult) {
+            $this->memoCache[$memoKey] = $cached;
+            return $cached;
+        }
 
-        // Store in memo cache for this request
+        $result = $this->performTxtLookup($domain);
+
+        // Only cache successful lookups (don't cache failures)
+        if ($result->success) {
+            Cache::put($cacheKey, $result, 900);
+        }
+
         $this->memoCache[$memoKey] = $result;
-
         return $result;
     }
 
@@ -123,29 +137,35 @@ class DnsClient
     /**
      * Perform TXT record lookup with retries and timeout handling.
      */
-    private function performTxtLookup(string $domain): array
+    private function performTxtLookup(string $domain): DnsResult
     {
-        $records = [];
-        
+        $lastError = null;
+
         for ($attempt = 0; $attempt <= $this->retries; $attempt++) {
             try {
                 $dnsRecords = dns_get_record($domain, DNS_TXT);
                 
                 if ($dnsRecords === false) {
+                    $lastError = "dns_get_record returned false";
                     if ($attempt === $this->retries) {
                         Log::warning("TXT lookup failed for {$domain} after {$this->retries} retries");
+                    }
+                    if ($attempt < $this->retries) {
+                        usleep(100000);
                     }
                     continue;
                 }
 
+                $records = [];
                 foreach ($dnsRecords as $record) {
                     if (isset($record['txt'])) {
                         $records[] = $record['txt'];
                     }
                 }
 
-                return $records;
+                return new DnsResult($records, true);
             } catch (\Exception $e) {
+                $lastError = $e->getMessage();
                 if ($attempt === $this->retries) {
                     Log::warning("TXT lookup exception for {$domain}: " . $e->getMessage());
                 }
@@ -156,7 +176,7 @@ class DnsClient
             }
         }
 
-        return $records;
+        return new DnsResult([], false, $lastError);
     }
 
     /**

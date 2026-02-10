@@ -77,9 +77,18 @@ class UsersController extends Controller
 
     public function show(User $user)
     {
-        $domainsCount = $user->domains()->count() ?? 0;
-        $scansCount   = $user->scans()->count() ?? 0;
-        return view('admin.users.show', compact('user','domainsCount','scansCount'));
+        $domainsCount = $user->domains()->count();
+        $scansCount   = $user->scans()->count();
+        $subscription = $user->currentSubscription();
+        $plan         = $subscription?->plan;
+        $domains      = $user->domains()->latest()->limit(10)->get();
+        $recentScans  = $user->scans()->with('domain:id,domain')->latest()->limit(10)->get();
+        $allSubscriptions = $user->subscriptions()->with('plan')->latest()->get();
+
+        return view('admin.users.show', compact(
+            'user', 'domainsCount', 'scansCount', 'subscription', 'plan',
+            'domains', 'recentScans', 'allSubscriptions'
+        ));
     }
 
     public function edit(User $user)
@@ -92,7 +101,7 @@ class UsersController extends Controller
         $request->validate([
             'name'   => 'sometimes|string|max:255',
             'role'   => 'sometimes|string|in:user,admin,superadmin',
-            'status' => 'sometimes|string|in:active,inactive,suspended',
+            'status' => 'sometimes|string|in:active,inactive,suspended,banned',
         ]);
 
         $user->fill($request->only('name','role','status'))->save();
@@ -100,9 +109,53 @@ class UsersController extends Controller
         return back()->with('success','User updated');
     }
 
+    public function ban(Request $request, User $user)
+    {
+        $user->update(['status' => 'banned']);
+
+        // Cancel active subscriptions
+        $user->subscriptions()->where('status', 'active')->update([
+            'status' => 'canceled',
+            'canceled_at' => now(),
+        ]);
+
+        return back()->with('success', 'User has been banned and their subscriptions canceled.');
+    }
+
+    public function suspend(User $user)
+    {
+        $user->update(['status' => 'suspended']);
+        return back()->with('success', 'User has been suspended.');
+    }
+
+    public function reactivate(User $user)
+    {
+        $user->update(['status' => 'active']);
+        return back()->with('success', 'User has been reactivated.');
+    }
+
+    public function terminateSubscription(Request $request, User $user)
+    {
+        $subscriptionId = $request->input('subscription_id');
+
+        $sub = $user->subscriptions()->findOrFail($subscriptionId);
+        $sub->update([
+            'status' => 'canceled',
+            'canceled_at' => now(),
+        ]);
+
+        return back()->with('success', "Subscription #{$sub->id} has been terminated.");
+    }
+
+    public function resetPassword(Request $request, User $user)
+    {
+        $request->validate(['password' => 'required|string|min:8|confirmed']);
+        $user->update(['password' => bcrypt($request->password)]);
+        return back()->with('success', 'Password has been reset.');
+    }
+
     public function destroy(User $user)
     {
-        // Soft delete if enabled; otherwise caution!
         $user->delete();
         return redirect()->route('admin.users.index')->with('success','User deleted');
     }

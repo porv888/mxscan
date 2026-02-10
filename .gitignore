@@ -51,6 +51,7 @@ verify_*.php
 # Documentation (optional - remove if you want to track)
 *.md
 !README.md
+!tasks.md
 
 # Error logs
 error_log

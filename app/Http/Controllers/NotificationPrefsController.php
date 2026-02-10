@@ -33,6 +33,9 @@ class NotificationPrefsController extends Controller
             'email_enabled' => 'boolean',
             'slack_enabled' => 'boolean',
             'slack_webhook' => 'nullable|url',
+            'webhook_enabled' => 'boolean',
+            'webhook_url' => 'nullable|url',
+            'webhook_secret' => 'nullable|string|max:100',
             'weekly_reports' => 'boolean',
         ]);
 
@@ -57,6 +60,9 @@ class NotificationPrefsController extends Controller
             'email_enabled' => $request->boolean('email_enabled', true),
             'slack_enabled' => $request->boolean('slack_enabled', false),
             'slack_webhook' => $request->input('slack_webhook'),
+            'webhook_enabled' => $request->boolean('webhook_enabled', false),
+            'webhook_url' => $request->input('webhook_url'),
+            'webhook_secret' => $request->input('webhook_secret'),
             'weekly_reports' => $request->boolean('weekly_reports', true),
         ]);
 

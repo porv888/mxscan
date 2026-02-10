@@ -9,6 +9,15 @@ use Illuminate\Support\Facades\Log;
 
 class BlacklistChecker
 {
+    private int $concurrency;
+    private int $timeoutMs;
+
+    public function __construct(int $concurrency = 20, int $timeoutMs = 3000)
+    {
+        $this->concurrency = $concurrency;
+        $this->timeoutMs = $timeoutMs;
+    }
+
     /**
      * Get enabled RBL providers from configuration.
      */
@@ -23,7 +32,7 @@ class BlacklistChecker
     }
 
     /**
-     * Check all IPs for a domain against RBL providers.
+     * Check all IPs for a domain against RBL providers (parallelized).
      */
     public function checkDomain(Scan $scan, string $domain): array
     {
@@ -39,28 +48,116 @@ class BlacklistChecker
 
         Log::info("Found IPs for {$domain}: " . implode(', ', $ips));
 
+        // Build all lookup jobs
+        $jobs = [];
+        $providers = $this->getRblProviders();
         foreach ($ips as $ip) {
-            foreach ($this->getRblProviders() as $providerId => $provider) {
-                $result = $this->checkIPAgainstRBL($ip, $provider);
-                
-                // Store result in database
-                $blacklistResult = BlacklistResult::create([
-                    'scan_id' => $scan->id,
-                    'provider' => $provider['name'],
-                    'ip_address' => $ip,
-                    'status' => $result['listed'] ? 'listed' : 'ok',
-                    'message' => $result['message'],
-                    'removal_url' => $provider['delist_url'] ?? null,
-                ]);
+            $reversedIP = $this->reverseIP($ip);
+            if (!$reversedIP) continue;
 
-                $results[] = $blacklistResult;
-                
-                Log::info("Checked {$ip} against {$provider['name']}: " . ($result['listed'] ? 'LISTED' : 'OK'));
+            foreach ($providers as $providerId => $provider) {
+                $jobs[] = [
+                    'ip' => $ip,
+                    'provider' => $provider,
+                    'provider_id' => $providerId,
+                    'lookup_host' => $reversedIP . '.' . $provider['host'],
+                ];
             }
         }
 
+        // Execute lookups in parallel batches
+        $lookupResults = $this->parallelDnsLookup($jobs);
+
+        // Persist results
+        foreach ($lookupResults as $lr) {
+            $blacklistResult = BlacklistResult::create([
+                'scan_id' => $scan->id,
+                'provider' => $lr['provider']['name'],
+                'ip_address' => $lr['ip'],
+                'status' => $lr['listed'] ? 'listed' : 'ok',
+                'message' => $lr['message'],
+                'removal_url' => $lr['provider']['delist_url'] ?? null,
+            ]);
+
+            $results[] = $blacklistResult;
+        }
+
+        $listedCount = collect($results)->where('status', 'listed')->count();
+        Log::info("Blacklist check completed for {$domain}: {$listedCount} listed out of " . count($results) . " checks");
+
         // Check if we should send alerts
         $this->checkForAlerts($scan, $results);
+
+        return $results;
+    }
+
+    /**
+     * Perform DNS lookups in parallel using curl_multi with DNS-over-HTTPS.
+     */
+    private function parallelDnsLookup(array $jobs): array
+    {
+        $results = [];
+        $batches = array_chunk($jobs, $this->concurrency);
+
+        foreach ($batches as $batch) {
+            $mh = curl_multi_init();
+            $handles = [];
+
+            foreach ($batch as $idx => $job) {
+                // Use Google Public DNS DoH to resolve A record
+                $url = 'https://dns.google/resolve?name=' . urlencode($job['lookup_host']) . '&type=A';
+
+                $ch = curl_init();
+                curl_setopt_array($ch, [
+                    CURLOPT_URL => $url,
+                    CURLOPT_RETURNTRANSFER => true,
+                    CURLOPT_TIMEOUT_MS => $this->timeoutMs,
+                    CURLOPT_CONNECTTIMEOUT_MS => 1500,
+                    CURLOPT_HTTPHEADER => ['Accept: application/dns-json'],
+                    CURLOPT_FOLLOWLOCATION => true,
+                    CURLOPT_SSL_VERIFYPEER => true,
+                ]);
+
+                curl_multi_add_handle($mh, $ch);
+                $handles[$idx] = ['ch' => $ch, 'job' => $job];
+            }
+
+            // Execute all handles
+            $running = null;
+            do {
+                curl_multi_exec($mh, $running);
+                curl_multi_select($mh, 0.1);
+            } while ($running > 0);
+
+            // Collect results
+            foreach ($handles as $idx => $h) {
+                $job = $h['job'];
+                $response = curl_multi_getcontent($h['ch']);
+                $httpCode = curl_getinfo($h['ch'], CURLINFO_HTTP_CODE);
+                curl_multi_remove_handle($mh, $h['ch']);
+                curl_close($h['ch']);
+
+                $listed = false;
+                $message = null;
+
+                if ($httpCode === 200 && $response) {
+                    $data = json_decode($response, true);
+                    if (isset($data['Answer']) && !empty($data['Answer'])) {
+                        $listed = true;
+                        $message = 'Listed on ' . $job['provider']['name'];
+                    }
+                }
+
+                $results[] = [
+                    'ip' => $job['ip'],
+                    'provider' => $job['provider'],
+                    'listed' => $listed,
+                    'message' => $message,
+                ];
+            }
+
+            curl_multi_close($mh);
+        }
 
         return $results;
     }
@@ -121,47 +218,6 @@ class BlacklistChecker
         }
 
         return $ips;
-    }
-
-    /**
-     * Check a single IP against an RBL provider.
-     */
-    private function checkIPAgainstRBL(string $ip, array $provider): array
-    {
-        $result = [
-            'listed' => false,
-            'message' => null,
-        ];
-
-        try {
-            // Reverse the IP for RBL lookup
-            $reversedIP = $this->reverseIP($ip);
-            if (!$reversedIP) {
-                return $result;
-            }
-
-            $lookupHost = $reversedIP . '.' . $provider['host'];
-            
-            // Perform DNS lookup
-            $dnsResult = dns_get_record($lookupHost, DNS_A);
-            
-            if (!empty($dnsResult)) {
-                $result['listed'] = true;
-                
-                // Try to get TXT record for more details
-                $txtRecords = dns_get_record($lookupHost, DNS_TXT);
-                if (!empty($txtRecords)) {
-                    $result['message'] = $txtRecords[0]['txt'] ?? 'Listed on ' . $provider['name'];
-                } else {
-                    $result['message'] = 'Listed on ' . $provider['name'];
-                }
-            }
-
-        } catch (\Exception $e) {
-            Log::error("Error checking IP {$ip} against {$provider['name']}: " . $e->getMessage());
-        }
-
-        return $result;
     }
 
     /**

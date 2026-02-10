@@ -75,26 +75,36 @@
     </div>
 
     <!-- Filters -->
-    <div class="bg-white rounded-lg shadow mb-6 p-4">
+    <form method="get" class="bg-white rounded-lg shadow mb-6 p-4">
         <div class="flex flex-wrap gap-4">
-            <select class="border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent">
-                <option>All Status</option>
-                <option>Completed</option>
-                <option>In Progress</option>
-                <option>Failed</option>
+            <select name="status" class="border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-red-500 focus:border-transparent">
+                <option value="">All Status</option>
+                <option value="finished" @selected(request('status')==='finished')>Finished</option>
+                <option value="running" @selected(request('status')==='running')>Running</option>
+                <option value="pending" @selected(request('status')==='pending')>Pending</option>
+                <option value="failed" @selected(request('status')==='failed')>Failed</option>
             </select>
-            <select class="border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent">
-                <option>All Scores</option>
-                <option>90-100 (Excellent)</option>
-                <option>70-89 (Good)</option>
-                <option>50-69 (Fair)</option>
-                <option>0-49 (Poor)</option>
+            <select name="type" class="border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-red-500 focus:border-transparent">
+                <option value="">All Types</option>
+                <option value="full" @selected(request('type')==='full')>Full Scan</option>
+                <option value="dns" @selected(request('type')==='dns')>DNS Only</option>
+                <option value="blacklist" @selected(request('type')==='blacklist')>Blacklist Only</option>
+                <option value="delivery" @selected(request('type')==='delivery')>Delivery Test</option>
             </select>
-            <input type="date" class="border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent">
-            <input type="text" placeholder="Search scans..." class="border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent">
-            <button class="bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-lg">Filter</button>
+            <select name="score_range" class="border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-red-500 focus:border-transparent">
+                <option value="">All Scores</option>
+                <option value="90-100" @selected(request('score_range')==='90-100')>90-100 (Excellent)</option>
+                <option value="70-89" @selected(request('score_range')==='70-89')>70-89 (Good)</option>
+                <option value="50-69" @selected(request('score_range')==='50-69')>50-69 (Fair)</option>
+                <option value="0-49" @selected(request('score_range')==='0-49')>0-49 (Poor)</option>
+            </select>
+            <input type="text" name="keyword" value="{{ request('keyword') }}" placeholder="Search domain..." class="border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-red-500 focus:border-transparent">
+            <button class="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700">Filter</button>
+            @if(request()->hasAny(['status','type','score_range','keyword']))
+                <a href="{{ route('admin.scans.index') }}" class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">Clear</a>
+            @endif
         </div>
-    </div>
+    </form>
 
     <!-- Scans Table -->
     <div class="bg-white rounded-lg shadow overflow-hidden">
@@ -114,7 +124,8 @@
                 @forelse($scans ?? [] as $scan)
                 <tr class="hover:bg-gray-50">
                     <td class="px-6 py-4 whitespace-nowrap">
-                        <div class="text-sm font-medium text-gray-900">#{{ $scan->id ?? '1001' }}</div>
+                        <div class="text-sm font-mono text-gray-900">{{ Str::limit($scan->id, 8, '...') }}</div>
+                        <div class="text-xs text-gray-400">{{ $scan->getTypeLabel() }}</div>
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap">
                         <div class="flex items-center">
@@ -180,22 +191,7 @@
         
         <!-- Pagination -->
         <div class="bg-white px-4 py-3 border-t border-gray-200 sm:px-6">
-            <div class="flex items-center justify-between">
-                <div class="flex-1 flex justify-between sm:hidden">
-                    <a href="#" class="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">Previous</a>
-                    <a href="#" class="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">Next</a>
-                </div>
-                <div class="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
-                    <div>
-                        <p class="text-sm text-gray-700">Showing <span class="font-medium">1</span> to <span class="font-medium">10</span> of <span class="font-medium">{{ $scans->total() ?? 0 }}</span> results</p>
-                    </div>
-                    <div>
-                        <nav class="relative z-0 inline-flex rounded-md shadow-sm -space-x-px">
-                            {{-- Pagination links will be rendered here --}}
-                        </nav>
-                    </div>
-                </div>
-            </div>
+            {{ $scans->links() }}
         </div>
     </div>
 </div>

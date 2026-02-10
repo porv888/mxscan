@@ -20,7 +20,7 @@ class ScannerService
             $mxRecords = dns_get_record($domain, DNS_MX);
             $records['MX'] = !empty($mxRecords) ? ['status' => 'found', 'data' => $mxRecords] : ['status' => 'missing'];
             if (!empty($mxRecords)) {
-                $score += 20;
+                $score += 15;
             }
 
             // Check SPF record (from TXT records)
@@ -32,13 +32,44 @@ class ScannerService
             $records['SPF'] = $spfRecord ? ['status' => 'found', 'data' => $spfRecord['txt']] : ['status' => 'missing'];
             
             if ($spfRecord) {
-                $score += 20;
+                $score += 15;
                 // Bonus points for strict SPF
                 if (str_contains($spfRecord['txt'], '-all')) {
                     $score += 5;
                 } elseif (str_contains($spfRecord['txt'], '~all')) {
                     $score += 2;
                 }
+            }
+
+            // Check DKIM selectors
+            $dkimSelectors = config('dkim.selectors', []);
+            $dkimFound = [];
+            foreach ($dkimSelectors as $selector) {
+                try {
+                    $dkimDomain = "{$selector}._domainkey.{$domain}";
+                    $dkimRecords = @dns_get_record($dkimDomain, DNS_TXT);
+                    if (!empty($dkimRecords)) {
+                        foreach ($dkimRecords as $rec) {
+                            if (isset($rec['txt']) && str_contains($rec['txt'], 'p=')) {
+                                $dkimFound[] = [
+                                    'selector' => $selector,
+                                    'record' => $rec['txt'],
+                                ];
+                                break;
+                            }
+                        }
+                    }
+                } catch (\Exception $e) {
+                    // Skip failed selector lookups silently
+                }
+            }
+
+            $records['DKIM'] = !empty($dkimFound)
+                ? ['status' => 'found', 'data' => $dkimFound]
+                : ['status' => 'missing'];
+
+            if (!empty($dkimFound)) {
+                $score += 15;
             }
 
             // Check DMARC record
@@ -62,7 +93,7 @@ class ScannerService
             $records['TLS-RPT'] = $tlsRptRecord ? ['status' => 'found', 'data' => $tlsRptRecord['txt']] : ['status' => 'missing'];
             
             if ($tlsRptRecord) {
-                $score += 15;
+                $score += 10;
             }
 
             // Check MTA-STS record
@@ -101,6 +132,8 @@ class ScannerService
                 'score' => $score,
                 'mx_found' => !empty($mxRecords),
                 'spf_found' => !empty($spfRecord),
+                'dkim_found' => !empty($dkimFound),
+                'dkim_selectors' => array_column($dkimFound, 'selector'),
                 'dmarc_found' => !empty($dmarcRecord),
                 'tlsrpt_found' => !empty($tlsRptRecord),
                 'mtasts_found' => !empty($mtaStsRecord),
@@ -139,6 +172,15 @@ class ScannerService
                 'title' => 'Add SPF record',
                 'value' => $spfValue,
                 'description' => 'SPF records prevent email spoofing by specifying which servers can send email for your domain.',
+            ];
+        }
+
+        if (isset($records['DKIM']) && $records['DKIM']['status'] === 'missing') {
+            $recommendations[] = [
+                'type' => 'DKIM',
+                'title' => 'Configure DKIM signing',
+                'value' => 'Enable DKIM in your mail server or email provider settings',
+                'description' => 'DKIM adds a digital signature to outgoing emails, proving they haven\'t been tampered with in transit. Enable it via your email provider\'s admin panel.',
             ];
         }
 
