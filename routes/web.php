@@ -18,6 +18,10 @@ Route::get('/privacy', fn() => view('legal.privacy'))->name('privacy');
 // Notification email verification (public route)
 Route::get('/notification-email/verify/{token}', [App\Http\Controllers\NotificationEmailController::class, 'verify'])->name('notification-emails.verify');
 
+// Google OAuth Routes
+Route::get('/auth/google/redirect', [App\Http\Controllers\Auth\GoogleController::class, 'redirect'])->name('auth.google.redirect');
+Route::get('/auth/google/callback', [App\Http\Controllers\Auth\GoogleController::class, 'callback'])->name('auth.google.callback');
+
 // Authentication Routes
 Auth::routes(['verify' => false]); // Disable built-in verification routes
 

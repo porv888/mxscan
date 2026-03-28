@@ -11,12 +11,14 @@
         "dragonmantank/cron-expression": "^3.4",
         "laravel/cashier": "^15.0",
         "laravel/framework": "^11.31",
+        "laravel/socialite": "^5.26",
         "laravel/tinker": "^2.9",
         "laravel/ui": "^4.6",
         "mlocati/spf-lib": "^3.3",
-        "s-ichikawa/laravel-sendgrid-driver": "^4.0",
         "spatie/dns": "^2.7",
+        "symfony/brevo-mailer": "^7.4",
         "symfony/cache": "^7.3",
+        "symfony/http-client": "^7.4",
         "webklex/laravel-imap": "^6.2"
     },
     "require-dev": {

@@ -71,9 +71,9 @@ return [
             'path' => env('MAIL_SENDMAIL_PATH', '/usr/sbin/sendmail -bs -i'),
         ],
 
-        'sendgrid' => [
-            'transport' => 'sendgrid',
-            'api_key' => env('SENDGRID_API_KEY'),
+        'brevo' => [
+            'transport' => 'brevo',
+            'api_key' => env('BREVO_API_KEY'),
         ],
 
         'log' => [

@@ -42,6 +42,12 @@ return [
         'webhook_secret' => env('STRIPE_WEBHOOK_SECRET'),
     ],
 
+    'google' => [
+        'client_id' => env('GOOGLE_CLIENT_ID'),
+        'client_secret' => env('GOOGLE_CLIENT_SECRET'),
+        'redirect' => env('GOOGLE_REDIRECT_URI', '/auth/google/callback'),
+    ],
+
     'plans' => [
         'premium_monthly' => env('STRIPE_PRICE_PREMIUM_MONTHLY'),
         'ultra_monthly'   => env('STRIPE_PRICE_ULTRA_MONTHLY'),
