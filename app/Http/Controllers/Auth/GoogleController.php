@@ -75,8 +75,10 @@ class GoogleController extends Controller
             'google_id' => $googleUser->getId(),
             'google_avatar' => $googleUser->getAvatar(),
             'password' => Hash::make(Str::random(24)),
-            'email_verified_at' => now(),
         ]);
+
+        // Mark email as verified (Google already verified it)
+        $user->markEmailAsVerified();
 
         // Set session flag for Google Ads conversion tracking
         session(['just_registered' => true]);
