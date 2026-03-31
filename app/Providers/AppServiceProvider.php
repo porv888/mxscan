@@ -5,8 +5,6 @@ namespace App\Providers;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Mail;
-use Symfony\Component\Mailer\Bridge\Brevo\Transport\BrevoApiTransport;
 use Illuminate\Auth\Notifications\VerifyEmail;
 use App\Notifications\VerifyEmailBranded;
 use Laravel\Cashier\Cashier;
@@ -29,11 +27,6 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        // Register Brevo HTTP API mail transport (bypasses cPanel SMTP interception)
-        Mail::extend('brevo', function (array $config) {
-            return new BrevoApiTransport($config['api_key']);
-        });
-
         // Use our branded email verification notification
         VerifyEmail::toMailUsing(function ($notifiable, $url) {
             return (new VerifyEmailBranded)->toMail($notifiable);
