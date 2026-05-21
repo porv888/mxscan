@@ -106,9 +106,9 @@
             </nav>
         </div>
 
-        <div class="flex">
+        <div class="flex min-h-screen w-full overflow-x-hidden">
             <!-- Desktop Sidebar -->
-            <div class="hidden md:flex md:w-64 md:flex-col">
+            <div class="hidden md:flex md:w-64 md:flex-shrink-0 md:flex-col">
                 <div class="flex flex-col flex-grow pt-5 overflow-y-auto bg-white border-r border-gray-200">
                     <div class="flex items-center flex-shrink-0 px-4">
                         <div class="flex items-center">
@@ -187,10 +187,10 @@
             </div>
 
             <!-- Main content -->
-            <div class="flex flex-col flex-1">
+            <div class="flex min-w-0 flex-1 flex-col">
                 <!-- Top navigation -->
                 <header class="bg-white shadow-sm border-b border-gray-200">
-                    <div class="flex items-center justify-between px-4 py-4 sm:px-6 lg:px-8">
+                    <div class="flex items-center justify-between gap-3 px-4 py-4 sm:px-6 lg:px-8">
                         <!-- Mobile menu button -->
                         <button type="button" 
                                 class="md:hidden inline-flex items-center justify-center p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500"
@@ -199,14 +199,14 @@
                         </button>
 
                         <!-- Page title -->
-                        <div class="flex-1 min-w-0">
-                            <h2 class="text-2xl font-bold leading-7 text-gray-900 sm:text-3xl sm:truncate">
+                        <div class="min-w-0 flex-1">
+                            <h2 class="truncate text-xl font-bold leading-7 text-gray-900 sm:text-3xl">
                                 @yield('page-title', 'Dashboard')
                             </h2>
                         </div>
 
                         <!-- User menu -->
-                        <div class="ml-4 flex items-center md:ml-6" x-data="{ dropdownOpen: false }">
+                        <div class="ml-2 flex shrink-0 items-center md:ml-6" x-data="{ dropdownOpen: false }">
                             <div class="relative">
                                 <button type="button" 
                                         class="max-w-xs bg-white flex items-center text-sm rounded-full focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500" 
@@ -330,7 +330,7 @@
                 @endif
 
                 <!-- Main content area -->
-                <main class="flex-1 p-4 sm:p-6 lg:p-8">
+                <main class="w-full min-w-0 flex-1 overflow-x-hidden p-4 sm:p-6 lg:p-8">
                     @yield('content')
                 </main>
             </div>
@@ -404,7 +404,7 @@
                 }
                 this.helpSending = false;
             }
-        }" class="fixed bottom-6 right-6 z-50">
+        }" class="fixed bottom-6 right-4 z-50 sm:right-6">
             <!-- Help Button -->
             <button @click="helpOpen = !helpOpen; helpSent = false; helpError = ''"
                     class="flex items-center justify-center w-14 h-14 bg-blue-600 hover:bg-blue-700 text-white rounded-full shadow-lg transition-all duration-200 hover:scale-105"
@@ -421,7 +421,7 @@
                  x-transition:leave="transition ease-in duration-150"
                  x-transition:leave-start="opacity-100 translate-y-0"
                  x-transition:leave-end="opacity-0 translate-y-4"
-                 class="absolute bottom-16 right-0 w-80 bg-white rounded-lg shadow-xl border border-gray-200 overflow-hidden">
+                 class="fixed bottom-24 left-4 right-4 bg-white rounded-lg shadow-xl border border-gray-200 overflow-hidden sm:absolute sm:bottom-16 sm:left-auto sm:right-0 sm:w-96">
                 <div class="bg-blue-600 px-4 py-3">
                     <h3 class="text-white font-semibold flex items-center">
                         <i data-lucide="message-circle" class="h-5 w-5 mr-2"></i>

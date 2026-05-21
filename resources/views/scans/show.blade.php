@@ -1,11 +1,11 @@
 @extends('layouts.app')
 
 @section('content')
-<div class="p-6 space-y-6">
+<div class="space-y-6">
 
     {{-- Header --}}
-    <div class="flex items-start justify-between">
-        <div>
+    <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div class="min-w-0">
             <h1 class="text-2xl font-semibold text-gray-900 dark:text-gray-100">{{ $domain->domain }}</h1>
             <div class="mt-1 text-sm text-gray-500 dark:text-gray-400">
                 Scanned at {{ $scan->finished_at?->timezone(auth()->user()->timezone ?? 'UTC')->format('M d, Y H:i') ?? $scan->created_at->format('M d, Y H:i') }}
@@ -13,14 +13,14 @@
                 • ID: {{ Str::limit($scan->id, 8, '') }}
             </div>
         </div>
-        <div class="flex gap-2">
-            <button onclick="downloadReport()" class="inline-flex items-center px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-600 dark:hover:bg-gray-700 transition-colors">
+        <div class="flex w-full flex-wrap gap-2 sm:w-auto sm:justify-end">
+            <button onclick="downloadReport()" class="inline-flex flex-1 items-center justify-center px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-600 dark:hover:bg-gray-700 transition-colors sm:flex-none">
                 <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
                 </svg>
                 Download
             </button>
-            <button onclick="shareReport()" class="inline-flex items-center px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-600 dark:hover:bg-gray-700 transition-colors">
+            <button onclick="shareReport()" class="inline-flex flex-1 items-center justify-center px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-600 dark:hover:bg-gray-700 transition-colors sm:flex-none">
                 <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.367 2.684 3 3 0 00-5.367-2.684z"></path>
                 </svg>
@@ -29,7 +29,7 @@
             <form method="POST" action="{{ route('domains.scan.now', $domain) }}">
                 @csrf
                 <input type="hidden" name="mode" value="full">
-                <button class="inline-flex items-center px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-600 dark:hover:bg-gray-700 transition-colors">
+                <button class="inline-flex flex-1 items-center justify-center px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-600 dark:hover:bg-gray-700 transition-colors sm:flex-none">
                     <i data-lucide="scan" class="w-4 h-4 mr-2"></i>
                     Scan
                 </button>

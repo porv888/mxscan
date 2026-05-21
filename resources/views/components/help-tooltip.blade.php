@@ -21,7 +21,7 @@
           x-cloak
           x-transition
           role="tooltip"
-          class="absolute left-1/2 top-6 z-50 w-72 -translate-x-1/2 rounded-lg border border-gray-200 bg-white p-3 text-left shadow-lg dark:border-gray-700 dark:bg-gray-900">
+          class="absolute left-0 top-6 z-50 w-64 max-w-[calc(100vw-2rem)] break-words rounded-lg border border-gray-200 bg-white p-3 text-left shadow-lg dark:border-gray-700 dark:bg-gray-900 sm:left-1/2 sm:-translate-x-1/2">
         <span class="block text-xs font-semibold text-gray-900 dark:text-gray-100">{{ $title }}</span>
         <span class="mt-1 block text-xs leading-5 text-gray-600 dark:text-gray-300">{{ $text }}</span>
         @if($impact)

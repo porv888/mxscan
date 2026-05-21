@@ -22,14 +22,14 @@
                 <div class="{{ $barColor }} h-full rounded-full transition-all" style="width: {{ $pct }}%"></div>
             </div>
         </div>
-        <div class="flex items-center gap-3">
+        <div class="flex w-full flex-wrap items-center gap-3 sm:w-auto sm:justify-end">
             @if($used >= $limit * 0.8)
                 <a href="{{ route('pricing') }}" class="text-sm text-blue-600 hover:text-blue-700 font-medium">
                     Upgrade plan
                 </a>
             @endif
             <a href="{{ route('dashboard.domains.create') }}" 
-               class="{{ $used >= $limit ? 'bg-gray-300 cursor-not-allowed pointer-events-none' : 'bg-blue-600 hover:bg-blue-700' }} text-white px-4 py-2.5 rounded-lg font-medium inline-flex items-center gap-2 transition-colors">
+               class="{{ $used >= $limit ? 'bg-gray-300 cursor-not-allowed pointer-events-none' : 'bg-blue-600 hover:bg-blue-700' }} inline-flex w-full items-center justify-center gap-2 rounded-lg px-4 py-2.5 font-medium text-white transition-colors sm:w-auto">
                 <i data-lucide="plus" class="w-4 h-4"></i>
                 <span>Add Domain</span>
             </a>
@@ -124,14 +124,14 @@
                     
                     <!-- Worst Issue Banner (Main Visual Anchor) -->
                     @if($worstIssue)
-                    <div class="px-4 py-2.5 flex items-center justify-between
+                    <div class="px-4 py-2.5 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between
                         {{ $worstSeverity === 'critical' ? 'bg-red-50' : 
                            ($worstSeverity === 'warning' ? 'bg-amber-50' : 'bg-blue-50') }}">
-                        <div class="flex items-center gap-2">
+                        <div class="flex min-w-0 items-center gap-2">
                             <i data-lucide="{{ $worstIcon }}" class="w-4 h-4 
                                 {{ $worstSeverity === 'critical' ? 'text-red-600' : 
                                    ($worstSeverity === 'warning' ? 'text-amber-600' : 'text-blue-600') }}"></i>
-                            <span class="text-sm font-medium 
+                            <span class="min-w-0 truncate text-sm font-medium 
                                 {{ $worstSeverity === 'critical' ? 'text-red-800' : 
                                    ($worstSeverity === 'warning' ? 'text-amber-800' : 'text-blue-800') }}">
                                 {{ $worstIssue }}
@@ -245,11 +245,11 @@
                     </div>
 
                     <!-- Card Footer - View report primary -->
-                    <div class="p-3 border-t border-gray-100 flex items-center gap-2">
+                    <div class="p-3 border-t border-gray-100 flex flex-wrap items-center gap-2">
                         @if($domain->scans()->exists())
                             @php $latestScanFooter = $domain->scans()->latest()->first(); @endphp
                             <a href="{{ route('reports.show', $latestScanFooter) }}"
-                               class="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-lg text-sm font-medium inline-flex items-center justify-center gap-2 transition-colors">
+                               class="min-w-[9rem] flex-1 bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-lg text-sm font-medium inline-flex items-center justify-center gap-2 transition-colors">
                                 <i data-lucide="file-text" class="w-4 h-4"></i>
                                 View Report
                             </a>

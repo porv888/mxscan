@@ -84,7 +84,7 @@
 
     <div x-show="open" x-collapse class="grid grid-cols-1 md:grid-cols-2 gap-4">
         {{-- MX Records --}}
-        <div class="md:col-span-2">
+        <div class="min-w-0 md:col-span-2">
             <div class="flex items-center justify-between mb-2">
                 <h3 class="flex items-center gap-1 text-sm font-semibold text-gray-900 dark:text-gray-100">
                     MX Records
@@ -100,11 +100,11 @@
                 @endif
             </div>
             @if($mxData && $mxData['status'] === 'found')
-            <div class="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-3">
+            <div class="min-w-0 overflow-hidden bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-3">
                 @if(is_array($mxData['data']))
                     @foreach($mxData['data'] as $mx)
-                    <div class="flex justify-between items-center text-sm mb-1 last:mb-0">
-                        <span class="text-gray-900 dark:text-gray-100">Priority {{ $mx['pri'] ?? 'N/A' }}: <code class="text-xs bg-white dark:bg-gray-800 px-1 py-0.5 rounded">{{ $mx['target'] ?? 'Unknown' }}</code></span>
+                    <div class="flex flex-col gap-1 text-sm mb-1 last:mb-0 sm:flex-row sm:items-center sm:justify-between">
+                        <span class="min-w-0 text-gray-900 dark:text-gray-100">Priority {{ $mx['pri'] ?? 'N/A' }}: <code class="break-all text-xs bg-white dark:bg-gray-800 px-1 py-0.5 rounded">{{ $mx['target'] ?? 'Unknown' }}</code></span>
                         <span class="text-xs text-gray-500 dark:text-gray-400">TTL: {{ $mx['ttl'] ?? 'N/A' }}s</span>
                     </div>
                     @endforeach
@@ -113,7 +113,7 @@
                 @endif
             </div>
             @else
-            <div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3">
+            <div class="min-w-0 overflow-hidden bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3">
                 <div class="flex items-center text-sm text-red-800 dark:text-red-200">
                     <svg class="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
                         <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"></path>
@@ -126,7 +126,7 @@
         </div>
 
         {{-- SPF Record --}}
-        <div>
+        <div class="min-w-0">
             <div class="flex items-center justify-between mb-2">
                 <h3 class="flex items-center gap-1 text-sm font-semibold text-gray-900 dark:text-gray-100">
                     SPF Record
@@ -152,9 +152,9 @@
                 @endif
             </div>
             @if($spfData && $spfData['status'] === 'found')
-            <div class="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-3">
-                <div class="flex justify-between items-start">
-                    <code class="text-xs text-gray-900 dark:text-gray-100 break-all flex-1">{{ $spfData['data'] }}</code>
+            <div class="min-w-0 overflow-hidden bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-3">
+                <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <code class="block max-w-full text-xs text-gray-900 dark:text-gray-100 break-all flex-1">{{ $spfData['data'] }}</code>
                     <div class="flex gap-1 ml-3 flex-shrink-0">
                         <button onclick="copyToClipboard('{{ addslashes($spfData['data']) }}', this)" class="px-2 py-1 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded hover:bg-gray-50 dark:bg-gray-700 dark:text-gray-200 dark:border-gray-600 dark:hover:bg-gray-600">
                             Copy
@@ -168,7 +168,7 @@
                 </div>
             </div>
             @else
-            <div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3">
+            <div class="min-w-0 overflow-hidden bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3">
                 <div class="flex items-center text-sm text-red-800 dark:text-red-200">
                     <svg class="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
                         <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"></path>
@@ -181,7 +181,7 @@
         </div>
 
         {{-- DKIM --}}
-        <div>
+        <div class="min-w-0">
             <div class="flex items-center justify-between mb-2">
                 <h3 class="flex items-center gap-1 text-sm font-semibold text-gray-900 dark:text-gray-100">
                     DKIM
@@ -197,19 +197,19 @@
                 @endif
             </div>
             @if($dkimData && $dkimData['status'] === 'found')
-            <div class="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-3 space-y-2">
+            <div class="min-w-0 overflow-hidden bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-3 space-y-2">
                 @foreach($dkimData['data'] as $dkim)
                 <div>
                     <div class="flex items-center gap-2 mb-1">
                         <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">{{ $dkim['selector'] }}</span>
                         <span class="text-xs text-gray-500 dark:text-gray-400">{{ $dkim['selector'] }}._domainkey.{{ $domain->domain ?? $domain }}</span>
                     </div>
-                    <code class="text-xs text-gray-900 dark:text-gray-100 break-all block">{{ \Illuminate\Support\Str::limit($dkim['record'], 120) }}</code>
+                    <code class="block max-w-full text-xs text-gray-900 dark:text-gray-100 break-all">{{ \Illuminate\Support\Str::limit($dkim['record'], 120) }}</code>
                 </div>
                 @endforeach
             </div>
             @else
-            <div class="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3">
+            <div class="min-w-0 overflow-hidden bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3">
                 <div class="flex items-center text-sm text-amber-800 dark:text-amber-200">
                     <svg class="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
                         <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>
@@ -223,7 +223,7 @@
         </div>
 
         {{-- DMARC Policy --}}
-        <div>
+        <div class="min-w-0">
             <div class="flex items-center justify-between mb-2">
                 <h3 class="flex items-center gap-1 text-sm font-semibold text-gray-900 dark:text-gray-100">
                     DMARC Policy
@@ -239,16 +239,16 @@
                 @endif
             </div>
             @if($dmarcData && $dmarcData['status'] === 'found')
-            <div class="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-3">
-                <div class="flex justify-between items-start">
-                    <code class="text-xs text-gray-900 dark:text-gray-100 break-all flex-1">{{ $dmarcData['data'] }}</code>
+            <div class="min-w-0 overflow-hidden bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-3">
+                <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <code class="block max-w-full text-xs text-gray-900 dark:text-gray-100 break-all flex-1">{{ $dmarcData['data'] }}</code>
                     <button onclick="copyToClipboard('{{ addslashes($dmarcData['data']) }}', this)" class="px-2 py-1 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded hover:bg-gray-50 dark:bg-gray-700 dark:text-gray-200 dark:border-gray-600 dark:hover:bg-gray-600 ml-3 flex-shrink-0">
                         Copy
                     </button>
                 </div>
             </div>
             @else
-            <div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3">
+            <div class="min-w-0 overflow-hidden bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3">
                 <div class="flex items-center text-sm text-red-800 dark:text-red-200">
                     <svg class="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
                         <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"></path>
@@ -278,7 +278,7 @@
                 default => 'border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50',
             };
         @endphp
-        <div>
+        <div class="min-w-0">
             <div class="flex items-center justify-between mb-2">
                 <h3 class="flex items-center gap-1 text-sm font-semibold text-gray-900 dark:text-gray-100">
                     DMARC Reports (Visibility)
@@ -291,8 +291,8 @@
                     {{ $dmarcStatus['label'] }}
                 </span>
             </div>
-            <div class="border rounded-lg p-3 {{ $borderClasses }}">
-                <div class="flex items-center justify-between">
+            <div class="min-w-0 overflow-hidden border rounded-lg p-3 {{ $borderClasses }}">
+                <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                     @if($dmarcStatus['status'] === 'active' || $dmarcStatus['status'] === 'enabled_mxscan_waiting')
                         @if($domain->dmarc_last_report_at)
                             <span class="text-xs text-gray-600 dark:text-gray-400">Last report: {{ $domain->dmarc_last_report_at->diffForHumans() }}</span>
@@ -314,7 +314,7 @@
         @endif
 
         {{-- TLS-RPT --}}
-        <div>
+        <div class="min-w-0">
             <div class="flex items-center justify-between mb-2">
                 <h3 class="flex items-center gap-1 text-sm font-semibold text-gray-900 dark:text-gray-100">
                     TLS-RPT
@@ -330,17 +330,17 @@
                 @endif
             </div>
             @if($tlsrptData && $tlsrptData['status'] === 'found')
-            <div class="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-3">
-                <div class="flex justify-between items-start">
-                    <code class="text-xs text-gray-900 dark:text-gray-100 break-all flex-1">{{ $tlsrptData['data'] }}</code>
+            <div class="min-w-0 overflow-hidden bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-3">
+                <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <code class="block max-w-full text-xs text-gray-900 dark:text-gray-100 break-all flex-1">{{ $tlsrptData['data'] }}</code>
                     <button onclick="copyToClipboard('{{ addslashes($tlsrptData['data']) }}', this)" class="px-2 py-1 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded hover:bg-gray-50 dark:bg-gray-700 dark:text-gray-200 dark:border-gray-600 dark:hover:bg-gray-600 ml-3 flex-shrink-0">
                         Copy
                     </button>
                 </div>
             </div>
             @else
-            <div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3">
-                <div class="flex items-center justify-between">
+            <div class="min-w-0 overflow-hidden bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3">
+                <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                     <div class="flex items-center text-sm text-red-800 dark:text-red-200">
                         <svg class="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
                             <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"></path>
@@ -355,7 +355,7 @@
         </div>
 
         {{-- MTA-STS --}}
-        <div>
+        <div class="min-w-0">
             <div class="flex items-center justify-between mb-2">
                 <h3 class="flex items-center gap-1 text-sm font-semibold text-gray-900 dark:text-gray-100">
                     MTA-STS
@@ -371,17 +371,17 @@
                 @endif
             </div>
             @if($mtastsData && $mtastsData['status'] === 'found')
-            <div class="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-3">
-                <div class="flex justify-between items-start">
-                    <code class="text-xs text-gray-900 dark:text-gray-100 break-all flex-1">{{ $mtastsData['data'] }}</code>
+            <div class="min-w-0 overflow-hidden bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-3">
+                <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <code class="block max-w-full text-xs text-gray-900 dark:text-gray-100 break-all flex-1">{{ $mtastsData['data'] }}</code>
                     <button onclick="copyToClipboard('{{ addslashes($mtastsData['data']) }}', this)" class="px-2 py-1 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded hover:bg-gray-50 dark:bg-gray-700 dark:text-gray-200 dark:border-gray-600 dark:hover:bg-gray-600 ml-3 flex-shrink-0">
                         Copy
                     </button>
                 </div>
             </div>
             @else
-            <div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3">
-                <div class="flex items-center justify-between">
+            <div class="min-w-0 overflow-hidden bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3">
+                <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                     <div class="flex items-center text-sm text-red-800 dark:text-red-200">
                         <svg class="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
                             <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"></path>

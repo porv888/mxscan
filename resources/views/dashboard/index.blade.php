@@ -23,8 +23,8 @@
     <!-- Incident Alert Banner - FIRST (most important) -->
     @if(($incidentCount ?? 0) > 0)
     <div class="bg-gradient-to-r from-red-50 to-amber-50 border border-red-200 rounded-lg p-4">
-        <div class="flex items-center justify-between">
-            <div class="flex items-center">
+        <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div class="flex min-w-0 items-center">
                 <div class="flex-shrink-0 p-2 bg-red-100 rounded-lg">
                     <i data-lucide="alert-triangle" class="h-5 w-5 text-red-600"></i>
                 </div>
@@ -34,7 +34,7 @@
                 </div>
             </div>
             <a href="{{ auth()->user()->canUseMonitoring() ? route('monitoring.incidents') : route('reports.index') }}" 
-               class="inline-flex items-center px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded-lg transition-colors">
+               class="inline-flex w-full items-center justify-center px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded-lg transition-colors sm:w-auto">
                 <i data-lucide="eye" class="w-4 h-4 mr-2"></i>
                 View All
             </a>
@@ -43,10 +43,10 @@
         <div class="mt-3 pt-3 border-t border-red-200 space-y-1">
             @foreach($unresolvedIncidents->take(3) as $incident)
             <a href="{{ $incident->action_url ?? route('monitoring.incidents') }}"
-               class="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-white/60 transition-colors group">
+               class="flex min-w-0 items-center gap-2 px-3 py-2 rounded-lg hover:bg-white/60 transition-colors group">
                 <span class="w-1.5 h-1.5 rounded-full shrink-0 {{ $incident->severity === 'incident' ? 'bg-red-500' : 'bg-amber-500' }}"></span>
-                <span class="text-sm text-gray-800 truncate flex-1 group-hover:text-gray-900">{{ Str::limit($incident->message, 56) }}</span>
-                <span class="text-xs text-gray-500 shrink-0">{{ $incident->domain->domain ?? '' }}</span>
+                <span class="min-w-0 text-sm text-gray-800 truncate flex-1 group-hover:text-gray-900">{{ Str::limit($incident->message, 56) }}</span>
+                <span class="hidden text-xs text-gray-500 shrink-0 sm:inline">{{ $incident->domain->domain ?? '' }}</span>
                 <i data-lucide="chevron-right" class="w-4 h-4 text-gray-400 shrink-0"></i>
             </a>
             @endforeach
@@ -77,14 +77,14 @@
         <div class="divide-y divide-gray-100">
             @foreach($priorityActions as $action)
             <div class="p-4 hover:bg-gray-50 transition-colors">
-                <div class="flex items-center justify-between">
-                    <div class="flex items-center space-x-4">
+                <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div class="flex min-w-0 items-center space-x-4">
                         <div class="flex-shrink-0 w-10 h-10 rounded-lg flex items-center justify-center
                             {{ $action['severity'] === 'critical' ? 'bg-red-100' : 'bg-amber-100' }}">
                             <i data-lucide="{{ $action['icon'] }}" class="w-5 h-5 
                                 {{ $action['severity'] === 'critical' ? 'text-red-600' : 'text-amber-600' }}"></i>
                         </div>
-                        <div>
+                        <div class="min-w-0">
                             <div class="flex items-center gap-2">
                                 <h3 class="text-sm font-semibold text-gray-900">{{ $action['title'] }}</h3>
                                 <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium
@@ -96,7 +96,7 @@
                         </div>
                     </div>
                     <a href="{{ $action['action_url'] }}" 
-                       class="inline-flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors
+                       class="inline-flex w-full items-center justify-center px-3 py-2 text-sm font-medium rounded-lg transition-colors sm:w-auto
                            {{ $action['severity'] === 'critical' ? 'bg-red-600 hover:bg-red-700 text-white' : 'bg-amber-600 hover:bg-amber-700 text-white' }}">
                         {{ $action['action_label'] }}
                         <i data-lucide="arrow-right" class="w-4 h-4 ml-1"></i>
