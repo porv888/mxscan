@@ -20,6 +20,82 @@
         </div>
     @endif
 
+    @if(($totalDomains ?? 0) === 0)
+    <!-- First-run onboarding -->
+    <section class="overflow-hidden rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-700 shadow-sm">
+        <div class="flex flex-col gap-8 p-6 text-white lg:flex-row lg:items-center lg:justify-between lg:p-8">
+            <div class="max-w-2xl">
+                <div class="inline-flex items-center rounded-full bg-white/15 px-3 py-1 text-xs font-medium text-blue-50 ring-1 ring-white/20">
+                    <i data-lucide="sparkles" class="mr-1.5 h-3.5 w-3.5"></i>
+                    First step
+                </div>
+                <h2 class="mt-4 text-3xl font-bold tracking-tight sm:text-4xl">Start by adding your first domain</h2>
+                <p class="mt-3 text-base leading-7 text-blue-50 sm:text-lg">
+                    MXScan will check your email security records, find missing protections, and show simple fixes.
+                </p>
+                <div class="mt-6 flex flex-col gap-3 sm:flex-row">
+                    <a href="{{ route('dashboard.domains.create') }}"
+                       class="inline-flex w-full items-center justify-center rounded-lg bg-white px-5 py-3 text-sm font-semibold text-blue-700 shadow-sm transition hover:bg-blue-50 sm:w-auto">
+                        <i data-lucide="plus" class="mr-2 h-4 w-4"></i>
+                        Add your first domain
+                    </a>
+                    <a href="{{ route('tools.index') }}"
+                       class="inline-flex w-full items-center justify-center rounded-lg border border-white/30 px-5 py-3 text-sm font-semibold text-white transition hover:bg-white/10 sm:w-auto">
+                        See what we check
+                        <i data-lucide="arrow-right" class="ml-2 h-4 w-4"></i>
+                    </a>
+                </div>
+            </div>
+            <div class="rounded-2xl bg-white/10 p-5 ring-1 ring-white/20 lg:w-80">
+                <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-white text-blue-700">
+                    <i data-lucide="shield-check" class="h-7 w-7"></i>
+                </div>
+                <p class="mt-4 text-sm leading-6 text-blue-50">
+                    Add one domain and you will get a clear report for SPF, DKIM, DMARC, blacklist status, secure delivery records, and renewal risks.
+                </p>
+            </div>
+        </div>
+    </section>
+
+    <section class="grid grid-cols-1 gap-4 md:grid-cols-3">
+        <div class="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+            <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-100 text-blue-700">
+                <i data-lucide="globe" class="h-5 w-5"></i>
+            </div>
+            <h3 class="mt-4 text-sm font-semibold text-gray-900">1. Add domain</h3>
+            <p class="mt-2 text-sm leading-6 text-gray-600">Enter your domain name, like example.com.</p>
+        </div>
+        <div class="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+            <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-indigo-100 text-indigo-700">
+                <i data-lucide="scan" class="h-5 w-5"></i>
+            </div>
+            <h3 class="mt-4 text-sm font-semibold text-gray-900">2. Run first scan</h3>
+            <p class="mt-2 text-sm leading-6 text-gray-600">We check SPF, DKIM, DMARC, blacklist status, and secure delivery records.</p>
+        </div>
+        <div class="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+            <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700">
+                <i data-lucide="wrench" class="h-5 w-5"></i>
+            </div>
+            <h3 class="mt-4 text-sm font-semibold text-gray-900">3. Fix what matters</h3>
+            <p class="mt-2 text-sm leading-6 text-gray-600">You get clear explanations and copy-paste DNS records.</p>
+        </div>
+    </section>
+
+    <section class="rounded-xl border border-blue-100 bg-blue-50 p-5">
+        <div class="flex flex-col gap-3 sm:flex-row sm:items-start">
+            <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-100 text-blue-700">
+                <i data-lucide="lock-keyhole" class="h-5 w-5"></i>
+            </div>
+            <div>
+                <h3 class="text-sm font-semibold text-gray-900">You stay in control</h3>
+                <p class="mt-1 text-sm leading-6 text-gray-600">
+                    MXScan only scans and explains what to fix. We never change your DNS automatically.
+                </p>
+            </div>
+        </div>
+    </section>
+    @else
+
     <!-- Incident Alert Banner - FIRST (most important) -->
     @if(($incidentCount ?? 0) > 0)
     <div class="bg-gradient-to-r from-red-50 to-amber-50 border border-red-200 rounded-lg p-4">
@@ -271,5 +347,6 @@
         </div>
     </div>
 
+    @endif
 </div>
 @endsection
