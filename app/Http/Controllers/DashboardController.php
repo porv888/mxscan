@@ -7,6 +7,8 @@ use Illuminate\Support\Facades\Auth;
 use App\Models\Domain;
 use App\Models\Scan;
 use App\Models\Incident;
+use App\Services\Dmarc\DmarcAnalyticsService;
+use App\Services\ScanTrendService;
 
 class DashboardController extends Controller
 {
@@ -65,11 +67,22 @@ class DashboardController extends Controller
         $domainIds = $user->domains()->pluck('id');
         $unresolvedIncidents = Incident::whereIn('domain_id', $domainIds)
             ->unresolved()
-            ->with('domain')
+            ->with(['domain.scans' => fn ($q) => $q->where('status', 'finished')->latest('finished_at')->limit(1)])
             ->orderByRaw("CASE severity WHEN 'incident' THEN 1 WHEN 'warning' THEN 2 ELSE 3 END")
             ->latest('occurred_at')
             ->take(5)
             ->get();
+
+        $unresolvedIncidents->each(function (Incident $incident) use ($user) {
+            $latestScan = $incident->domain?->scans->first();
+            if ($user->canUseMonitoring()) {
+                $incident->action_url = route('monitoring.incidents.show', $incident);
+            } elseif ($latestScan) {
+                $incident->action_url = route('reports.show', $latestScan);
+            } else {
+                $incident->action_url = route('domains.hub', $incident->domain);
+            }
+        });
         
         $incidentCount = Incident::whereIn('domain_id', $domainIds)
             ->unresolved()
@@ -173,9 +186,24 @@ class DashboardController extends Controller
             return ($domainDays !== null && $domainDays < 30) || ($sslDays !== null && $sslDays < 30);
         })->count();
         
-        $unscannedDomains = $domains->filter(function($d) {
-            return $d->last_scanned_at === null || $d->last_scanned_at->lt(now()->subDays(7));
+        $monitoringGap = $domains->filter(function ($d) {
+            $stale = $d->last_scanned_at === null || $d->last_scanned_at->lt(now()->subDays(7));
+            if (!$stale) {
+                return false;
+            }
+            $hasActiveSchedule = $d->activeSchedule && $d->activeSchedule->status === 'active';
+            if ($hasActiveSchedule) {
+                return true;
+            }
+            if ($d->created_at && $d->created_at->gt(now()->subHours(24))) {
+                return false;
+            }
+
+            return true;
         })->count();
+
+        $dmarcDashboard = app(DmarcAnalyticsService::class)->getDashboardSummary($user->id, 7);
+        $scoreTrend = app(ScanTrendService::class)->getUserTrend($user->id, 30);
 
         return view('dashboard.index', compact(
             'totalDomains',
@@ -188,7 +216,9 @@ class DashboardController extends Controller
             'priorityActions',
             'domainsAtRisk',
             'expiringSoon',
-            'unscannedDomains'
+            'monitoringGap',
+            'dmarcDashboard',
+            'scoreTrend'
         ));
     }
 }

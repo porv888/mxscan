@@ -14,14 +14,6 @@
             </div>
         </div>
         <div class="flex gap-2">
-            <form method="POST" action="{{ route('domains.scan.now', $domain) }}">
-                @csrf
-                <input type="hidden" name="mode" value="full">
-                <button class="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-600 transition-colors">
-                    <i data-lucide="scan" class="w-4 h-4 mr-2"></i>
-                    Scan
-                </button>
-            </form>
             <button onclick="downloadReport()" class="inline-flex items-center px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-600 dark:hover:bg-gray-700 transition-colors">
                 <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
@@ -34,6 +26,14 @@
                 </svg>
                 Share
             </button>
+            <form method="POST" action="{{ route('domains.scan.now', $domain) }}">
+                @csrf
+                <input type="hidden" name="mode" value="full">
+                <button class="inline-flex items-center px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-600 dark:hover:bg-gray-700 transition-colors">
+                    <i data-lucide="scan" class="w-4 h-4 mr-2"></i>
+                    Scan
+                </button>
+            </form>
         </div>
     </div>
 
@@ -52,16 +52,24 @@
         'mtastsOk' => $mtastsOk,
         'domainDays' => $domainDays,
         'sslDays' => $sslDays,
+        'bimiOk' => $bimiOk ?? false,
+        'bimiHasData' => $bimiHasData ?? false,
+        'scoreBreakdown' => $scoreBreakdown ?? [],
+        'scoreDeductions' => $scoreDeductions ?? [],
     ])
+
+    @if(!empty($scoreTrend['labels']))
+    @include('dashboard.partials._score-trend', ['scoreTrend' => $scoreTrend, 'chartId' => 'reportScoreTrend'])
+    @endif
 
     {{-- Incidents Strip --}}
     @include('scans.partials._incidents-strip', ['incidents' => $incidents])
 
     {{-- Two-Column Layout: Service Sections + Fix Pack --}}
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+    <div class="grid grid-cols-1 lg:grid-cols-5 gap-6">
         
         {{-- Left Column: Service Sections --}}
-        <div class="lg:col-span-2 space-y-6">
+        <div class="lg:col-span-3 space-y-6">
             
             {{-- DNS Security Section --}}
             @if($enabled['dns'])
@@ -94,7 +102,7 @@
         </div>
 
         {{-- Right Column: Fix Pack + Quick Actions --}}
-        <aside class="space-y-6">
+        <aside class="lg:col-span-2 space-y-6 min-w-0">
             
             {{-- Fix Pack --}}
             @include('scans.partials._fix-pack', [

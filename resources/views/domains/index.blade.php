@@ -11,12 +11,19 @@
 
     <!-- Header -->
     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
+        <div class="flex-1 min-w-0">
             <h1 class="text-2xl font-bold text-gray-900">Domains</h1>
-            <p class="text-gray-500 mt-1">{{ $used }} of {{ $limit }} domains used</p>
+            <p class="text-sm text-gray-600 mt-1 font-medium">Plan limits: {{ $used }}/{{ $limit }} domains</p>
+            <div class="mt-2 h-2 w-full max-w-xs bg-gray-200 rounded-full overflow-hidden">
+                @php
+                    $pct = $limit > 0 ? min(100, ($used / $limit) * 100) : 0;
+                    $barColor = $pct >= 100 ? 'bg-red-500' : ($pct >= 80 ? 'bg-amber-500' : 'bg-green-500');
+                @endphp
+                <div class="{{ $barColor }} h-full rounded-full transition-all" style="width: {{ $pct }}%"></div>
+            </div>
         </div>
         <div class="flex items-center gap-3">
-            @if($used >= $limit)
+            @if($used >= $limit * 0.8)
                 <a href="{{ route('pricing') }}" class="text-sm text-blue-600 hover:text-blue-700 font-medium">
                     Upgrade plan
                 </a>
@@ -178,6 +185,20 @@
                                         <h3 class="font-semibold text-gray-900 truncate">{{ $domain->domain }}</h3>
                                     @endif
                                     <p class="text-xs text-gray-500">{{ $domain->provider_guess ?: 'Unknown provider' }}</p>
+                                    @php
+                                        $dmarc = $dmarcSummaries[$domain->id] ?? null;
+                                        $dmarcSummary = $dmarc['summary'] ?? null;
+                                        $dmarcStatus = $dmarc['status'] ?? null;
+                                    @endphp
+                                    @if($dmarcSummary && ($dmarcSummary['has_data'] ?? false))
+                                    <p class="text-xs text-gray-600 mt-1">
+                                        {{ number_format($dmarcSummary['total_volume']) }} emails (7d) · {{ $dmarcSummary['alignment_rate'] }}% DMARC pass
+                                    </p>
+                                    @elseif($dmarcStatus && ($dmarcStatus['status'] ?? '') === \App\Services\Dmarc\DmarcStatusService::STATUS_ENABLED_MXSCAN_WAITING)
+                                    <p class="text-xs text-blue-600 mt-1">DMARC configured — awaiting reports</p>
+                                    @else
+                                    <a href="{{ route('dmarc.show', $domain) }}" class="text-xs text-gray-500 hover:text-blue-600 mt-1 inline-block">DMARC reporting not configured</a>
+                                    @endif
                                 </div>
                             </div>
                             <!-- Actions Menu -->
@@ -223,22 +244,40 @@
                         </div>
                     </div>
 
-                    <!-- Card Footer - Simplified Actions -->
+                    <!-- Card Footer - View report primary -->
                     <div class="p-3 border-t border-gray-100 flex items-center gap-2">
-                        <!-- Primary Scan Button -->
-                        <form action="{{ route('domains.scan.now', $domain) }}" method="POST" class="flex-1">
+                        @if($domain->scans()->exists())
+                            @php $latestScanFooter = $domain->scans()->latest()->first(); @endphp
+                            <a href="{{ route('reports.show', $latestScanFooter) }}"
+                               class="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-lg text-sm font-medium inline-flex items-center justify-center gap-2 transition-colors">
+                                <i data-lucide="file-text" class="w-4 h-4"></i>
+                                View Report
+                            </a>
+                        @else
+                            <form action="{{ route('domains.scan.now', $domain) }}" method="POST" class="flex-1">
+                                @csrf
+                                <input type="hidden" name="mode" value="full">
+                                <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-lg text-sm font-medium inline-flex items-center justify-center gap-2 transition-colors">
+                                    <i data-lucide="scan" class="w-4 h-4"></i>
+                                    Run first scan
+                                </button>
+                            </form>
+                        @endif
+
+                        <form action="{{ route('domains.scan.now', $domain) }}" method="POST">
                             @csrf
                             <input type="hidden" name="mode" value="full">
-                            <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-lg text-sm font-medium inline-flex items-center justify-center gap-2 transition-colors">
+                            <button type="submit" title="Scan now"
+                                    class="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors border border-gray-200">
                                 <i data-lucide="scan" class="w-4 h-4"></i>
-                                Scan
                             </button>
                         </form>
-                        
+
                         <!-- Scan Options Dropdown -->
                         <div class="relative" x-data="{ open: false }">
                             <button @click="open = !open" 
-                                    class="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors border border-gray-200">
+                                    class="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors border border-gray-200"
+                                    title="Scan options">
                                 <i data-lucide="chevron-down" class="w-4 h-4"></i>
                             </button>
                             <div x-show="open" @click.away="open = false" x-cloak
@@ -282,15 +321,6 @@
                             </div>
                         </div>
 
-                        <!-- View Latest Report -->
-                        @if($domain->scans()->exists())
-                            @php $latestScan = $domain->scans()->latest()->first(); @endphp
-                            <a href="{{ route('scans.show', $latestScan) }}" 
-                               class="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors border border-gray-200"
-                               title="View Latest Report">
-                                <i data-lucide="file-text" class="w-4 h-4"></i>
-                            </a>
-                        @endif
                     </div>
                 </div>
             @endforeach

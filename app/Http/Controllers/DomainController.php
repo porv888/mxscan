@@ -6,6 +6,8 @@ use App\Models\Domain;
 use App\Models\Schedule;
 use App\Models\DeliveryMonitor;
 use App\Rules\WithinDomainLimit;
+use App\Services\Dmarc\DmarcAnalyticsService;
+use App\Services\Dmarc\DmarcStatusService;
 use App\Services\Expiry\ExpiryCoordinator;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -20,10 +22,24 @@ class DomainController extends Controller
     public function index()
     {
         $domains = Domain::where('user_id', Auth::id())
-                        ->orderBy('created_at', 'desc')
-                        ->get();
+            ->with('activeSchedule')
+            ->orderBy('created_at', 'desc')
+            ->get();
 
-        return view('domains.index', compact('domains'));
+        $analytics = app(DmarcAnalyticsService::class);
+        $statusService = app(DmarcStatusService::class);
+        $dmarcSummaries = [];
+
+        foreach ($domains as $domain) {
+            $summary = $analytics->getDomainSummary($domain, 7);
+            $status = $statusService->getStatus($domain);
+            $dmarcSummaries[$domain->id] = [
+                'summary' => $summary,
+                'status' => $status,
+            ];
+        }
+
+        return view('domains.index', compact('domains', 'dmarcSummaries'));
     }
 
     /**

@@ -283,6 +283,40 @@ class DmarcAnalyticsService
     }
 
     /**
+     * Aggregate DMARC volume and pass rate for dashboard (last N days).
+     */
+    public function getDashboardSummary(int $userId, int $days = 7): array
+    {
+        $domainIds = Domain::where('user_id', $userId)->pluck('id');
+
+        if ($domainIds->isEmpty()) {
+            return [
+                'total_volume' => 0,
+                'alignment_rate' => 0,
+                'has_data' => false,
+                'active_domains' => 0,
+            ];
+        }
+
+        $startDate = now()->subDays($days)->toDateString();
+        $endDate = now()->toDateString();
+
+        $stats = DmarcDailyStat::whereIn('domain_id', $domainIds)
+            ->whereBetween('date', [$startDate, $endDate])
+            ->get();
+
+        $totalVolume = $stats->sum('total_count');
+        $alignedVolume = $stats->sum('aligned_count');
+
+        return [
+            'total_volume' => $totalVolume,
+            'alignment_rate' => $totalVolume > 0 ? round(($alignedVolume / $totalVolume) * 100, 1) : 0,
+            'has_data' => $totalVolume > 0,
+            'active_domains' => Domain::whereIn('id', $domainIds)->whereNotNull('dmarc_last_report_at')->count(),
+        ];
+    }
+
+    /**
      * Get global overview across all domains for a user.
      */
     public function getGlobalOverview(int $userId): array

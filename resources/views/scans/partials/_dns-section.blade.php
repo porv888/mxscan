@@ -15,7 +15,7 @@
                 $mtastsData && $mtastsData['status'] === 'found';
 @endphp
 
-<section class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6" x-data="{ open: {{ $allGreen ? 'false' : 'true' }} }">
+<section id="dns-security" class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6" x-data="{ open: {{ $allGreen ? 'false' : 'true' }} }">
     <header class="flex items-center justify-between mb-4">
         <h3 class="text-sm font-semibold text-gray-900 dark:text-gray-100">DNS Security</h3>
         <button @click="open=!open" class="text-sm text-blue-700 dark:text-blue-300 hover:underline flex items-center gap-1">
@@ -31,9 +31,9 @@
         <div x-show="!open" class="text-sm text-green-700 dark:text-green-300">✓ All configured. Great job!</div>
     @endif
 
-    <div x-show="open" x-collapse class="space-y-4">
+    <div x-show="open" x-collapse class="grid grid-cols-1 md:grid-cols-2 gap-4">
         {{-- MX Records --}}
-        <div>
+        <div class="md:col-span-2">
             <div class="flex items-center justify-between mb-2">
                 <h3 class="text-sm font-semibold text-gray-900 dark:text-gray-100">MX Records</h3>
                 @if($mxData && $mxData['status'] === 'found')

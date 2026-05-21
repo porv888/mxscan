@@ -19,7 +19,10 @@
             sidebarOpen: false
          }"
          @open-upgrade.window="showUpgrade = true"
-         @toast.window="showToast = true; toastText = $event.detail.text; toastType = $event.detail.type; setTimeout(() => showToast = false, 3000)">
+         @toast.window="showToast = true; toastText = $event.detail.text; toastType = $event.detail.type; setTimeout(() => showToast = false, 5000)"
+         @if(session('toast'))
+         x-init='$nextTick(() => { showToast = true; toastText = @json(session("toast.text")); toastType = @json(session("toast.type", "info")); setTimeout(() => showToast = false, 5000); })'
+         @endif>
         
         <!-- Mobile sidebar overlay -->
         <div x-show="sidebarOpen" 

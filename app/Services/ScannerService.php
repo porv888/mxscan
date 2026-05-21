@@ -12,6 +12,7 @@ class ScannerService
         $records = [];
         $score = 0;
         $recommendations = [];
+        $scoreBreakdown = [];
 
         try {
             Log::info('Starting domain scan', ['domain' => $domain]);
@@ -152,8 +153,27 @@ class ScannerService
                 ['status' => 'found', 'data' => $mtaStsRecord['txt'], 'policy' => $mtaStsPolicy] : 
                 ['status' => 'missing'];
 
+            // BIMI check
+            try {
+                $bimiResult = app(BimiChecker::class)->check($domain);
+                if ($bimiResult['record_found'] && $bimiResult['logo_valid']) {
+                    $records['BIMI'] = ['status' => 'found', 'data' => $bimiResult];
+                    $score += (int) config('dns-scoring.bimi.valid', 5);
+                } elseif ($bimiResult['record_found']) {
+                    $records['BIMI'] = ['status' => 'partial', 'data' => $bimiResult];
+                    $score += (int) config('dns-scoring.bimi.record_only', 2);
+                } else {
+                    $records['BIMI'] = ['status' => 'missing', 'data' => $bimiResult];
+                }
+            } catch (\Exception $e) {
+                Log::warning('BIMI check failed', ['domain' => $domain, 'error' => $e->getMessage()]);
+                $records['BIMI'] = ['status' => 'missing', 'data' => null];
+            }
+
             // Cap score at 100
-            $score = min($score, 100);
+            $score = min($score, (int) config('dns-scoring.cap', 100));
+
+            $scoreBreakdown = app(ScoreBreakdownService::class)->buildFromDnsRecords($records);
 
             // Generate recommendations based on actual DNS results
             $recommendations = $this->generateRecommendations($domain, $records);
@@ -180,6 +200,7 @@ class ScannerService
             'score' => $score,
             'records' => $records,
             'recommendations' => $recommendations,
+            'score_breakdown' => $scoreBreakdown ?? [],
         ];
     }
 
@@ -239,6 +260,15 @@ class ScannerService
                 'title' => 'Add MTA-STS record',
                 'value' => 'v=STSv1; id=20250910',
                 'description' => 'MTA-STS enforces secure TLS connections for email delivery to your domain.',
+            ];
+        }
+
+        if (isset($records['BIMI']) && $records['BIMI']['status'] === 'missing') {
+            $recommendations[] = [
+                'type' => 'BIMI',
+                'title' => 'Add BIMI record',
+                'value' => 'v=BIMI1; l=https://example.com/logo.svg',
+                'description' => 'BIMI enables verified brand logos in supporting inboxes (requires DMARC at enforcement).',
             ];
         }
 

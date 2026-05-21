@@ -15,6 +15,10 @@
         </span>
       @endisset
     </div>
+    @include('scans.partials._score-breakdown', [
+      'scoreBreakdown' => $scoreBreakdown ?? [],
+      'scoreDeductions' => $scoreDeductions ?? [],
+    ])
   </div>
 
   {{-- Blacklist --}}
@@ -90,6 +94,18 @@
     </div>
     <div class="text-xs text-gray-500 mt-1">{{ $tlsrptOk ? 'Receiving TLS failure reports' : 'Optional: Get notified of TLS issues' }}</div>
   </div>
+
+  @if($bimiHasData ?? false)
+  <div class="rounded-xl border border-gray-200 dark:border-gray-700 p-4">
+    <div class="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">BIMI</div>
+    <div class="mt-2 text-lg font-medium {{ ($bimiOk ?? false) ? 'text-green-700 dark:text-green-300' : 'text-amber-600 dark:text-amber-400' }}">
+      {{ ($bimiOk ?? false) ? 'Valid' : 'Not set up' }}
+    </div>
+    <div class="text-xs text-gray-500 mt-1">
+      <a href="{{ route('tools.bimi') }}" class="underline">Check in Tools</a>
+    </div>
+  </div>
+  @endif
 
   {{-- MTA-STS --}}
   <div class="rounded-xl border border-gray-200 dark:border-gray-700 p-4">

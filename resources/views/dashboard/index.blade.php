@@ -33,26 +33,32 @@
                     <p class="text-sm text-gray-600">Security issues detected that need your attention</p>
                 </div>
             </div>
-            <a href="{{ route('monitoring.incidents') }}" 
+            <a href="{{ auth()->user()->canUseMonitoring() ? route('monitoring.incidents') : route('reports.index') }}" 
                class="inline-flex items-center px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded-lg transition-colors">
                 <i data-lucide="eye" class="w-4 h-4 mr-2"></i>
                 View All
             </a>
         </div>
         @if($unresolvedIncidents->count() > 0)
-        <div class="mt-3 pt-3 border-t border-red-200">
-            <div class="flex flex-wrap gap-2">
-                @foreach($unresolvedIncidents->take(3) as $incident)
-                <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium 
-                    {{ $incident->severity === 'incident' ? 'bg-red-100 text-red-800' : 'bg-amber-100 text-amber-800' }}">
-                    <span class="w-1.5 h-1.5 rounded-full mr-1.5 {{ $incident->severity === 'incident' ? 'bg-red-500' : 'bg-amber-500' }}"></span>
-                    {{ Str::limit($incident->message, 40) }}
-                </span>
-                @endforeach
-                @if($unresolvedIncidents->count() > 3)
-                <span class="text-xs text-gray-500 self-center">+{{ $unresolvedIncidents->count() - 3 }} more</span>
-                @endif
-            </div>
+        <div class="mt-3 pt-3 border-t border-red-200 space-y-1">
+            @foreach($unresolvedIncidents->take(3) as $incident)
+            <a href="{{ $incident->action_url ?? route('monitoring.incidents') }}"
+               class="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-white/60 transition-colors group">
+                <span class="w-1.5 h-1.5 rounded-full shrink-0 {{ $incident->severity === 'incident' ? 'bg-red-500' : 'bg-amber-500' }}"></span>
+                <span class="text-sm text-gray-800 truncate flex-1 group-hover:text-gray-900">{{ Str::limit($incident->message, 56) }}</span>
+                <span class="text-xs text-gray-500 shrink-0">{{ $incident->domain->domain ?? '' }}</span>
+                <i data-lucide="chevron-right" class="w-4 h-4 text-gray-400 shrink-0"></i>
+            </a>
+            @endforeach
+            @if($unresolvedIncidents->count() > 3)
+            <p class="text-xs text-gray-500 px-3 pt-1">+{{ $unresolvedIncidents->count() - 3 }} more in incident list</p>
+            @endif
+            @if(auth()->user()->canUseMonitoring())
+            <a href="{{ route('settings.notifications') }}" class="inline-flex items-center text-xs text-blue-700 hover:text-blue-800 px-3 pt-2">
+                <i data-lucide="bell" class="w-3 h-3 mr-1"></i>
+                Configure Slack &amp; webhooks
+            </a>
+            @endif
         </div>
         @endif
     </div>
@@ -142,25 +148,66 @@
             @endif
         </div>
 
-        <!-- Needs Scanning -->
-        <div class="bg-white rounded-lg shadow-sm p-5 border-l-4 {{ ($unscannedDomains ?? 0) > 0 ? 'border-blue-500' : 'border-green-500' }}">
+        <!-- Monitoring gap -->
+        <div class="bg-white rounded-lg shadow-sm p-5 border-l-4 {{ ($monitoringGap ?? 0) > 0 ? 'border-blue-500' : 'border-green-500' }}">
             <div class="flex items-center justify-between">
                 <div>
-                    <p class="text-xs font-medium text-gray-500 uppercase tracking-wide">Needs Scanning</p>
-                    <p class="text-3xl font-bold {{ ($unscannedDomains ?? 0) > 0 ? 'text-blue-600' : 'text-green-600' }}">{{ $unscannedDomains ?? 0 }}</p>
-                    <p class="text-xs text-gray-500 mt-1">Not scanned in 7+ days</p>
+                    <p class="text-xs font-medium text-gray-500 uppercase tracking-wide">Monitoring Gap</p>
+                    <p class="text-3xl font-bold {{ ($monitoringGap ?? 0) > 0 ? 'text-blue-600' : 'text-green-600' }}">{{ $monitoringGap ?? 0 }}</p>
+                    <p class="text-xs text-gray-500 mt-1">
+                        @if(($monitoringGap ?? 0) > 0)
+                            Automated scan overdue
+                        @else
+                            All domains monitored on schedule
+                        @endif
+                    </p>
                 </div>
-                <div class="p-3 rounded-full {{ ($unscannedDomains ?? 0) > 0 ? 'bg-blue-100' : 'bg-green-100' }}">
-                    <i data-lucide="{{ ($unscannedDomains ?? 0) > 0 ? 'scan' : 'check-circle' }}" class="w-6 h-6 {{ ($unscannedDomains ?? 0) > 0 ? 'text-blue-600' : 'text-green-600' }}"></i>
+                <div class="p-3 rounded-full {{ ($monitoringGap ?? 0) > 0 ? 'bg-blue-100' : 'bg-green-100' }}">
+                    <i data-lucide="{{ ($monitoringGap ?? 0) > 0 ? 'clock' : 'check-circle' }}" class="w-6 h-6 {{ ($monitoringGap ?? 0) > 0 ? 'text-blue-600' : 'text-green-600' }}"></i>
                 </div>
             </div>
-            @if(($unscannedDomains ?? 0) > 0)
-            <a href="{{ route('dashboard.domains') }}" class="mt-3 inline-flex items-center text-xs font-medium text-blue-600 hover:text-blue-700">
-                Scan now <i data-lucide="arrow-right" class="w-3 h-3 ml-1"></i>
+            @if(($monitoringGap ?? 0) > 0)
+            <a href="{{ route('domains') }}" class="mt-3 inline-flex items-center text-xs font-medium text-blue-600 hover:text-blue-700">
+                Review domains <i data-lucide="arrow-right" class="w-3 h-3 ml-1"></i>
             </a>
             @endif
         </div>
     </div>
+
+    <!-- DMARC + monitoring summary -->
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <a href="{{ route('dmarc.index') }}" class="bg-white rounded-lg shadow-sm p-4 border border-gray-200 hover:border-blue-300 transition-colors">
+            <p class="text-xs font-medium text-gray-500 uppercase tracking-wide">DMARC volume (7d)</p>
+            <p class="text-2xl font-bold text-gray-900 mt-1">
+                @if($dmarcDashboard['has_data'] ?? false)
+                    {{ number_format($dmarcDashboard['total_volume']) }}
+                @else
+                    —
+                @endif
+            </p>
+            <p class="text-xs text-gray-500 mt-1">
+                @if($dmarcDashboard['has_data'] ?? false)
+                    {{ $dmarcDashboard['alignment_rate'] }}% aligned
+                @else
+                    Set up DMARC reporting
+                @endif
+            </p>
+        </a>
+        <a href="{{ route('monitoring.incidents') }}" class="bg-white rounded-lg shadow-sm p-4 border border-gray-200 hover:border-red-300 transition-colors">
+            <p class="text-xs font-medium text-gray-500 uppercase tracking-wide">Active incidents</p>
+            <p class="text-2xl font-bold {{ ($incidentCount ?? 0) > 0 ? 'text-red-600' : 'text-green-600' }} mt-1">{{ $incidentCount ?? 0 }}</p>
+            <p class="text-xs text-gray-500 mt-1">Unresolved security issues</p>
+        </a>
+        <a href="{{ route('automations.index') }}" class="bg-white rounded-lg shadow-sm p-4 border border-gray-200 hover:border-blue-300 transition-colors">
+            <p class="text-xs font-medium text-gray-500 uppercase tracking-wide">Automations</p>
+            <p class="text-2xl font-bold text-gray-900 mt-1">{{ $domains->where(fn($d) => $d->activeSchedule)->count() }}</p>
+            <p class="text-xs text-gray-500 mt-1">Domains with scheduled scans</p>
+        </a>
+    </div>
+
+    @if(!empty($scoreTrend['labels']))
+    @include('dashboard.partials._score-trend', ['scoreTrend' => $scoreTrend, 'chartId' => 'dashboardScoreTrend'])
+    @endif
 
     <!-- Recent Activity (demoted - collapsible) -->
     <div class="bg-white rounded-lg shadow-sm" x-data="{ expanded: false }">
@@ -224,23 +271,5 @@
         </div>
     </div>
 
-    <!-- Quick Actions - Simplified single row -->
-    <div class="flex flex-wrap gap-3">
-        <a href="{{ route('dashboard.domains.create') }}" 
-           class="inline-flex items-center px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors">
-            <i data-lucide="plus" class="w-4 h-4 mr-2"></i>
-            Add Domain
-        </a>
-        <a href="{{ route('dashboard.domains') }}" 
-           class="inline-flex items-center px-4 py-2.5 bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 text-sm font-medium rounded-lg transition-colors">
-            <i data-lucide="globe" class="w-4 h-4 mr-2"></i>
-            Manage Domains
-        </a>
-        <a href="{{ route('schedules.index') }}" 
-           class="inline-flex items-center px-4 py-2.5 bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 text-sm font-medium rounded-lg transition-colors">
-            <i data-lucide="calendar" class="w-4 h-4 mr-2"></i>
-            Schedules
-        </a>
-    </div>
 </div>
 @endsection
