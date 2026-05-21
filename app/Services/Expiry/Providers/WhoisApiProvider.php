@@ -90,7 +90,7 @@ class WhoisApiProvider implements DomainExpiryProvider
             );
 
         } catch (\Exception $e) {
-            Log::warning('WHOIS API detection failed', [
+            Log::debug('WHOIS API detection failed', [
                 'domain' => $domain,
                 'provider' => config('expiry.domain.whois_api.provider'),
                 'error' => $e->getMessage(),
@@ -139,7 +139,7 @@ class WhoisApiProvider implements DomainExpiryProvider
             $response = $http->get($config['url'], $params);
 
             if (!$response->successful()) {
-                Log::warning('WHOIS API request failed', [
+                Log::debug('WHOIS API request failed', [
                     'status' => $response->status(),
                     'body' => $response->body(),
                 ]);
@@ -149,7 +149,7 @@ class WhoisApiProvider implements DomainExpiryProvider
             return $response->json();
 
         } catch (\Exception $e) {
-            Log::warning('WHOIS API request exception', [
+            Log::debug('WHOIS API request exception', [
                 'error' => $e->getMessage(),
             ]);
             return null;

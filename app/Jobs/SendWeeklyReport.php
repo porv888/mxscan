@@ -50,7 +50,9 @@ class SendWeeklyReport implements ShouldQueue
                             continue;
                         }
 
-                        $reportData = $this->generateReportData($domain, $weekStart, $weekEnd);
+                        $reportData = $this->sanitizeForUtf8(
+                            $this->generateReportData($domain, $weekStart, $weekEnd)
+                        );
                         
                         // Skip if no activity this week
                         if ($this->shouldSkipReport($reportData)) {
@@ -180,6 +182,60 @@ class SendWeeklyReport implements ShouldQueue
             'weekStart' => $weekStart,
             'weekEnd' => $weekEnd,
         ])->setPaper('a4', 'portrait');
+    }
+
+    /**
+     * Recursively remove invalid UTF-8 from report payload data before it is
+     * rendered into PDF/email content.
+     */
+    private function sanitizeForUtf8(mixed $value): mixed
+    {
+        if (is_string($value)) {
+            return $this->sanitizeString($value);
+        }
+
+        if (is_array($value)) {
+            foreach ($value as $key => $item) {
+                $value[$key] = $this->sanitizeForUtf8($item);
+            }
+
+            return $value;
+        }
+
+        if ($value instanceof \Illuminate\Support\Collection) {
+            return $value->map(fn ($item) => $this->sanitizeForUtf8($item));
+        }
+
+        if ($value instanceof \Illuminate\Database\Eloquent\Model) {
+            foreach ($value->getAttributes() as $key => $attribute) {
+                if (is_string($attribute) || is_array($attribute)) {
+                    $value->setAttribute($key, $this->sanitizeForUtf8($attribute));
+                }
+            }
+
+            return $value;
+        }
+
+        return $value;
+    }
+
+    private function sanitizeString(string $value): string
+    {
+        if (function_exists('mb_check_encoding') && mb_check_encoding($value, 'UTF-8')) {
+            return $value;
+        }
+
+        $converted = function_exists('mb_convert_encoding')
+            ? @mb_convert_encoding($value, 'UTF-8', 'UTF-8')
+            : false;
+
+        if (is_string($converted) && $converted !== '') {
+            return $converted;
+        }
+
+        $ignored = @iconv('UTF-8', 'UTF-8//IGNORE', $value);
+
+        return is_string($ignored) ? $ignored : '';
     }
 
     /**

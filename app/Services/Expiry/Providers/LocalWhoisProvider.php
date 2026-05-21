@@ -67,7 +67,7 @@ class LocalWhoisProvider implements DomainExpiryProvider
             );
 
         } catch (\Exception $e) {
-            Log::warning('Local WHOIS detection failed', [
+            Log::debug('Local WHOIS detection failed', [
                 'domain' => $domain,
                 'error' => $e->getMessage(),
             ]);

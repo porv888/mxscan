@@ -10,6 +10,7 @@ use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Mail\Mailables\Attachment;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Str;
 
 class WeeklyReportMail extends Mailable implements ShouldQueue
 {
@@ -29,8 +30,10 @@ class WeeklyReportMail extends Mailable implements ShouldQueue
      */
     public function envelope(): Envelope
     {
+        $domain = $this->safeDomainName();
+
         return new Envelope(
-            subject: "MXScan Weekly Report — {$this->domain->domain}",
+            subject: "MXScan Weekly Report - {$domain}",
         );
     }
 
@@ -54,12 +57,21 @@ class WeeklyReportMail extends Mailable implements ShouldQueue
      */
     public function attachments(): array
     {
-        $filename = "mxscan-{$this->domain->domain}-weekly-" . 
+        $filename = "mxscan-{$this->safeDomainName()}-weekly-" . 
                    $this->weekStart->format('Y-m-d') . ".pdf";
 
         return [
             Attachment::fromData(fn () => $this->pdfContent, $filename)
                 ->withMime('application/pdf'),
         ];
+    }
+
+    private function safeDomainName(): string
+    {
+        return Str::of($this->domain->domain)
+            ->ascii()
+            ->replaceMatches('/[^A-Za-z0-9._-]+/', '-')
+            ->trim('-')
+            ->value() ?: 'domain';
     }
 }

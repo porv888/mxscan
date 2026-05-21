@@ -43,7 +43,7 @@ class CtProvider implements SslExpiryProvider
             );
 
         } catch (\Exception $e) {
-            Log::warning('CT detection failed', [
+            Log::debug('CT detection failed', [
                 'domain' => $domain,
                 'error' => $e->getMessage(),
             ]);

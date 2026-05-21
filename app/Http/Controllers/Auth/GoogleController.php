@@ -38,7 +38,7 @@ class GoogleController extends Controller
         if ($user) {
             // Existing Google user — log them in
             $user->update([
-                'google_avatar' => $googleUser->getAvatar(),
+                'google_avatar' => $this->googleAvatarUrl($googleUser),
             ]);
 
             Auth::login($user, true);
@@ -54,7 +54,7 @@ class GoogleController extends Controller
             // Link Google account to existing user
             $user->update([
                 'google_id' => $googleUser->getId(),
-                'google_avatar' => $googleUser->getAvatar(),
+                'google_avatar' => $this->googleAvatarUrl($googleUser),
             ]);
 
             // Mark email as verified since Google already verified it
@@ -73,7 +73,7 @@ class GoogleController extends Controller
             'name' => $googleUser->getName(),
             'email' => $googleUser->getEmail(),
             'google_id' => $googleUser->getId(),
-            'google_avatar' => $googleUser->getAvatar(),
+            'google_avatar' => $this->googleAvatarUrl($googleUser),
             'password' => Hash::make(Str::random(24)),
         ]);
 
@@ -87,5 +87,16 @@ class GoogleController extends Controller
         Log::info('Google OAuth new user created', ['user_id' => $user->id, 'email' => $user->email]);
 
         return redirect()->route('dashboard');
+    }
+
+    private function googleAvatarUrl($googleUser): ?string
+    {
+        $avatar = $googleUser->getAvatar();
+
+        if (!is_string($avatar) || trim($avatar) === '') {
+            return null;
+        }
+
+        return trim($avatar);
     }
 }

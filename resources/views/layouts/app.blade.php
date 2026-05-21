@@ -10,6 +10,7 @@
     <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
 </head>
 <body class="bg-gray-50">
+    @php($currentUser = auth()->user())
     <div class="min-h-screen" 
          x-data="{
             showUpgrade: false,
@@ -76,7 +77,7 @@
                     <i data-lucide="search" class="mr-3 h-5 w-5 {{ request()->routeIs('reports*') ? 'text-blue-500' : 'text-gray-400' }}"></i>
                     Reports
                 </a>
-                @if(auth()->user()->canUseMonitoring())
+                @if($currentUser?->canUseMonitoring())
                     <a href="{{ route('monitoring.incidents') }}" 
                        class="group flex items-center px-2 py-2 text-sm font-medium rounded-md {{ request()->routeIs('monitoring.*') ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900' }}">
                         <i data-lucide="alert-triangle" class="mr-3 h-5 w-5 {{ request()->routeIs('monitoring.*') ? 'text-blue-500' : 'text-gray-400' }}"></i>
@@ -143,7 +144,7 @@
                                 Reports
                             </a>
                             
-                            @if(auth()->user()->canUseMonitoring())
+                            @if($currentUser?->canUseMonitoring())
                                 <a href="{{ route('monitoring.incidents') }}" 
                                    class="group flex items-center justify-between px-2 py-2 text-sm font-medium rounded-md {{ request()->routeIs('monitoring.incidents*') || request()->routeIs('monitoring.snapshots*') ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900' }}">
                                     <span class="flex items-center">
@@ -207,16 +208,17 @@
 
                         <!-- User menu -->
                         <div class="ml-2 flex shrink-0 items-center md:ml-6" x-data="{ dropdownOpen: false }">
+                            @auth
                             <div class="relative">
                                 <button type="button" 
                                         class="max-w-xs bg-white flex items-center text-sm rounded-full focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500" 
                                         @click="dropdownOpen = !dropdownOpen">
                                     <span class="sr-only">Open user menu</span>
                                     <div class="h-8 w-8 rounded-full bg-blue-600 flex items-center justify-center">
-                                        <span class="text-sm font-medium text-white">{{ substr(Auth::user()->name, 0, 1) }}</span>
+                                        <span class="text-sm font-medium text-white">{{ strtoupper(substr($currentUser?->name ?? 'U', 0, 1)) }}</span>
                                     </div>
                                     <span class="hidden md:ml-3 md:block">
-                                        <span class="text-sm font-medium text-gray-700">{{ Auth::user()->name }}</span>
+                                        <span class="text-sm font-medium text-gray-700">{{ $currentUser?->name ?? 'User' }}</span>
                                     </span>
                                     <i data-lucide="chevron-down" class="hidden md:block ml-2 h-4 w-4 text-gray-400"></i>
                                 </button>
@@ -249,7 +251,7 @@
                                         Billing
                                     </a>
                                     
-                                    @if(auth()->user()->isAdmin())
+                                    @if($currentUser?->isAdmin())
                                         <div class="border-t border-gray-100 my-1"></div>
                                         <a href="{{ route('admin.dashboard') }}" 
                                            class="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
@@ -270,6 +272,12 @@
                                     </form>
                                 </div>
                             </div>
+                            @else
+                            <a href="{{ route('login') }}"
+                               class="inline-flex items-center rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
+                                Log in
+                            </a>
+                            @endauth
                         </div>
                     </div>
                 </header>

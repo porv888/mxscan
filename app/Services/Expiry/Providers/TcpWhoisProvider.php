@@ -154,7 +154,7 @@ class TcpWhoisProvider implements DomainExpiryProvider
             );
             
         } catch (\Exception $e) {
-            Log::warning('TCP WHOIS provider error', [
+            Log::debug('TCP WHOIS provider error', [
                 'domain' => $domain,
                 'error' => $e->getMessage(),
             ]);

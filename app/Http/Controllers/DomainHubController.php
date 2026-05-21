@@ -70,6 +70,6 @@ class DomainHubController extends Controller
         $cadence = $sched?->status === 'active' ? ($sched->frequency ?? 'daily') : 'off';
         $runAt = $settings['run_at'] ?? null;
         
-        return view('domains.hub.settings', compact('domain', 'enabled', 'cadence', 'runAt'));
+        return view('domains.edit', compact('domain'));
     }
 }

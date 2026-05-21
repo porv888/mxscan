@@ -53,7 +53,7 @@ class RdapAggregatorProvider implements DomainExpiryProvider
             );
 
         } catch (\Exception $e) {
-            Log::warning('RDAP Aggregator detection failed', [
+            Log::debug('RDAP Aggregator detection failed', [
                 'domain' => $domain,
                 'error' => $e->getMessage(),
             ]);
@@ -85,7 +85,7 @@ class RdapAggregatorProvider implements DomainExpiryProvider
                         return $date;
                     }
                 } catch (\Exception $e) {
-                    Log::warning('Failed to parse RDAP expiry date', [
+                    Log::debug('Failed to parse RDAP expiry date', [
                         'date' => $event['eventDate'],
                         'error' => $e->getMessage(),
                     ]);

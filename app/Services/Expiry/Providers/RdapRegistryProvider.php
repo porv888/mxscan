@@ -69,7 +69,7 @@ class RdapRegistryProvider implements DomainExpiryProvider
             );
 
         } catch (\Exception $e) {
-            Log::warning('RDAP Registry detection failed', [
+            Log::debug('RDAP Registry detection failed', [
                 'domain' => $domain,
                 'error' => $e->getMessage(),
             ]);
@@ -112,7 +112,7 @@ class RdapRegistryProvider implements DomainExpiryProvider
             return null;
 
         } catch (\Exception $e) {
-            Log::warning('RDAP bootstrap resolution failed', [
+            Log::debug('RDAP bootstrap resolution failed', [
                 'domain' => $domain,
                 'error' => $e->getMessage(),
             ]);
@@ -139,7 +139,7 @@ class RdapRegistryProvider implements DomainExpiryProvider
                         return $date;
                     }
                 } catch (\Exception $e) {
-                    Log::warning('Failed to parse RDAP expiry date', [
+                    Log::debug('Failed to parse RDAP expiry date', [
                         'date' => $event['eventDate'],
                         'error' => $e->getMessage(),
                     ]);

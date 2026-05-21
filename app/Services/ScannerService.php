@@ -18,14 +18,14 @@ class ScannerService
             Log::info('Starting domain scan', ['domain' => $domain]);
 
             // Check MX records
-            $mxRecords = dns_get_record($domain, DNS_MX);
+            $mxRecords = $this->safeDnsGetRecord($domain, DNS_MX, 'MX');
             $records['MX'] = !empty($mxRecords) ? ['status' => 'found', 'data' => $mxRecords] : ['status' => 'missing'];
             if (!empty($mxRecords)) {
                 $score += 15;
             }
 
             // Check SPF record (from TXT records)
-            $txtRecords = dns_get_record($domain, DNS_TXT);
+            $txtRecords = $this->safeDnsGetRecord($domain, DNS_TXT, 'SPF TXT');
             $spfRecord = collect($txtRecords ?: [])->first(function ($record) {
                 return isset($record['txt']) && str_contains($record['txt'], 'v=spf1');
             });
@@ -51,7 +51,7 @@ class ScannerService
 
                     // First try TXT lookup (works for direct TXT and some CNAME chains)
                     $foundViaTxt = false;
-                    $dkimRecords = @dns_get_record($dkimDomain, DNS_TXT);
+                    $dkimRecords = $this->safeDnsGetRecord($dkimDomain, DNS_TXT, 'DKIM TXT');
                     if (!empty($dkimRecords)) {
                         foreach ($dkimRecords as $rec) {
                             if (isset($rec['txt']) && str_contains($rec['txt'], 'p=')) {
@@ -70,11 +70,11 @@ class ScannerService
                     }
 
                     // Fallback: check for CNAME (providers like Mandrill, SendGrid use CNAMEs)
-                    $cnameRecords = @dns_get_record($dkimDomain, DNS_CNAME);
+                    $cnameRecords = $this->safeDnsGetRecord($dkimDomain, DNS_CNAME, 'DKIM CNAME');
                     if (!empty($cnameRecords)) {
                         $target = $cnameRecords[0]['target'] ?? '';
                         // Resolve the CNAME target for the actual TXT key
-                        $targetTxt = @dns_get_record($target, DNS_TXT);
+                        $targetTxt = $this->safeDnsGetRecord($target, DNS_TXT, 'DKIM CNAME target TXT');
                         $txtValue = '';
                         if (!empty($targetTxt)) {
                             foreach ($targetTxt as $rec) {
@@ -105,7 +105,7 @@ class ScannerService
             }
 
             // Check DMARC record
-            $dmarcRecords = dns_get_record("_dmarc.$domain", DNS_TXT);
+            $dmarcRecords = $this->safeDnsGetRecord("_dmarc.$domain", DNS_TXT, 'DMARC TXT');
             $dmarcRecord = !empty($dmarcRecords) ? $dmarcRecords[0] : null;
             $records['DMARC'] = $dmarcRecord ? ['status' => 'found', 'data' => $dmarcRecord['txt']] : ['status' => 'missing'];
             
@@ -120,7 +120,7 @@ class ScannerService
             }
 
             // Check TLS-RPT record
-            $tlsRptRecords = dns_get_record("_smtp._tls.$domain", DNS_TXT);
+            $tlsRptRecords = $this->safeDnsGetRecord("_smtp._tls.$domain", DNS_TXT, 'TLS-RPT TXT');
             $tlsRptRecord = !empty($tlsRptRecords) ? $tlsRptRecords[0] : null;
             $records['TLS-RPT'] = $tlsRptRecord ? ['status' => 'found', 'data' => $tlsRptRecord['txt']] : ['status' => 'missing'];
             
@@ -129,7 +129,7 @@ class ScannerService
             }
 
             // Check MTA-STS record
-            $mtaStsRecords = dns_get_record("_mta-sts.$domain", DNS_TXT);
+            $mtaStsRecords = $this->safeDnsGetRecord("_mta-sts.$domain", DNS_TXT, 'MTA-STS TXT');
             $mtaStsRecord = !empty($mtaStsRecords) ? $mtaStsRecords[0] : null;
             $mtaStsPolicy = null;
             
@@ -144,7 +144,7 @@ class ScannerService
                         $score += 10; // Partial points for DNS record only
                     }
                 } catch (\Exception $e) {
-                    Log::warning('MTA-STS policy fetch failed', ['domain' => $domain, 'error' => $e->getMessage()]);
+                    Log::info('MTA-STS policy not reachable', ['domain' => $domain, 'error' => $e->getMessage()]);
                     $score += 10; // Partial points for DNS record only
                 }
             }
@@ -358,11 +358,28 @@ class ScannerService
     private function getDomainIp(string $domain): ?string
     {
         try {
-            $records = dns_get_record($domain, DNS_A);
+            $records = $this->safeDnsGetRecord($domain, DNS_A, 'A');
             return !empty($records) ? $records[0]['ip'] : null;
-        } catch (Exception $e) {
+        } catch (\Exception $e) {
             Log::warning("Failed to resolve IP for domain: $domain", ['error' => $e->getMessage()]);
             return null;
+        }
+    }
+
+    private function safeDnsGetRecord(string $host, int $type, string $label): array
+    {
+        try {
+            $records = @dns_get_record($host, $type);
+
+            return is_array($records) ? $records : [];
+        } catch (\Throwable $e) {
+            Log::warning('DNS lookup failed', [
+                'host' => $host,
+                'record_type' => $label,
+                'error' => $e->getMessage(),
+            ]);
+
+            return [];
         }
     }
 }

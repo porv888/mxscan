@@ -44,7 +44,7 @@ class LiveTlsProvider implements SslExpiryProvider
             );
 
         } catch (\Exception $e) {
-            Log::warning('Live TLS detection failed', [
+            Log::debug('Live TLS detection failed', [
                 'domain' => $domain,
                 'error' => $e->getMessage(),
             ]);

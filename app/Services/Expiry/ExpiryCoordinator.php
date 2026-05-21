@@ -285,7 +285,7 @@ class ExpiryCoordinator
      */
     private function logResult(Domain $domain, ExpiryResult $result, string $type): void
     {
-        $level = $result->success ? 'info' : 'warning';
+        $level = $result->success ? 'info' : 'debug';
         
         Log::log($level, "Expiry detection result", [
             'domain' => $domain->domain,
