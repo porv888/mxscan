@@ -13,6 +13,57 @@
                 $dmarcData && $dmarcData['status'] === 'found' &&
                 $tlsrptData && $tlsrptData['status'] === 'found' &&
                 $mtastsData && $mtastsData['status'] === 'found';
+
+    $recordHelp = [
+        'mx' => [
+            'title' => 'MX records',
+            'text' => 'MX records tell other mail servers where to deliver email for your domain.',
+            'impact' => 'Without MX records, people may not be able to send email to this domain.',
+            'fix' => 'Add the mail server records from your email provider.',
+        ],
+        'spf' => [
+            'title' => 'SPF record',
+            'text' => 'SPF tells inboxes which servers are allowed to send email for your domain.',
+            'impact' => 'Without SPF, attackers can spoof your domain more easily and your real emails may go to spam.',
+            'fix' => 'Add one SPF TXT record that includes your sending services.',
+        ],
+        'spf_lookup' => [
+            'title' => 'SPF lookup limit',
+            'text' => 'SPF has a 10 lookup limit.',
+            'impact' => 'If you go over it, some receivers may treat SPF as failed.',
+            'fix' => 'Remove unused senders or use the SPF optimizer.',
+        ],
+        'dkim' => [
+            'title' => 'DKIM',
+            'text' => 'DKIM adds a digital signature that proves your email was not changed in transit.',
+            'impact' => 'Without DKIM, inboxes have less trust in your email and DMARC protection is weaker.',
+            'fix' => 'Enable DKIM signing in your email provider.',
+        ],
+        'dmarc' => [
+            'title' => 'DMARC policy',
+            'text' => 'DMARC tells inboxes what to do when SPF or DKIM checks fail.',
+            'impact' => 'Without DMARC, spoofed emails using your domain are harder to stop and track.',
+            'fix' => 'Add a DMARC TXT record at _dmarc.',
+        ],
+        'dmarc_reports' => [
+            'title' => 'DMARC reports',
+            'text' => 'DMARC reports show who is sending email as your domain.',
+            'impact' => 'Without reports, you cannot see abuse, failed senders, or sending volume.',
+            'fix' => 'Add the MXScan RUA address to your DMARC record.',
+        ],
+        'tlsrpt' => [
+            'title' => 'TLS-RPT',
+            'text' => 'TLS-RPT sends reports when secure mail delivery has problems.',
+            'impact' => 'Without it, TLS delivery failures may happen without you knowing.',
+            'fix' => 'Add a TLS-RPT TXT record.',
+        ],
+        'mtasts' => [
+            'title' => 'MTA-STS',
+            'text' => 'MTA-STS tells other mail servers to use secure encrypted delivery to your domain.',
+            'impact' => 'Without it, some mail connections may be easier to downgrade or intercept.',
+            'fix' => 'Add the DNS record and publish an MTA-STS policy file.',
+        ],
+    ];
 @endphp
 
 <section id="dns-security" class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6" x-data="{ open: {{ $allGreen ? 'false' : 'true' }} }">
@@ -35,7 +86,10 @@
         {{-- MX Records --}}
         <div class="md:col-span-2">
             <div class="flex items-center justify-between mb-2">
-                <h3 class="text-sm font-semibold text-gray-900 dark:text-gray-100">MX Records</h3>
+                <h3 class="flex items-center gap-1 text-sm font-semibold text-gray-900 dark:text-gray-100">
+                    MX Records
+                    <x-help-tooltip :title="$recordHelp['mx']['title']" :text="$recordHelp['mx']['text']" :impact="$recordHelp['mx']['impact']" :fix="$recordHelp['mx']['fix']" />
+                </h3>
                 @if($mxData && $mxData['status'] === 'found')
                 <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
                     <svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
@@ -66,6 +120,7 @@
                     </svg>
                     No MX records found
                 </div>
+                <p class="mt-2 text-xs text-red-700 dark:text-red-300">This can stop people from sending email to this domain.</p>
             </div>
             @endif
         </div>
@@ -73,7 +128,10 @@
         {{-- SPF Record --}}
         <div>
             <div class="flex items-center justify-between mb-2">
-                <h3 class="text-sm font-semibold text-gray-900 dark:text-gray-100">SPF Record</h3>
+                <h3 class="flex items-center gap-1 text-sm font-semibold text-gray-900 dark:text-gray-100">
+                    SPF Record
+                    <x-help-tooltip :title="$recordHelp['spf']['title']" :text="$recordHelp['spf']['text']" :impact="$recordHelp['spf']['impact']" :fix="$recordHelp['spf']['fix']" />
+                </h3>
                 @if($spfData && $spfData['status'] === 'found')
                 <div class="flex items-center gap-2">
                     <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
@@ -86,6 +144,9 @@
                     <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium {{ $spfLookupCount >= 10 ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200' : ($spfLookupCount >= 7 ? 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200' : 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200') }}">
                         {{ $spfLookupCount }}/10 lookups
                     </span>
+                    @if($spfLookupCount >= 7)
+                    <x-help-tooltip :title="$recordHelp['spf_lookup']['title']" :text="$recordHelp['spf_lookup']['text']" :impact="$recordHelp['spf_lookup']['impact']" :fix="$recordHelp['spf_lookup']['fix']" />
+                    @endif
                     @endif
                 </div>
                 @endif
@@ -114,6 +175,7 @@
                     </svg>
                     No SPF record found
                 </div>
+                <p class="mt-2 text-xs text-red-700 dark:text-red-300">This can make real emails look suspicious and easier to spoof.</p>
             </div>
             @endif
         </div>
@@ -121,7 +183,10 @@
         {{-- DKIM --}}
         <div>
             <div class="flex items-center justify-between mb-2">
-                <h3 class="text-sm font-semibold text-gray-900 dark:text-gray-100">DKIM</h3>
+                <h3 class="flex items-center gap-1 text-sm font-semibold text-gray-900 dark:text-gray-100">
+                    DKIM
+                    <x-help-tooltip :title="$recordHelp['dkim']['title']" :text="$recordHelp['dkim']['text']" :impact="$recordHelp['dkim']['impact']" :fix="$recordHelp['dkim']['fix']" />
+                </h3>
                 @if($dkimData && $dkimData['status'] === 'found')
                 <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
                     <svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
@@ -152,6 +217,7 @@
                     No DKIM selectors detected (checked {{ count(config('dkim.selectors', [])) }} common selectors)
                 </div>
                 <p class="text-xs text-amber-600 dark:text-amber-400 mt-1 ml-6">Enable DKIM signing in your email provider settings. If using a custom selector, it may not be in our probe list.</p>
+                <p class="text-xs text-amber-700 dark:text-amber-300 mt-2 ml-6">This lowers inbox trust and makes DMARC protection weaker.</p>
             </div>
             @endif
         </div>
@@ -159,7 +225,10 @@
         {{-- DMARC Policy --}}
         <div>
             <div class="flex items-center justify-between mb-2">
-                <h3 class="text-sm font-semibold text-gray-900 dark:text-gray-100">DMARC Policy</h3>
+                <h3 class="flex items-center gap-1 text-sm font-semibold text-gray-900 dark:text-gray-100">
+                    DMARC Policy
+                    <x-help-tooltip :title="$recordHelp['dmarc']['title']" :text="$recordHelp['dmarc']['text']" :impact="$recordHelp['dmarc']['impact']" :fix="$recordHelp['dmarc']['fix']" />
+                </h3>
                 @if($dmarcData && $dmarcData['status'] === 'found')
                 <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
                     <svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
@@ -186,6 +255,7 @@
                     </svg>
                     No DMARC policy found
                 </div>
+                <p class="mt-2 text-xs text-red-700 dark:text-red-300">This makes spoofed emails harder to stop and track.</p>
             </div>
             @endif
         </div>
@@ -210,7 +280,10 @@
         @endphp
         <div>
             <div class="flex items-center justify-between mb-2">
-                <h3 class="text-sm font-semibold text-gray-900 dark:text-gray-100">DMARC Reports (Visibility)</h3>
+                <h3 class="flex items-center gap-1 text-sm font-semibold text-gray-900 dark:text-gray-100">
+                    DMARC Reports (Visibility)
+                    <x-help-tooltip :title="$recordHelp['dmarc_reports']['title']" :text="$recordHelp['dmarc_reports']['text']" :impact="$recordHelp['dmarc_reports']['impact']" :fix="$recordHelp['dmarc_reports']['fix']" />
+                </h3>
                 <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium {{ $badgeClasses }}">
                     @if($dmarcStatus['status'] === 'active')
                         <span class="w-1.5 h-1.5 rounded-full bg-green-500 mr-1 animate-pulse"></span>
@@ -243,7 +316,10 @@
         {{-- TLS-RPT --}}
         <div>
             <div class="flex items-center justify-between mb-2">
-                <h3 class="text-sm font-semibold text-gray-900 dark:text-gray-100">TLS-RPT</h3>
+                <h3 class="flex items-center gap-1 text-sm font-semibold text-gray-900 dark:text-gray-100">
+                    TLS-RPT
+                    <x-help-tooltip :title="$recordHelp['tlsrpt']['title']" :text="$recordHelp['tlsrpt']['text']" :impact="$recordHelp['tlsrpt']['impact']" :fix="$recordHelp['tlsrpt']['fix']" />
+                </h3>
                 @if($tlsrptData && $tlsrptData['status'] === 'found')
                 <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
                     <svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
@@ -273,6 +349,7 @@
                     </div>
                     <a href="#fix-pack" class="text-xs font-medium text-blue-600 dark:text-blue-400 hover:underline">Add Now</a>
                 </div>
+                <p class="mt-2 text-xs text-red-700 dark:text-red-300">This means mail delivery security problems may go unnoticed.</p>
             </div>
             @endif
         </div>
@@ -280,7 +357,10 @@
         {{-- MTA-STS --}}
         <div>
             <div class="flex items-center justify-between mb-2">
-                <h3 class="text-sm font-semibold text-gray-900 dark:text-gray-100">MTA-STS</h3>
+                <h3 class="flex items-center gap-1 text-sm font-semibold text-gray-900 dark:text-gray-100">
+                    MTA-STS
+                    <x-help-tooltip :title="$recordHelp['mtasts']['title']" :text="$recordHelp['mtasts']['text']" :impact="$recordHelp['mtasts']['impact']" :fix="$recordHelp['mtasts']['fix']" />
+                </h3>
                 @if($mtastsData && $mtastsData['status'] === 'found')
                 <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
                     <svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
@@ -310,6 +390,7 @@
                     </div>
                     <a href="#fix-pack" class="text-xs font-medium text-blue-600 dark:text-blue-400 hover:underline">Add Now</a>
                 </div>
+                <p class="mt-2 text-xs text-red-700 dark:text-red-300">This can make secure mail delivery less protected.</p>
             </div>
             @endif
         </div>
