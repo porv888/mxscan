@@ -7,14 +7,14 @@ use App\Http\Controllers\StripeWebhookController;
 
 Route::get('/user', function (Request $request) {
     return $request->user();
-})->middleware('auth:sanctum');
+})->middleware('auth');
 
 // Stripe webhook (no CSRF protection in API routes)
 Route::post('/stripe/webhook', [StripeWebhookController::class, 'handle'])
     ->name('stripe.webhook');
 
 // Blacklist API Routes
-Route::middleware('auth:sanctum')->prefix('blacklist')->group(function () {
+Route::middleware('auth')->prefix('blacklist')->group(function () {
     Route::get('/statistics', [BlacklistApiController::class, 'statistics']);
     Route::get('/domains/{domain}/status', [BlacklistApiController::class, 'status']);
     Route::get('/domains/{domain}/history', [BlacklistApiController::class, 'history']);
@@ -22,7 +22,7 @@ Route::middleware('auth:sanctum')->prefix('blacklist')->group(function () {
 });
 
 // SPF API Routes
-Route::middleware('auth:sanctum')->prefix('spf')->group(function () {
+Route::middleware('auth')->prefix('spf')->group(function () {
     Route::post('/run', [App\Http\Controllers\SpfController::class, 'run']);
     Route::get('/history', [App\Http\Controllers\SpfController::class, 'history']);
 });
