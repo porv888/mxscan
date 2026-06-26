@@ -57,17 +57,20 @@ class SpfCheckJob implements ShouldQueue
                     $recordChanged = false;
                 } elseif ($result->currentRecord === null && $previousCheck->looked_up_record === null) {
                     // Both current and previous are null
-                    // Check if there was a valid record before these two nulls
-                    $lastValidCheck = SpfCheck::where('domain_id', $this->domainId)
-                        ->whereNotNull('looked_up_record')
-                        ->where('looked_up_record', '!=', '')
-                        ->orderBy('created_at', 'desc')
-                        ->first();
-                    
-                    if ($lastValidCheck && !$previousCheck->changed) {
-                        // There was a valid record before, and previous check didn't already alert
-                        // This is the second consecutive null - confirm as genuine removal
-                        $recordChanged = true;
+                    // Only confirm as genuine removal if this is NOT a DNS timeout
+                    if (!$dnsLookupFailed) {
+                        // Check if there was a valid record before these two nulls
+                        $lastValidCheck = SpfCheck::where('domain_id', $this->domainId)
+                            ->whereNotNull('looked_up_record')
+                            ->where('looked_up_record', '!=', '')
+                            ->orderBy('created_at', 'desc')
+                            ->first();
+
+                        if ($lastValidCheck && !$previousCheck->changed) {
+                            // There was a valid record before, and previous check didn't already alert
+                            // This is the second consecutive null - confirm as genuine removal
+                            $recordChanged = true;
+                        }
                     }
                 }
             }

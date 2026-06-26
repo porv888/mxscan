@@ -51,11 +51,12 @@ class SpfResolver
         $spfRecord = $this->resolveCurrent($domain);
         
         if (!$spfRecord) {
+            $earlyWarnings = !empty($this->warnings) ? $this->warnings : [self::WARNING_NO_SPF];
             return new SpfResultDTO(
                 currentRecord: null,
                 lookupsUsed: 0,
                 flattenedSpf: null,
-                warnings: [self::WARNING_NO_SPF],
+                warnings: $earlyWarnings,
                 resolvedIps: []
             );
         }
