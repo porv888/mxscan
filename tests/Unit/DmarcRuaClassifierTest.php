@@ -15,6 +15,22 @@ class DmarcRuaClassifierTest extends TestCase
         $this->classifier = new DmarcRuaClassifier();
     }
 
+    public function test_production_brevo_plus_canonical_is_connected(): void
+    {
+        $canonical = 'dmarc+718d719760053ef030649861@mxscan.me';
+        $record = 'v=DMARC1; p=quarantine; rua=mailto:rua@dmarc.brevo.com,mailto:dmarc+718d719760053ef030649861@mxscan.me';
+
+        $classification = $this->classifier->classify($record, $canonical);
+
+        $this->assertSame(DmarcRuaClassifier::LINK_CONNECTED, $classification['rua_link_state']);
+        $this->assertTrue($classification['has_canonical_mxscan_rua']);
+        $this->assertTrue($classification['has_any_mxscan_rua']);
+        $this->assertSame(
+            ['rua@dmarc.brevo.com', 'dmarc+718d719760053ef030649861@mxscan.me'],
+            array_column($classification['recipients'], 'email')
+        );
+    }
+
     public function test_parses_comma_separated_mailtos_with_whitespace(): void
     {
         $recipients = $this->classifier->parseRuaRecipients(

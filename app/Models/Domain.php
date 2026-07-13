@@ -27,6 +27,7 @@ class Domain extends Model
         'dmarc_token',
         'dmarc_last_report_at',
         'dmarc_rua_verified_at',
+        'dmarc_dns_record',
     ];
 
     // DMARC Activity state constants
@@ -551,13 +552,14 @@ class Domain extends Model
     public function checkDmarcRuaFromDns(): bool
     {
         try {
-            $dmarcRecords = dns_get_record("_dmarc.{$this->domain}", DNS_TXT);
-            $dmarcRecord = !empty($dmarcRecords) ? $dmarcRecords[0]['txt'] ?? null : null;
+            $lookup = app(\App\Services\Dmarc\DmarcDnsLookup::class)->lookupForDomain($this);
+            $dmarcRecord = $lookup['dmarc_record'];
 
             if (!$dmarcRecord) {
-                if ($this->dmarc_rua_verified_at) {
-                    $this->update(['dmarc_rua_verified_at' => null]);
-                }
+                $this->update([
+                    'dmarc_rua_verified_at' => null,
+                    'dmarc_dns_record' => null,
+                ]);
                 return false;
             }
 
@@ -565,10 +567,16 @@ class Domain extends Model
                 ->classify($dmarcRecord, $this->dmarc_rua_email);
             $isConfigured = $classification['has_canonical_mxscan_rua'];
 
-            if ($isConfigured && !$this->dmarc_rua_verified_at) {
-                $this->update(['dmarc_rua_verified_at' => now()]);
-            } elseif (!$isConfigured && $this->dmarc_rua_verified_at) {
-                $this->update(['dmarc_rua_verified_at' => null]);
+            if ($isConfigured) {
+                $this->update([
+                    'dmarc_rua_verified_at' => now(),
+                    'dmarc_dns_record' => $dmarcRecord,
+                ]);
+            } else {
+                $this->update([
+                    'dmarc_rua_verified_at' => null,
+                    'dmarc_dns_record' => null,
+                ]);
             }
 
             return $isConfigured;

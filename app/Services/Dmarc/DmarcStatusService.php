@@ -31,7 +31,8 @@ class DmarcStatusService
     public const DEFAULT_STALE_THRESHOLD_DAYS = 7;
 
     public function __construct(
-        protected DmarcRuaClassifier $ruaClassifier = new DmarcRuaClassifier()
+        protected DmarcRuaClassifier $ruaClassifier = new DmarcRuaClassifier(),
+        protected DmarcDnsLookup $dnsLookup = new DmarcDnsLookup()
     ) {
     }
 
@@ -222,10 +223,17 @@ class DmarcStatusService
     }
 
     /**
-     * Get the DMARC record from the latest finished/completed scan.
+     * Get the DMARC record used for status classification.
+     *
+     * Prefers the last verified live DNS snapshot after an explicit Check DNS.
+     * Falls back to the latest finished/completed scan.
      */
     protected function getDmarcRecord(Domain $domain): ?string
     {
+        if ($domain->dmarc_dns_record && $domain->dmarc_rua_verified_at) {
+            return $domain->dmarc_dns_record;
+        }
+
         $latestScan = $this->latestCompletedScan($domain);
 
         if (!$latestScan) {
@@ -395,23 +403,33 @@ class DmarcStatusService
      *   has_any_mxscan_rua: bool,
      *   has_canonical_mxscan_rua: bool,
      *   rua_link_state: string,
-     *   message: string
+     *   message: string,
+     *   recipients: list,
+     *   dns_diagnostics: array
      * }
      */
     public function checkDnsAndSync(Domain $domain): array
     {
+        $hostname = '_dmarc.' . $domain->domain;
+        $expectedCanonical = strtolower(trim($domain->dmarc_rua_email));
+
         try {
-            $dmarcRecords = dns_get_record("_dmarc.{$domain->domain}", DNS_TXT);
-            $dmarcRecord = !empty($dmarcRecords) ? ($dmarcRecords[0]['txt'] ?? null) : null;
+            $lookup = $this->dnsLookup->lookupForDomain($domain);
+            $dmarcRecord = $lookup['dmarc_record'];
+            $hostname = $lookup['hostname'];
 
             $hasDmarc = !empty($dmarcRecord);
             $hasRua = false;
             $hasAnyMxscanRua = false;
             $hasCanonicalMxscanRua = false;
             $ruaLinkState = self::RUA_LINK_NOT_CONNECTED;
+            $recipients = [];
+            $parsedRua = null;
+            $normalizedEmails = [];
 
             if ($hasDmarc) {
                 $parts = $this->ruaClassifier->parseDmarcTags($dmarcRecord);
+                $parsedRua = $parts['rua'] ?? null;
                 $hasRua = isset($parts['rua'])
                     && count($this->ruaClassifier->parseRuaRecipients($parts['rua'])) > 0;
 
@@ -419,19 +437,57 @@ class DmarcStatusService
                 $hasAnyMxscanRua = $classification['has_any_mxscan_rua'];
                 $hasCanonicalMxscanRua = $classification['has_canonical_mxscan_rua'];
                 $ruaLinkState = $classification['rua_link_state'];
+                $recipients = $classification['recipients'];
+                $normalizedEmails = array_values(array_map(
+                    static fn (array $r): string => $r['email'],
+                    $recipients
+                ));
             }
 
-            if ($hasCanonicalMxscanRua && !$domain->dmarc_rua_verified_at) {
-                $domain->update(['dmarc_rua_verified_at' => now()]);
-            } elseif (!$hasCanonicalMxscanRua && $domain->dmarc_rua_verified_at) {
-                $domain->update(['dmarc_rua_verified_at' => null]);
+            if ($hasCanonicalMxscanRua) {
+                $domain->update([
+                    'dmarc_rua_verified_at' => now(),
+                    'dmarc_dns_record' => $dmarcRecord,
+                ]);
+            } else {
+                $domain->update([
+                    'dmarc_rua_verified_at' => null,
+                    'dmarc_dns_record' => null,
+                ]);
             }
+
+            $dnsDiagnostics = [
+                'hostname' => $hostname,
+                'checked_at' => $lookup['checked_at']->toIso8601String(),
+                'dmarc_record' => $dmarcRecord,
+                'detected_rua_recipients' => $normalizedEmails,
+                'expected_rua_recipient' => $expectedCanonical,
+                'resolver_source' => $lookup['resolver_source'],
+            ];
+
+            Log::debug('dmarc_rua_dns_check', [
+                'queried_hostname' => $hostname,
+                'raw_dns_txt_response' => $lookup['raw_records'],
+                'reconstructed_txt_records' => $lookup['reconstructed_txt'],
+                'selected_dmarc_record' => $dmarcRecord,
+                'parsed_rua_value' => $parsedRua,
+                'normalized_rua_recipients' => $normalizedEmails,
+                'expected_canonical_address' => $expectedCanonical,
+                'domain_dmarc_token' => $domain->dmarc_token,
+                'token_match_in_dns' => $hasCanonicalMxscanRua,
+                'comparison_result' => [
+                    'has_any_mxscan_rua' => $hasAnyMxscanRua,
+                    'has_canonical_mxscan_rua' => $hasCanonicalMxscanRua,
+                    'rua_link_state' => $ruaLinkState,
+                ],
+                'resolver_source' => $lookup['resolver_source'],
+                'checked_at' => $lookup['checked_at']->toIso8601String(),
+            ]);
 
             $message = match (true) {
-                !$hasDmarc => 'No DMARC record found. Please add the DNS record.',
-                !$hasRua => 'DMARC record found, but no RUA address configured.',
-                $ruaLinkState === self::RUA_LINK_DETECTED_UNLINKED => 'MXScan reporting address detected, but it is not linked to this domain. Relink required.',
-                !$hasCanonicalMxscanRua => 'DMARC record found with RUA, but MXScan address not detected. Please add our RUA to your record.',
+                !$hasDmarc,
+                !$hasRua,
+                !$hasCanonicalMxscanRua => 'MXScan checked ' . $hostname . ' but did not find the expected reporting address.',
                 default => 'DNS confirmed! MXScan RUA is configured. Waiting for reports (24-48 hours).',
             };
 
@@ -449,12 +505,23 @@ class DmarcStatusService
                 'has_canonical_mxscan_rua' => $hasCanonicalMxscanRua,
                 'rua_link_state' => $ruaLinkState,
                 'message' => $message,
+                'recipients' => $recipients,
+                'dns_diagnostics' => $dnsDiagnostics,
             ];
         } catch (\Exception $e) {
             Log::warning('DMARC DNS check failed', [
                 'domain' => $domain->domain,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ]);
+
+            $dnsDiagnostics = [
+                'hostname' => $hostname,
+                'checked_at' => now()->toIso8601String(),
+                'dmarc_record' => null,
+                'detected_rua_recipients' => [],
+                'expected_rua_recipient' => $expectedCanonical,
+                'resolver_source' => DmarcDnsLookup::RESOLVER_SOURCE,
+            ];
 
             return [
                 'success' => false,
@@ -465,7 +532,9 @@ class DmarcStatusService
                 'has_any_mxscan_rua' => false,
                 'has_canonical_mxscan_rua' => false,
                 'rua_link_state' => self::RUA_LINK_NOT_CONNECTED,
-                'message' => 'DNS check failed: ' . $e->getMessage(),
+                'message' => 'MXScan checked ' . $hostname . ' but did not find the expected reporting address.',
+                'recipients' => [],
+                'dns_diagnostics' => $dnsDiagnostics,
             ];
         }
     }

@@ -50,6 +50,7 @@ trait UsesSqliteDmarcSchema
             $table->string('dmarc_token', 32)->nullable()->unique();
             $table->timestamp('dmarc_last_report_at')->nullable();
             $table->timestamp('dmarc_rua_verified_at')->nullable();
+            $table->text('dmarc_dns_record')->nullable();
             $table->timestamps();
         });
 

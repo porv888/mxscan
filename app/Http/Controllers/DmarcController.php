@@ -320,13 +320,18 @@ class DmarcController extends Controller
 
         // Use the unified status service for DNS check
         $dnsResult = $this->statusService->checkDnsAndSync($domain);
-        
-        // Get the updated unified status
+
+        // Get the updated unified status (lifecycle fields from getStatus;
+        // link-state fields must come from the fresh DNS result).
         $domain->refresh();
         $status = $this->statusService->getStatus($domain);
 
+        $ruaLinkState = $dnsResult['rua_link_state'];
+        $hasCanonical = $dnsResult['has_canonical_mxscan_rua'];
+        $hasAnyMxscan = $dnsResult['has_any_mxscan_rua'];
+
         if ($request->expectsJson()) {
-            return response()->json([
+            $payload = [
                 'success' => $dnsResult['success'],
                 'is_configured' => $dnsResult['has_mxscan_rua'],
                 'status' => $status['status'],
@@ -336,12 +341,18 @@ class DmarcController extends Controller
                 'message' => $dnsResult['message'],
                 'dmarc_record' => $dnsResult['dmarc_record'],
                 'checklist' => $status['checklist'],
-                'rua_link_state' => $status['rua_link_state'],
-                'rua_link_label' => $status['rua_link_label'],
-                'rua_link_cta' => $status['rua_link_cta'],
-                'has_any_mxscan_rua' => $status['has_any_mxscan_rua'],
-                'has_canonical_mxscan_rua' => $status['has_canonical_mxscan_rua'],
-            ]);
+                'rua_link_state' => $ruaLinkState,
+                'rua_link_label' => $this->statusService->getRuaLinkLabel($ruaLinkState),
+                'rua_link_cta' => $this->statusService->getRuaLinkCta($ruaLinkState),
+                'has_any_mxscan_rua' => $hasAnyMxscan,
+                'has_canonical_mxscan_rua' => $hasCanonical,
+            ];
+
+            if (!$hasCanonical) {
+                $payload['dns_diagnostics'] = $dnsResult['dns_diagnostics'] ?? null;
+            }
+
+            return response()->json($payload);
         }
 
         return back()->with($dnsResult['has_mxscan_rua'] ? 'success' : 'info', $dnsResult['message']);

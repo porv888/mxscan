@@ -713,8 +713,33 @@
                         </button>
                         <div class="sr-only" aria-live="polite" x-text="statusAnnouncement"></div>
                         <div x-show="failed" x-cloak class="rounded-lg border border-amber-200 bg-amber-50 p-3" role="status">
-                            <p class="text-sm font-medium text-amber-900">The updated record was not detected yet.</p>
-                            <p class="text-sm text-amber-800 mt-1">DNS changes can take time to propagate. Check the value and try again shortly.</p>
+                            <p class="text-sm font-medium text-amber-900" x-text="failureTitle"></p>
+                            <p class="text-sm text-amber-800 mt-1" x-show="!diagnostics" x-cloak>DNS changes can take time to propagate. Check the value and try again shortly.</p>
+                            <details x-show="diagnostics" x-cloak class="mt-3 rounded-lg border border-amber-100 bg-white/70 p-3">
+                                <summary class="cursor-pointer text-sm font-medium text-amber-900">Technical details</summary>
+                                <dl class="mt-3 space-y-2 text-xs text-amber-900 font-mono">
+                                    <div>
+                                        <dt class="text-amber-700">Checked hostname</dt>
+                                        <dd class="break-all" x-text="diagnostics?.hostname || '—'"></dd>
+                                    </div>
+                                    <div>
+                                        <dt class="text-amber-700">Checked time</dt>
+                                        <dd x-text="diagnostics?.checked_at || '—'"></dd>
+                                    </div>
+                                    <div>
+                                        <dt class="text-amber-700">Detected DMARC record</dt>
+                                        <dd class="break-all whitespace-pre-wrap" x-text="diagnostics?.dmarc_record || '(none)'"></dd>
+                                    </div>
+                                    <div>
+                                        <dt class="text-amber-700">Detected RUA recipients</dt>
+                                        <dd class="break-all" x-text="(diagnostics?.detected_rua_recipients || []).join(', ') || '(none)'"></dd>
+                                    </div>
+                                    <div>
+                                        <dt class="text-amber-700">Expected RUA recipient</dt>
+                                        <dd class="break-all" x-text="diagnostics?.expected_rua_recipient || '—'"></dd>
+                                    </div>
+                                </dl>
+                            </details>
                         </div>
                     </div>
                 @endif
@@ -888,11 +913,15 @@ function dmarcDnsVerify(config) {
         connected: !!config.initiallyConnected,
         checking: false,
         failed: false,
+        failureTitle: 'The updated record was not detected yet.',
+        diagnostics: null,
         statusAnnouncement: '',
         async checkDns() {
             if (this.checking) return;
             this.checking = true;
             this.failed = false;
+            this.diagnostics = null;
+            this.failureTitle = 'The updated record was not detected yet.';
             this.statusAnnouncement = 'Checking DNS';
             try {
                 const res = await fetch(this.checkUrl, {
@@ -913,15 +942,21 @@ function dmarcDnsVerify(config) {
                 if (linked) {
                     this.connected = true;
                     this.failed = false;
+                    this.diagnostics = null;
                     this.statusAnnouncement = 'MXScan reporting is connected.';
                     // Refresh so the top status strip matches connected state.
                     window.setTimeout(() => window.location.reload(), 800);
                 } else {
                     this.failed = true;
-                    this.statusAnnouncement = 'The updated record was not detected yet.';
+                    this.diagnostics = data.dns_diagnostics || null;
+                    this.failureTitle = data.message
+                        || 'MXScan checked the DMARC host but did not find the expected reporting address.';
+                    this.statusAnnouncement = this.failureTitle;
                 }
             } catch (e) {
                 this.failed = true;
+                this.diagnostics = null;
+                this.failureTitle = 'The updated record was not detected yet.';
                 this.statusAnnouncement = 'The updated record was not detected yet.';
             } finally {
                 this.checking = false;
