@@ -104,7 +104,7 @@
                     </div>
                     <button type="button"
                             @click="navigator.clipboard.writeText(@js($domain->dmarc_rua_email)); copied = true; setTimeout(() => copied = false, 2000)"
-                            class="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            class="mx-btn mx-btn-ghost"
                             :aria-label="copied ? 'Copied' : 'Copy RUA address'">
                         <i data-lucide="copy" class="w-4 h-4" x-show="!copied"></i>
                         <i data-lucide="check" class="w-4 h-4 text-green-600" x-show="copied" x-cloak></i>
@@ -552,7 +552,7 @@
                                 <div class="flex items-center gap-2" x-data="{ copied: false }">
                                     <button type="button"
                                             @click="navigator.clipboard.writeText(@js($dmarcUpdate['updated'])); copied = true; setTimeout(() => copied = false, 2000)"
-                                            class="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                                            class="mx-btn mx-btn-primary"
                                             :aria-label="copied ? 'Copied' : 'Copy updated record'">
                                         <span x-show="!copied">Copy updated record</span>
                                         <span x-show="copied" x-cloak>Copied</span>
@@ -631,7 +631,7 @@
                                     <div x-data="{ copied: false }">
                                         <button type="button"
                                                 @click="navigator.clipboard.writeText(@js($dmarcUpdate['current'])); copied = true; setTimeout(() => copied = false, 2000)"
-                                                class="text-xs font-medium text-blue-700 hover:text-blue-800 focus:outline-none focus:ring-2 focus:ring-blue-500 rounded px-2 py-1"
+                                                class="mx-btn mx-btn-ghost"
                                                 :aria-label="copied ? 'Copied' : 'Copy current record'">
                                             <span x-text="copied ? 'Copied' : 'Copy'"></span>
                                         </button>
@@ -667,7 +667,7 @@
                         <code class="flex-1 block px-3 py-2 bg-green-50 border border-green-200 rounded-lg text-sm font-mono text-gray-800 break-all overflow-x-auto">mailto:{{ $domain->dmarc_rua_email }}</code>
                         <button type="button"
                                 @click="navigator.clipboard.writeText(@js('mailto:'.$domain->dmarc_rua_email)); copied = true; setTimeout(() => copied = false, 2000)"
-                                class="flex-shrink-0 px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                class="mx-btn mx-btn-primary flex-shrink-0">
                             <span x-show="!copied">Copy updated record</span>
                             <span x-show="copied" x-cloak>Copied</span>
                         </button>
@@ -695,7 +695,7 @@
                         <code class="flex-1 block px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm font-mono text-gray-800 break-all overflow-x-auto">v=DMARC1; p=quarantine; rua=mailto:{{ $domain->dmarc_rua_email }}; pct=100; adkim=r; aspf=r;</code>
                         <button type="button"
                                 @click="navigator.clipboard.writeText(@js('v=DMARC1; p=quarantine; rua=mailto:'.$domain->dmarc_rua_email.'; pct=100; adkim=r; aspf=r;')); copied = true; setTimeout(() => copied = false, 2000)"
-                                class="flex-shrink-0 px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                class="mx-btn mx-btn-primary flex-shrink-0">
                             <span x-show="!copied">Copy</span>
                             <span x-show="copied" x-cloak>Copied</span>
                         </button>
@@ -707,7 +707,7 @@
                         <button type="button"
                                 @click="checkDns()"
                                 :disabled="checking"
-                                class="inline-flex items-center justify-center gap-2 px-4 py-2 bg-white border border-gray-300 hover:bg-gray-50 text-gray-800 text-sm font-medium rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-60 disabled:cursor-not-allowed">
+                                class="mx-btn mx-btn-secondary mx-btn-block">
                             <i data-lucide="refresh-cw" class="w-4 h-4" :class="checking && 'animate-spin'" aria-hidden="true"></i>
                             <span x-text="checking ? 'Checking DNS…' : 'I’ve updated DNS — Check again'"></span>
                         </button>

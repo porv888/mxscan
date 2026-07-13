@@ -1,0 +1,71 @@
+/* MXScan shared UI controls — works with Tailwind CDN (no Vite build required). */
+
+.mx-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+    font-weight: 500;
+    border-radius: 0.5rem;
+    border: 1px solid transparent;
+    cursor: pointer;
+    transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease, opacity 150ms ease;
+    text-decoration: none;
+    white-space: nowrap;
+}
+
+.mx-btn:focus {
+    outline: none;
+}
+
+.mx-btn:focus-visible {
+    outline: 2px solid #3b82f6;
+    outline-offset: 2px;
+}
+
+.mx-btn:disabled,
+.mx-btn[disabled] {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.mx-btn-primary {
+    background-color: #2563eb;
+    border-color: #2563eb;
+    color: #ffffff;
+}
+
+.mx-btn-primary:hover:not(:disabled):not([disabled]) {
+    background-color: #1d4ed8;
+    border-color: #1d4ed8;
+}
+
+.mx-btn-secondary {
+    background-color: #ffffff;
+    border-color: #d1d5db;
+    color: #1f2937;
+}
+
+.mx-btn-secondary:hover:not(:disabled):not([disabled]) {
+    background-color: #f9fafb;
+}
+
+.mx-btn-ghost {
+    background-color: transparent;
+    border-color: transparent;
+    color: #6b7280;
+    padding: 0.375rem;
+}
+
+.mx-btn-ghost:hover:not(:disabled):not([disabled]) {
+    background-color: #f3f4f6;
+    color: #374151;
+}
+
+.mx-btn-block {
+    display: flex;
+    width: 100%;
+}

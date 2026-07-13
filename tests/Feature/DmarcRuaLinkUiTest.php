@@ -96,6 +96,8 @@ class DmarcRuaLinkUiTest extends TestCase
 
         $response->assertSee('Copy updated record', false);
         $response->assertSee('I’ve updated DNS — Check again', false);
+        $response->assertSee('mx-btn-primary', false);
+        $response->assertSee('mx-btn-secondary', false);
         $response->assertDontSee('Relink MXScan reporting', false);
         $response->assertDontSee('I Added It — Check DNS', false);
 
