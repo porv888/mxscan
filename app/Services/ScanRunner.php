@@ -10,7 +10,6 @@ use App\Services\BlacklistChecker;
 use App\Services\Expiry\ExpiryCoordinator;
 use App\Services\ScanReport\ScanFinalizer;
 use App\Services\ScanReport\ScanRecommendationService;
-use App\Services\Spf\SpfResolver;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Log;
 use Exception;
