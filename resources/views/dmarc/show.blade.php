@@ -707,7 +707,7 @@
                         <button type="button"
                                 @click="checkDns()"
                                 :disabled="checking"
-                                class="mx-btn mx-btn-secondary mx-btn-block">
+                                class="mx-btn mx-btn-primary mx-btn-block">
                             <i data-lucide="refresh-cw" class="w-4 h-4" :class="checking && 'animate-spin'" aria-hidden="true"></i>
                             <span x-text="checking ? 'Checking DNS…' : 'I’ve updated DNS — Check again'"></span>
                         </button>
