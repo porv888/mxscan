@@ -7,6 +7,7 @@
     <title>{{ config('app.name', 'MXScan') }} - Verify Email</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+    <link rel="stylesheet" href="{{ asset('css/mx-ui.css') }}">
     
     <!-- Google Ads Tag -->
     <script async src="https://www.googletagmanager.com/gtag/js?id=AW-1066529764"></script>
@@ -70,15 +71,15 @@
                     <div class="flex items-center gap-3 justify-center mb-6">
                         <form method="POST" action="{{ route('verification.resend') }}">
                             @csrf
-                            <button type="submit" class="px-4 py-2 rounded bg-blue-600 text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
-                                <i data-lucide="send" class="h-4 w-4 mr-2 inline"></i>
+                            <button type="submit" class="mx-btn mx-btn-primary">
+                                <i data-lucide="send" class="h-4 w-4"></i>
                                 Resend email
                             </button>
                         </form>
 
                         <form method="POST" action="{{ route('logout') }}">
                             @csrf
-                            <button type="submit" class="px-4 py-2 rounded border hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500">
+                            <button type="submit" class="mx-btn mx-btn-secondary">
                                 Log out
                             </button>
                         </form>

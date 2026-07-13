@@ -461,7 +461,7 @@
                     @csrf
                     <input type="file" name="report_file" accept=".xml,.zip,.gz" 
                            class="text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
-                    <button type="submit" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors">
+                    <button type="submit" class="mx-btn mx-btn-primary">
                         Upload
                     </button>
                 </form>

@@ -18,8 +18,8 @@
             </div>
         </div>
         <div class="flex w-full flex-wrap gap-2 sm:w-auto sm:justify-end">
-            <button onclick="shareReport()" class="inline-flex flex-1 items-center justify-center px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-600 dark:hover:bg-gray-700 transition-colors sm:flex-none focus:outline-none focus:ring-2 focus:ring-blue-500">
-                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <button onclick="shareReport()" class="mx-btn mx-btn-secondary flex-1 sm:flex-none">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.367 2.684 3 3 0 00-5.367-2.684z"></path>
                 </svg>
                 Share
@@ -27,8 +27,8 @@
             <form method="POST" action="{{ route('domains.scan.now', $domain) }}">
                 @csrf
                 <input type="hidden" name="mode" value="full">
-                <button class="inline-flex flex-1 items-center justify-center px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-600 dark:hover:bg-gray-700 transition-colors sm:flex-none focus:outline-none focus:ring-2 focus:ring-blue-500">
-                    <i data-lucide="scan" class="w-4 h-4 mr-2"></i>
+                <button class="mx-btn mx-btn-secondary flex-1 sm:flex-none">
+                    <i data-lucide="scan" class="w-4 h-4"></i>
                     Scan
                 </button>
             </form>
@@ -162,8 +162,8 @@
                         @endif
                     </div>
                     
-                    <button type="submit" class="w-full inline-flex items-center justify-center px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-600 transition-colors">
-                        <i data-lucide="scan" class="w-4 h-4 mr-2"></i>
+                    <button type="submit" class="mx-btn mx-btn-primary mx-btn-block">
+                        <i data-lucide="scan" class="w-4 h-4"></i>
                         Scan Selected
                     </button>
                 </form>
@@ -200,12 +200,11 @@
     function copyToClipboard(text, button) {
         navigator.clipboard.writeText(text).then(() => {
             const originalText = button.innerText;
-            const originalClasses = button.className;
             button.innerText = 'Copied!';
-            button.className = button.className.replace(/bg-\w+-\d+/g, 'bg-green-600').replace(/text-\w+-\d+/g, 'text-white');
+            button.setAttribute('data-copied', 'true');
             setTimeout(() => {
                 button.innerText = originalText;
-                button.className = originalClasses;
+                button.removeAttribute('data-copied');
             }, 1500);
         }).catch(err => {
             console.error('Failed to copy text: ', err);

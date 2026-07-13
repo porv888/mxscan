@@ -275,7 +275,7 @@
                             </div>
                             @else
                             <a href="{{ route('login') }}"
-                               class="inline-flex items-center rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
+                               class="mx-btn mx-btn-secondary">
                                 Log in
                             </a>
                             @endauth
@@ -464,7 +464,7 @@
                                 <span class="text-xs text-gray-400">Ctrl+Enter to send</span>
                                 <button @click="sendHelp()"
                                         :disabled="helpSending || helpMessage.length < 10"
-                                        class="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center">
+                                        class="mx-btn mx-btn-primary">
                                     <span x-show="!helpSending">Send</span>
                                     <span x-show="helpSending" class="flex items-center">
                                         <svg class="animate-spin h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24">
@@ -513,11 +513,11 @@
                     </p>
                     <div class="flex justify-end space-x-3">
                         <button @click="showUpgrade = false" 
-                                class="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md transition-colors">
+                                class="mx-btn mx-btn-secondary">
                             Maybe Later
                         </button>
                         <a href="{{ route('pricing') }}" 
-                           class="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md transition-colors">
+                           class="mx-btn mx-btn-primary">
                             View Plans
                         </a>
                     </div>

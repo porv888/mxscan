@@ -167,12 +167,12 @@
 
             <div class="flex items-center justify-end space-x-3 pt-2">
                 <a href="{{ route('dashboard') }}"
-                   class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                   class="mx-btn mx-btn-secondary">
                     Cancel
                 </a>
                 <button type="submit"
-                        class="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
-                    <i data-lucide="scan" class="w-4 h-4 mr-2"></i>
+                        class="mx-btn mx-btn-primary">
+                    <i data-lucide="scan" class="w-4 h-4"></i>
                     Scan domain
                 </button>
             </div>

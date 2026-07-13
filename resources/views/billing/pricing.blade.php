@@ -14,21 +14,21 @@
 
                 <div class="mt-6 space-y-2">
                     @if($plan['key'] === 'freemium')
-                        <a href="{{ route('dashboard.domains') }}" class="px-4 py-2 bg-gray-200 rounded block text-center">
+                        <a href="{{ route('dashboard.domains') }}" class="mx-btn mx-btn-secondary mx-btn-block">
                             Continue free
                         </a>
                     @else
                         @if($plan['has_monthly'])
                             <form method="POST" action="{{ route('billing.checkout', ['plan' => $plan['key'], 'interval' => 'monthly']) }}">
                                 @csrf
-                                <button class="px-4 py-2 bg-blue-600 text-white rounded w-full">Choose Monthly</button>
+                                <button class="mx-btn mx-btn-primary mx-btn-block">Choose Monthly</button>
                             </form>
                         @endif
 
                         @if($enableYearly && $plan['has_yearly'])
                             <form method="POST" action="{{ route('billing.checkout', ['plan' => $plan['key'], 'interval' => 'yearly']) }}">
                                 @csrf
-                                <button class="px-4 py-2 bg-indigo-600 text-white rounded w-full">Choose Yearly</button>
+                                <button class="mx-btn mx-btn-primary mx-btn-block">Choose Yearly</button>
                             </form>
                         @endif
                     @endif

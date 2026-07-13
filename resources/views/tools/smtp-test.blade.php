@@ -35,7 +35,7 @@
                     </select>
                 </div>
                 <div class="flex items-end">
-                    <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg flex items-center space-x-2 transition-colors">
+                    <button type="submit" class="mx-btn mx-btn-primary text-white px-6 py-2 rounded-lg flex items-center space-x-2 transition-colors">
                         <i data-lucide="wifi" class="w-4 h-4"></i>
                         <span>Test</span>
                     </button>

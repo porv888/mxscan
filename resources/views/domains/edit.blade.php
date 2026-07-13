@@ -166,12 +166,12 @@
             <!-- Form Actions -->
             <div class="flex items-center justify-end space-x-3 pt-6 border-t border-gray-200">
                 <a href="{{ route('dashboard.domains') }}" 
-                   class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                   class="mx-btn mx-btn-secondary">
                     Cancel
                 </a>
                 <button type="submit" 
-                        class="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
-                    <i data-lucide="save" class="w-4 h-4 inline mr-2"></i>
+                        class="mx-btn mx-btn-primary">
+                    <i data-lucide="save" class="w-4 h-4"></i>
                     Update Domain
                 </button>
             </div>
@@ -192,8 +192,8 @@
                     </p>
                 </div>
                 <button onclick="showDeleteModal('{{ $domain->domain }}', {{ $domain->id }})" 
-                        class="ml-4 px-4 py-2 text-sm font-medium text-red-700 bg-red-100 border border-red-300 rounded-md hover:bg-red-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500">
-                    <i data-lucide="trash-2" class="w-4 h-4 inline mr-2"></i>
+                        class="mx-btn mx-btn-danger ml-4">
+                    <i data-lucide="trash-2" class="w-4 h-4"></i>
                     Delete Domain
                 </button>
             </div>
@@ -221,14 +221,14 @@
             </div>
             <div class="px-6 py-4 border-t border-gray-200 flex justify-end space-x-3">
                 <button onclick="hideDeleteModal()" 
-                        class="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md">
+                        class="mx-btn mx-btn-secondary">
                     Cancel
                 </button>
                 <form id="deleteForm" method="POST" class="inline">
                     @csrf
                     @method('DELETE')
                     <button type="submit" 
-                            class="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-md">
+                            class="mx-btn mx-btn-danger">
                         Delete Domain
                     </button>
                 </form>

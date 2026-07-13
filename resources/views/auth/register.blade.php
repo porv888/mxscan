@@ -6,6 +6,7 @@
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>{{ config('app.name', 'MXScan') }} - Register</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="{{ asset('css/mx-ui.css') }}">
     <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
 </head>
 <body class="bg-gray-50">
@@ -108,10 +109,8 @@
                 </div>
 
                 <div>
-                    <button type="submit" class="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
-                        <span class="absolute left-0 inset-y-0 flex items-center pl-3">
-                            <i data-lucide="user-plus" class="h-5 w-5 text-blue-500 group-hover:text-blue-400"></i>
-                        </span>
+                    <button type="submit" class="mx-btn mx-btn-primary mx-btn-block">
+                        <i data-lucide="user-plus" class="h-5 w-5"></i>
                         Create Account
                     </button>
                 </div>

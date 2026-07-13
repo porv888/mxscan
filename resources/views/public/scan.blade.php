@@ -10,6 +10,7 @@
     <meta property="og:description" content="Check your domain's email security in seconds. Free SPF, DKIM, DMARC analysis.">
     <meta property="og:type" content="website">
     <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="{{ asset('css/mx-ui.css') }}">
     <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
 </head>
 <body class="bg-gray-50">
@@ -24,7 +25,7 @@
             <div class="flex items-center space-x-4">
                 <a href="{{ route('pricing') }}" class="text-sm text-gray-600 hover:text-gray-900">Pricing</a>
                 <a href="{{ route('login') }}" class="text-sm text-gray-600 hover:text-gray-900">Log in</a>
-                <a href="{{ route('register') }}" class="bg-blue-600 hover:bg-blue-700 text-white text-sm px-4 py-2 rounded-lg transition-colors">Sign up free</a>
+                <a href="{{ route('register') }}" class="mx-btn mx-btn-primary">Sign up free</a>
             </div>
         </div>
     </nav>
@@ -48,7 +49,7 @@
                            placeholder="Enter your domain, e.g. example.com"
                            required autofocus
                            class="flex-1 px-5 py-4 text-lg border-0 focus:ring-0 focus:outline-none">
-                    <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-8 py-4 text-lg font-semibold transition-colors flex items-center space-x-2">
+                    <button type="submit" class="mx-btn mx-btn-primary mx-btn-lg" style="border-radius: 0;">
                         <i data-lucide="search" class="w-5 h-5"></i>
                         <span>Scan</span>
                     </button>
@@ -116,9 +117,9 @@
         <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
             <h2 class="text-2xl font-bold text-white mb-3">Need continuous monitoring?</h2>
             <p class="text-blue-100 mb-6">Sign up for free to monitor your domains 24/7 with automated scans, blacklist checking, delivery testing, and DMARC visibility.</p>
-            <a href="{{ route('register') }}" class="inline-flex items-center bg-white text-blue-600 font-semibold px-6 py-3 rounded-lg hover:bg-blue-50 transition-colors">
+            <a href="{{ route('register') }}" class="mx-btn mx-btn-secondary mx-btn-lg">
                 Get started free
-                <i data-lucide="arrow-right" class="w-4 h-4 ml-2"></i>
+                <i data-lucide="arrow-right" class="w-4 h-4"></i>
             </a>
         </div>
     </section>

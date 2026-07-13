@@ -76,8 +76,8 @@
 
             <div class="flex justify-end">
                 <button type="submit" 
-                        class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
-                    <i data-lucide="save" class="w-4 h-4 mr-2"></i>
+                        class="mx-btn mx-btn-primary">
+                    <i data-lucide="save" class="w-4 h-4"></i>
                     Save Changes
                 </button>
             </div>
@@ -116,8 +116,8 @@
                                class="flex-1 border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm @error('email') border-red-300 @enderror"
                                required>
                         <button type="submit" 
-                                class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
-                            <i data-lucide="plus" class="w-4 h-4 mr-2"></i>
+                                class="mx-btn mx-btn-primary">
+                            <i data-lucide="plus" class="w-4 h-4"></i>
                             Add Email
                         </button>
                     </div>
@@ -259,8 +259,8 @@
 
                 <div>
                     <div class="text-gray-500 text-sm mb-2">Manage Plan</div>
-                    <a href="{{ route('billing') }}" class="w-full inline-flex justify-center items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
-                        <i data-lucide="credit-card" class="w-4 h-4 mr-2"></i>
+                    <a href="{{ route('billing') }}" class="mx-btn mx-btn-primary mx-btn-block">
+                        <i data-lucide="credit-card" class="w-4 h-4"></i>
                         Manage plan
                     </a>
                 </div>
@@ -319,8 +319,8 @@
 
             <div class="flex justify-end">
                 <button type="submit" 
-                        class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
-                    <i data-lucide="lock" class="w-4 h-4 mr-2"></i>
+                        class="mx-btn mx-btn-primary">
+                    <i data-lucide="lock" class="w-4 h-4"></i>
                     Update Password
                 </button>
             </div>
@@ -382,8 +382,8 @@
                     </p>
                 </div>
                 <button type="button" onclick="confirmDeleteAccount()" 
-                        class="inline-flex items-center px-4 py-2 border border-red-300 text-sm font-medium rounded-md text-red-700 bg-white hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500">
-                    <i data-lucide="trash-2" class="w-4 h-4 mr-2"></i>
+                        class="mx-btn mx-btn-danger">
+                    <i data-lucide="trash-2" class="w-4 h-4"></i>
                     Delete Account
                 </button>
             </div>
@@ -438,13 +438,13 @@
                     <button type="submit"
                             id="confirmDeleteBtn"
                             disabled
-                            class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-red-600 text-base font-medium text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 sm:ml-3 sm:w-auto sm:text-sm disabled:opacity-50 disabled:cursor-not-allowed">
+                            class="mx-btn mx-btn-danger mx-btn-block sm:w-auto sm:ml-3">
                         Delete Account
                     </button>
                 </form>
                 <button type="button" 
                         @click="show = false"
-                        class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm">
+                        class="mx-btn mx-btn-secondary mx-btn-block mt-3 sm:mt-0 sm:ml-3 sm:w-auto">
                     Cancel
                 </button>
             </div>

@@ -115,7 +115,7 @@
             <div class="flex flex-col gap-2 sm:flex-row">
                 @if($pendingScan && in_array($pendingScan->status, ['queued', 'running'], true))
                     <a href="{{ route('reports.show', $pendingScan) }}"
-                       class="inline-flex items-center justify-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                       class="mx-btn mx-btn-primary">
                         View scan progress
                     </a>
                 @elseif($pendingScan && $pendingScan->status === 'failed')
@@ -123,7 +123,7 @@
                         @csrf
                         <input type="hidden" name="mode" value="full">
                         <button type="submit"
-                                class="inline-flex w-full items-center justify-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                                class="mx-btn mx-btn-primary mx-btn-block">
                             Retry scan
                         </button>
                     </form>
@@ -132,7 +132,7 @@
                         @csrf
                         <input type="hidden" name="mode" value="full">
                         <button type="submit"
-                                class="inline-flex w-full items-center justify-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                                class="mx-btn mx-btn-primary mx-btn-block">
                             Scan domain
                         </button>
                     </form>
@@ -152,7 +152,7 @@
             </div>
             @if($primaryFindingAction)
             <a href="{{ $primaryFindingAction['url'] }}"
-               class="inline-flex items-center justify-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+               class="mx-btn mx-btn-primary">
                 {{ $primaryFindingAction['label'] }}
             </a>
             @endif
@@ -187,8 +187,8 @@
                 </div>
             </div>
             <a href="{{ auth()->user()->canUseMonitoring() ? route('monitoring.incidents') : route('reports.index') }}" 
-               class="inline-flex w-full items-center justify-center px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded-lg transition-colors sm:w-auto">
-                <i data-lucide="eye" class="w-4 h-4 mr-2"></i>
+               class="mx-btn mx-btn-danger w-full sm:w-auto">
+                <i data-lucide="eye" class="w-4 h-4"></i>
                 View All
             </a>
         </div>
@@ -249,10 +249,9 @@
                         </div>
                     </div>
                     <a href="{{ $action['action_url'] }}" 
-                       class="inline-flex w-full items-center justify-center px-3 py-2 text-sm font-medium rounded-lg transition-colors sm:w-auto
-                           {{ $action['severity'] === 'critical' ? 'bg-red-600 hover:bg-red-700 text-white' : 'bg-amber-600 hover:bg-amber-700 text-white' }}">
+                       class="mx-btn w-full sm:w-auto {{ $action['severity'] === 'critical' ? 'mx-btn-danger' : 'mx-btn-primary' }}">
                         {{ $action['action_label'] }}
-                        <i data-lucide="arrow-right" class="w-4 h-4 ml-1"></i>
+                        <i data-lucide="arrow-right" class="w-4 h-4"></i>
                     </a>
                 </div>
             </div>

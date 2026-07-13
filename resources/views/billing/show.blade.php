@@ -49,7 +49,7 @@
                 <form method="POST" action="{{ route('billing.checkout') }}" class="mt-4">
                     @csrf
                     <input type="hidden" name="price" value="{{ $pricePremium }}">
-                    <button class="px-4 py-2 rounded bg-blue-600 text-white hover:bg-blue-700">Start Premium</button>
+                    <button class="mx-btn mx-btn-primary">Start Premium</button>
                 </form>
             @elseif($isPremium)
                 <div class="mt-4 text-sm text-emerald-700">You’re on Premium.</div>
@@ -58,7 +58,7 @@
                 <form method="POST" action="{{ route('billing.swap') }}" class="mt-4">
                     @csrf
                     <input type="hidden" name="price" value="{{ $pricePremium }}">
-                    <button class="px-4 py-2 rounded border hover:bg-white">Switch to Premium</button>
+                    <button class="mx-btn mx-btn-secondary">Switch to Premium</button>
                 </form>
             @endif
         </div>
@@ -80,7 +80,7 @@
                 <form method="POST" action="{{ route('billing.checkout') }}" class="mt-4">
                     @csrf
                     <input type="hidden" name="price" value="{{ $priceUltra }}">
-                    <button class="px-4 py-2 rounded bg-blue-600 text-white hover:bg-blue-700">Start Ultra</button>
+                    <button class="mx-btn mx-btn-primary">Start Ultra</button>
                 </form>
             @elseif($isUltra)
                 <div class="mt-4 text-sm text-emerald-700">You’re on Ultra.</div>
@@ -89,7 +89,7 @@
                 <form method="POST" action="{{ route('billing.swap') }}" class="mt-4">
                     @csrf
                     <input type="hidden" name="price" value="{{ $priceUltra }}">
-                    <button class="px-4 py-2 rounded border hover:bg-white">Switch to Ultra</button>
+                    <button class="mx-btn mx-btn-secondary">Switch to Ultra</button>
                 </form>
             @endif
         </div>
@@ -104,7 +104,7 @@
             </div>
             <form method="POST" action="{{ route('billing.portal') }}">
                 @csrf
-                <button class="px-4 py-2 rounded border hover:bg-white">Open Billing Portal</button>
+                <button class="mx-btn mx-btn-secondary">Open Billing Portal</button>
             </form>
         </div>
     </div>

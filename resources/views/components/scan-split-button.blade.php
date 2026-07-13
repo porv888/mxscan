@@ -10,9 +10,10 @@
         <input type="hidden" name="mode" value="full">
         <button
             type="submit"
-            class="inline-flex items-center px-3 py-1 text-xs font-medium text-white bg-blue-600 border border-blue-600 rounded-l hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1"
+            class="mx-btn mx-btn-primary mx-btn-sm"
+            style="border-top-right-radius: 0; border-bottom-right-radius: 0;"
         >
-            <i data-lucide="search" class="w-3 h-3 mr-1"></i>
+            <i data-lucide="search" class="w-3 h-3"></i>
             <span class="hidden lg:inline">Scan</span>
         </button>
     </form>
@@ -20,7 +21,8 @@
     {{-- Toggle Button --}}
     <button 
         type="button"
-        class="inline-flex items-center px-2 py-1 text-xs font-medium text-white bg-blue-600 border border-l-0 border-blue-600 rounded-r hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1"
+        class="mx-btn mx-btn-primary mx-btn-sm"
+        style="border-top-left-radius: 0; border-bottom-left-radius: 0; border-left: 1px solid rgba(255,255,255,0.25); padding-left: 0.5rem; padding-right: 0.5rem;"
         @click="open = !open" 
         aria-haspopup="menu" 
         :aria-expanded="open"

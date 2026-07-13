@@ -148,7 +148,7 @@
         
         <div class="flex flex-wrap gap-2">
             <button @click="copyAddress('{{ $monitor->inbox_address }}')" 
-                    class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center space-x-2 transition">
+                    class="mx-btn mx-btn-primary px-4 py-2 text-white rounded-lg flex items-center space-x-2 transition">
                 <i data-lucide="copy" class="w-4 h-4"></i>
                 <span>Copy Address</span>
             </button>

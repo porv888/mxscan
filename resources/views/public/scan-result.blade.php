@@ -9,6 +9,7 @@
     <meta property="og:title" content="MXScan - {{ $domain }} scored {{ $results['score'] }}/100">
     <meta property="og:description" content="Email security scan results for {{ $domain }}">
     <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="{{ asset('css/mx-ui.css') }}">
     <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
 </head>
 <body class="bg-gray-50">
@@ -23,7 +24,7 @@
             <div class="flex items-center space-x-4">
                 <a href="{{ route('pricing') }}" class="text-sm text-gray-600 hover:text-gray-900">Pricing</a>
                 <a href="{{ route('login') }}" class="text-sm text-gray-600 hover:text-gray-900">Log in</a>
-                <a href="{{ route('register') }}" class="bg-blue-600 hover:bg-blue-700 text-white text-sm px-4 py-2 rounded-lg transition-colors">Sign up free</a>
+                <a href="{{ route('register') }}" class="mx-btn mx-btn-primary">Sign up free</a>
             </div>
         </div>
     </nav>
@@ -35,7 +36,7 @@
             <div class="flex shadow-sm rounded-lg overflow-hidden border border-gray-200">
                 <input type="text" name="domain" value="{{ $domain }}" placeholder="Enter domain"
                        required class="flex-1 px-4 py-3 text-sm border-0 focus:ring-0 focus:outline-none">
-                <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 text-sm font-medium transition-colors">
+                <button type="submit" class="mx-btn mx-btn-primary" style="border-radius: 0;">
                     Scan Again
                 </button>
             </div>
@@ -156,7 +157,7 @@
                                 @endforeach
                             </div>
                             <div class="absolute inset-0 bg-gradient-to-b from-transparent via-white/70 to-white flex items-end justify-center pb-6">
-                                <a href="{{ route('register') }}" class="bg-blue-600 hover:bg-blue-700 text-white font-medium px-6 py-2.5 rounded-lg transition-colors flex items-center space-x-2">
+                                <a href="{{ route('register') }}" class="mx-btn mx-btn-primary">
                                     <i data-lucide="lock" class="w-4 h-4"></i>
                                     <span>Sign up free to see all recommendations</span>
                                 </a>
@@ -171,9 +172,9 @@
         <div class="bg-gradient-to-r from-blue-600 to-blue-700 rounded-xl p-8 text-center">
             <h2 class="text-xl font-bold text-white mb-2">Monitor {{ $domain }} 24/7</h2>
             <p class="text-blue-100 mb-5">Get alerted when DNS records change, your domain gets blacklisted, or certificates expire.</p>
-            <a href="{{ route('register') }}" class="inline-flex items-center bg-white text-blue-600 font-semibold px-6 py-3 rounded-lg hover:bg-blue-50 transition-colors">
+            <a href="{{ route('register') }}" class="mx-btn mx-btn-secondary mx-btn-lg">
                 Start monitoring free
-                <i data-lucide="arrow-right" class="w-4 h-4 ml-2"></i>
+                <i data-lucide="arrow-right" class="w-4 h-4"></i>
             </a>
         </div>
     </div>

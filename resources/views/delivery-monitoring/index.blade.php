@@ -17,7 +17,7 @@
                 </div>
             @endif
             <a href="{{ route('delivery-monitoring.create') }}" 
-               class="{{ $used >= $limit ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700' }} text-white px-4 py-2 rounded-lg flex items-center space-x-2 {{ $used >= $limit ? 'pointer-events-none' : '' }}">
+               class="mx-btn mx-btn-primary {{ $used >= $limit ? 'bg-gray-400 cursor-not-allowed' : ' ' }} text-white px-4 py-2 rounded-lg flex items-center space-x-2 {{ $used >= $limit ? 'pointer-events-none' : '' }}">
                 <i data-lucide="plus" class="w-4 h-4"></i>
                 <span>New Monitor</span>
             </a>
@@ -163,7 +163,7 @@
                 Create your first delivery monitor to test email delivery, authentication (SPF/DKIM/DMARC), and time-to-inbox.
             </p>
             <a href="{{ route('delivery-monitoring.create') }}" 
-               class="inline-flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg">
+               class="mx-btn mx-btn-primary inline-flex items-center px-4 py-2 text-white rounded-lg">
                 <i data-lucide="plus" class="w-4 h-4 mr-2"></i>
                 Create Monitor
             </a>

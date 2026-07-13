@@ -11,7 +11,7 @@
             <p class="text-gray-600 mt-1">Manage recurring scan schedules for your domains</p>
         </div>
         <a href="{{ route('automations.create') }}" 
-           class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center space-x-2">
+           class="mx-btn mx-btn-primary">
             <i data-lucide="plus" class="w-4 h-4"></i>
             <span>New Automation</span>
         </a>
@@ -164,7 +164,7 @@
             <h3 class="mt-4 text-lg font-medium text-gray-900">No automations yet</h3>
             <p class="mt-2 text-gray-500">Set up recurring scans to automate your email security monitoring.</p>
             <a href="{{ route('automations.create') }}" 
-               class="mt-4 inline-block bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg">
+               class="mx-btn mx-btn-primary">
                 Create Your First Automation
             </a>
         </div>

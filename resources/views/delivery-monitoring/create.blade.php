@@ -86,7 +86,7 @@
                     Cancel
                 </a>
                 <button type="submit" 
-                        class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center space-x-2">
+                        class="mx-btn mx-btn-primary px-4 py-2 text-white rounded-lg flex items-center space-x-2">
                     <i data-lucide="plus" class="w-4 h-4"></i>
                     <span>Create Monitor</span>
                 </button>

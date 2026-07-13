@@ -73,7 +73,7 @@
 
             <!-- Filter Buttons -->
             <div class="md:col-span-2 lg:col-span-5 flex items-center space-x-2">
-                <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm">
+                <button type="submit" class="mx-btn mx-btn-primary text-white px-4 py-2 rounded-md text-sm">
                     Apply Filters
                 </button>
                 <a href="{{ route('reports.index') }}" class="bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-md text-sm">

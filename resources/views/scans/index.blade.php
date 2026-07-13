@@ -151,7 +151,7 @@
                                 <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
                                     @if($hasRegression)
                                         <a href="{{ route('scans.show', $scan->id) }}" 
-                                           class="inline-flex items-center px-2 py-1 bg-red-600 hover:bg-red-700 text-white text-xs font-medium rounded transition-colors">
+                                           class="mx-btn mx-btn-danger mx-btn-sm">
                                             See what changed
                                         </a>
                                     @else
@@ -180,7 +180,7 @@
                 <h3 class="text-lg font-medium text-gray-900 mb-2">No scans yet</h3>
                 <p class="text-gray-600 mb-6">Start your first domain security scan to see results here.</p>
                 <a href="{{ route('dashboard.domains') }}" 
-                   class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700">
+                   class="mx-btn mx-btn-primary">
                     <i data-lucide="plus" class="w-4 h-4 mr-2"></i>
                     Add Domain & Scan
                 </a>

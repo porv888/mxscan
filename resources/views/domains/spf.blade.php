@@ -20,7 +20,7 @@
         <div class="flex items-center space-x-4">
             <form method="POST" action="{{ route('spf.run', $domainModel->domain) }}">
                 @csrf
-                <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center space-x-2">
+                <button type="submit" class="mx-btn mx-btn-primary">
                     <i data-lucide="refresh-cw" class="w-4 h-4"></i>
                     <span>Run Check</span>
                 </button>
@@ -211,7 +211,7 @@
                 <p class="text-gray-600 mb-6">Run your first SPF check to analyze your domain's email authentication setup.</p>
                 <form method="POST" action="{{ route('spf.run', $domainModel->domain) }}" class="inline">
                     @csrf
-                    <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg flex items-center space-x-2 mx-auto">
+                    <button type="submit" class="mx-btn mx-btn-primary mx-btn-lg">
                         <i data-lucide="play" class="w-5 h-5"></i>
                         <span>Run First Check</span>
                     </button>

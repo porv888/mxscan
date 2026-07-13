@@ -11,7 +11,7 @@
             <p class="text-gray-600 mt-1">Manage automated scanning schedules for your domains</p>
         </div>
         <a href="{{ route('schedules.create') }}" 
-           class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center space-x-2">
+           class="mx-btn mx-btn-primary">
             <i data-lucide="plus" class="w-4 h-4"></i>
             <span>New Schedule</span>
         </a>
@@ -224,7 +224,7 @@
             <p class="mt-2 text-gray-500">Automate your domain monitoring by creating scheduled scans.</p>
             <div class="mt-6 space-y-3">
                 <a href="{{ route('schedules.create') }}" 
-                   class="inline-block bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg">
+                   class="mx-btn mx-btn-primary">
                     Create Your First Schedule
                 </a>
                 <p class="text-sm text-gray-500">

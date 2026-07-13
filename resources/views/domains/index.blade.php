@@ -29,7 +29,7 @@
                 </a>
             @endif
             <a href="{{ route('dashboard.domains.create') }}" 
-               class="{{ $used >= $limit ? 'bg-gray-300 cursor-not-allowed pointer-events-none' : 'bg-blue-600 hover:bg-blue-700' }} inline-flex w-full items-center justify-center gap-2 rounded-lg px-4 py-2.5 font-medium text-white transition-colors sm:w-auto">
+               class="mx-btn mx-btn-primary w-full sm:w-auto {{ $used >= $limit ? 'opacity-60 pointer-events-none cursor-not-allowed' : '' }}">
                 <i data-lucide="plus" class="w-4 h-4"></i>
                 <span>Add Domain</span>
             </a>
@@ -138,16 +138,14 @@
                             </span>
                         </div>
                         @if($worstAction && $worstActionUrl)
-                            <a href="{{ $worstActionUrl }}" class="text-xs font-semibold px-2 py-1 rounded transition-colors
-                                {{ $worstSeverity === 'critical' ? 'bg-red-600 hover:bg-red-700 text-white' : 
-                                   ($worstSeverity === 'warning' ? 'bg-amber-600 hover:bg-amber-700 text-white' : 'bg-blue-600 hover:bg-blue-700 text-white') }}">
+                            <a href="{{ $worstActionUrl }}" class="mx-btn mx-btn-sm {{ $worstSeverity === 'critical' ? 'mx-btn-danger' : 'mx-btn-primary' }}">
                                 {{ $worstAction }}
                             </a>
                         @elseif($worstAction === 'Scan')
                             <form action="{{ route('domains.scan.now', $domain) }}" method="POST" class="inline">
                                 @csrf
                                 <input type="hidden" name="mode" value="full">
-                                <button type="submit" class="text-xs font-semibold px-2 py-1 rounded bg-blue-600 hover:bg-blue-700 text-white transition-colors">
+                                <button type="submit" class="mx-btn mx-btn-primary mx-btn-sm">
                                     {{ $worstAction }}
                                 </button>
                             </form>
@@ -253,7 +251,7 @@
                         @if($domain->scans()->exists())
                             @php $latestScanFooter = $domain->scans()->latest()->first(); @endphp
                             <a href="{{ route('reports.show', $latestScanFooter) }}"
-                               class="min-w-[9rem] flex-1 bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-lg text-sm font-medium inline-flex items-center justify-center gap-2 transition-colors">
+                               class="mx-btn mx-btn-primary min-w-[9rem] flex-1">
                                 <i data-lucide="file-text" class="w-4 h-4"></i>
                                 View Report
                             </a>
@@ -261,7 +259,7 @@
                             <form action="{{ route('domains.scan.now', $domain) }}" method="POST" class="flex-1">
                                 @csrf
                                 <input type="hidden" name="mode" value="full">
-                                <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-lg text-sm font-medium inline-flex items-center justify-center gap-2 transition-colors">
+                                <button type="submit" class="mx-btn mx-btn-primary mx-btn-block">
                                     <i data-lucide="scan" class="w-4 h-4"></i>
                                     Run first scan
                                 </button>
@@ -272,7 +270,7 @@
                             @csrf
                             <input type="hidden" name="mode" value="full">
                             <button type="submit" title="Scan now"
-                                    class="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors border border-gray-200">
+                                    class="mx-btn mx-btn-secondary">
                                 <i data-lucide="scan" class="w-4 h-4"></i>
                             </button>
                         </form>
@@ -338,7 +336,7 @@
             <h3 class="text-lg font-semibold text-gray-900">No domains yet</h3>
             <p class="mt-2 text-gray-500 max-w-sm mx-auto">Add your first domain to start monitoring email security, blacklist status, and more.</p>
             <a href="{{ route('dashboard.domains.create') }}" 
-               class="mt-6 inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-lg font-medium transition-colors">
+               class="mx-btn mx-btn-primary mt-6">
                 <i data-lucide="plus" class="w-4 h-4"></i>
                 Add Your First Domain
             </a>
@@ -413,11 +411,11 @@
                 
                 <div class="px-6 py-4 border-t border-gray-200 flex justify-end space-x-3">
                     <button type="button" onclick="hideScheduleModal()" 
-                            class="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md">
+                            class="mx-btn mx-btn-secondary">
                         Cancel
                     </button>
                     <button type="submit" 
-                            class="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md">
+                            class="mx-btn mx-btn-primary">
                         Save Schedule
                     </button>
                 </div>
@@ -446,14 +444,14 @@
             </div>
             <div class="px-6 py-4 border-t border-gray-200 flex justify-end space-x-3">
                 <button onclick="hideDeleteModal()" 
-                        class="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md">
+                        class="mx-btn mx-btn-secondary">
                     Cancel
                 </button>
                 <form id="deleteForm" method="POST" class="inline">
                     @csrf
                     @method('DELETE')
                     <button type="submit" 
-                            class="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-md">
+                            class="mx-btn mx-btn-danger">
                         Delete Domain
                     </button>
                 </form>

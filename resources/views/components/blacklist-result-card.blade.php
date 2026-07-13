@@ -90,7 +90,7 @@
                                         @if($result->removal_url)
                                             <a href="{{ $result->removal_url }}" 
                                                target="_blank" 
-                                               class="inline-flex items-center px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded-lg font-medium">
+                                               class="mx-btn mx-btn-primary inline-flex items-center px-3 py-2 text-white text-sm rounded-lg font-medium">
                                                 <i data-lucide="external-link" class="w-4 h-4 mr-2"></i>
                                                 Request Delisting
                                             </a>
@@ -165,7 +165,7 @@
             <h4 class="text-lg font-medium text-gray-900 mb-2">No Blacklist Check Yet</h4>
             <p class="text-gray-600 mb-4">Run a blacklist check to see if your domain's IPs are listed on spam blacklists.</p>
             <button onclick="runBlacklistCheck()" 
-                    class="inline-flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg">
+                    class="mx-btn mx-btn-primary inline-flex items-center px-4 py-2 text-white rounded-lg">
                 <i data-lucide="shield-check" class="w-4 h-4 mr-2"></i>
                 Run Blacklist Check
             </button>
