@@ -505,6 +505,17 @@ class DmarcStatusService
     /**
      * Generate a safe updated DMARC record that preserves existing settings
      * and adds/relinks the MXScan RUA address.
+     *
+     * @return array{
+     *   current: string,
+     *   updated: string,
+     *   mxscan_already_present: bool,
+     *   action: string,
+     *   existing_rua: string|null,
+     *   removed_recipients: list<string>,
+     *   preserved_recipients: list<string>,
+     *   added_recipients: list<string>
+     * }|null
      */
     public function getUpdatedDmarcRecord(Domain $domain): ?array
     {
@@ -514,15 +525,42 @@ class DmarcStatusService
             return null;
         }
 
-        $result = $this->ruaClassifier->rewriteRua($currentRecord, $domain->dmarc_rua_email);
+        $canonical = strtolower(trim($domain->dmarc_rua_email));
+        $result = $this->ruaClassifier->rewriteRua($currentRecord, $canonical);
+        $classification = $this->ruaClassifier->classify($currentRecord, $canonical);
 
-        // Preserve prior public shape; include action including relink_rua.
+        $removed = [];
+        foreach ($classification['mxscan_recipients'] as $recipient) {
+            $email = strtolower($recipient['email'] ?? '');
+            if ($email !== '' && $email !== $canonical) {
+                $removed[] = $email;
+            }
+        }
+        $removed = array_values(array_unique($removed));
+
+        $preserved = [];
+        foreach ($classification['external_recipients'] as $recipient) {
+            $email = strtolower($recipient['email'] ?? '');
+            if ($email !== '') {
+                $preserved[] = $email;
+            }
+        }
+        $preserved = array_values(array_unique($preserved));
+
+        $added = [];
+        if (($result['action'] ?? 'none') !== 'none' && $canonical !== '') {
+            $added[] = $canonical;
+        }
+
         return [
             'current' => $result['current'],
             'updated' => $result['updated'],
             'mxscan_already_present' => $result['mxscan_already_present'],
             'action' => $result['action'],
             'existing_rua' => $result['existing_rua'],
+            'removed_recipients' => $removed,
+            'preserved_recipients' => $preserved,
+            'added_recipients' => $added,
         ];
     }
 

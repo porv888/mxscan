@@ -69,7 +69,7 @@ class DmarcRuaLinkUiTest extends TestCase
         $response->assertDontSee('Connect MXScan reporting', false);
     }
 
-    public function test_detected_unlinked_shows_relink_cta_and_single_mxscan_record(): void
+    public function test_detected_unlinked_setup_ui_copy_and_dns_panel(): void
     {
         $user = User::factory()->create();
         $token = 'newtoken0000000000000001';
@@ -77,14 +77,41 @@ class DmarcRuaLinkUiTest extends TestCase
         $domain = $this->makeDomainWithScan($user, $input, $token);
 
         $expectedUpdated = 'v=DMARC1; p=quarantine; rua=mailto:rua@dmarc.brevo.com,mailto:dmarc+' . $token . '@mxscan.me';
+        $warning = 'MXScan reporting is present, but it is not linked to this domain.';
 
         $response = $this->actingAs($user)->get(route('dmarc.show', $domain));
+        $html = $response->getContent();
 
         $response->assertOk();
-        $response->assertSee('MXScan reporting is present, but it is not linked to this domain.', false);
-        $response->assertSee('Relink MXScan reporting', false);
+        $this->assertSame(1, substr_count($html, $warning));
+        $response->assertSee('Replace your current DMARC TXT value with the updated value below.', false);
+        $response->assertSee('Update your DMARC record', false);
+        $response->assertSee('This removes old MXScan reporting addresses, keeps external reporting destinations, and adds the correct MXScan address for this domain.', false);
+
+        $response->assertSee('TXT', false);
+        $response->assertSee('_dmarc.' . $domain->domain, false);
+        $response->assertSee('Replace existing value', false);
         $response->assertSee($expectedUpdated, false);
-        $this->assertGreaterThanOrEqual(1, substr_count($response->getContent(), $expectedUpdated));
+        $response->assertSee('Do not create a second DMARC record. Replace the value of the existing TXT record.', false);
+
+        $response->assertSee('Copy updated record', false);
+        $response->assertSee('I’ve updated DNS — Check again', false);
+        $response->assertDontSee('Relink MXScan reporting', false);
+        $response->assertDontSee('I Added It — Check DNS', false);
+
+        $response->assertSee('MXScan will make these changes:', false);
+        $response->assertSee('Removed:', false);
+        $response->assertSee('dmarc@mxscan.me', false);
+        $response->assertSee('dmarc+oldtoken@mxscan.me', false);
+        $response->assertSee('Preserved:', false);
+        $response->assertSee('rua@dmarc.brevo.com', false);
+        $response->assertSee('Added:', false);
+        $response->assertSee('dmarc+' . $token . '@mxscan.me', false);
+
+        $response->assertSee('Show current record and technical comparison', false);
+        $this->assertStringNotContainsString('id="dmarc-tech-comparison" open', $html);
+        $this->assertMatchesRegularExpression('/aria-expanded="false"|:aria-expanded="open\.toString\(\)"/', $html);
+
         $this->assertSame(1, preg_match_all('/@mxscan\.me/i', $expectedUpdated));
     }
 
@@ -123,5 +150,23 @@ class DmarcRuaLinkUiTest extends TestCase
         $this->assertSame($expectedUpdated, $update['updated']);
         $this->assertSame(1, preg_match_all('/@mxscan\.me/i', $update['updated']));
         $this->assertStringNotContainsString('dmarc+f162461412858183e0eb489f@mxscan.me', $update['updated']);
+        $this->assertContains('dmarc@mxscan.me', $update['removed_recipients']);
+        $this->assertContains('rua@dmarc.brevo.com', $update['preserved_recipients']);
+        $this->assertContains('dmarc+' . $token . '@mxscan.me', $update['added_recipients']);
+    }
+
+    public function test_failed_verification_keeps_setup_instructions(): void
+    {
+        $user = User::factory()->create();
+        $token = 'newtoken0000000000000001';
+        $input = 'v=DMARC1; p=quarantine; rua=mailto:dmarc@mxscan.me,mailto:rua@dmarc.brevo.com';
+        $domain = $this->makeDomainWithScan($user, $input, $token);
+
+        $response = $this->actingAs($user)->get(route('dmarc.show', $domain));
+        $response->assertOk();
+        $response->assertSee('Update your DMARC record', false);
+        $response->assertSee('Copy updated record', false);
+        $response->assertSee('I’ve updated DNS — Check again', false);
+        $response->assertSee('The updated record was not detected yet.', false);
     }
 }

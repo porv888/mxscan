@@ -1,9 +1,11 @@
 @extends('layouts.app')
 
-@section('page-title', 'DMARC Activity - ' . $domain->domain)
+@section('page-title', 'DMARC Visibility')
 
 @php
     use App\Services\Dmarc\DmarcStatusService;
+    $isDetectedUnlinked = ($dmarcStatus['rua_link_state'] ?? '') === DmarcStatusService::RUA_LINK_DETECTED_UNLINKED;
+    $isNotConnected = ($dmarcStatus['rua_link_state'] ?? '') === DmarcStatusService::RUA_LINK_NOT_CONNECTED;
 @endphp
 
 @section('content')
@@ -22,13 +24,15 @@
                 <span>{{ $domain->domain }}</span>
             </div>
             <h1 class="text-2xl font-bold text-gray-900">DMARC Visibility</h1>
-            <p class="text-gray-500 mt-1">Who is sending email as {{ $domain->domain }}</p>
+            @if($summary['has_data'] ?? false)
+                <p class="text-gray-500 mt-1">Who is sending email as {{ $domain->domain }}</p>
+            @endif
         </div>
         <div class="flex items-center gap-3">
             @php $latestScan = $domain->scans()->latest()->first(); @endphp
             @if($latestScan)
                 <a href="{{ route('scans.show', $latestScan) }}" 
-                   class="text-sm text-gray-600 hover:text-gray-900">
+                   class="text-sm text-gray-600 hover:text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 rounded">
                     <i data-lucide="file-text" class="w-4 h-4 inline mr-1"></i>
                     View DNS Report
                 </a>
@@ -44,6 +48,9 @@
             'gray' => 'bg-gray-100 text-gray-700',
             default => 'bg-gray-100 text-gray-700',
         };
+        if ($isDetectedUnlinked) {
+            $badgeClasses = 'bg-amber-100 text-amber-800';
+        }
         $displayLabel = $dmarcStatus['has_rua']
             ? ($dmarcStatus['rua_link_label'] ?? $dmarcStatus['label'])
             : $dmarcStatus['label'];
@@ -52,37 +59,41 @@
                 DmarcStatusService::RUA_LINK_DETECTED_UNLINKED,
                 DmarcStatusService::RUA_LINK_NOT_CONNECTED,
             ], true);
+        $checkDnsUrl = route('dmarc.check-dns', $domain);
     @endphp
 
     <!-- Status Strip with unified status -->
-    <div class="bg-white rounded-xl border border-gray-200 p-4">
+    <div class="bg-white rounded-xl border {{ $isDetectedUnlinked ? 'border-amber-200' : 'border-gray-200' }} p-4">
         <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <div class="flex items-center gap-4">
+            <div class="flex items-start gap-4 min-w-0">
                 <!-- Status Badge -->
-                <div class="flex items-center gap-2 px-3 py-1.5 rounded-full {{ $badgeClasses }}">
+                <div class="flex items-center gap-2 px-3 py-1.5 rounded-full {{ $badgeClasses }} shrink-0">
                     @if($dmarcStatus['status'] === DmarcStatusService::STATUS_ACTIVE)
-                        <span class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
+                        <span class="w-2 h-2 rounded-full bg-green-500 animate-pulse" aria-hidden="true"></span>
                     @elseif($dmarcStatus['status'] === DmarcStatusService::STATUS_ENABLED_MXSCAN_WAITING)
-                        <i data-lucide="clock" class="w-3.5 h-3.5"></i>
+                        <i data-lucide="clock" class="w-3.5 h-3.5" aria-hidden="true"></i>
                     @elseif($dmarcStatus['status'] === DmarcStatusService::STATUS_STALE)
-                        <i data-lucide="alert-circle" class="w-3.5 h-3.5"></i>
-                    @elseif(($dmarcStatus['rua_link_state'] ?? '') === DmarcStatusService::RUA_LINK_DETECTED_UNLINKED)
-                        <i data-lucide="link" class="w-3.5 h-3.5"></i>
+                        <i data-lucide="alert-circle" class="w-3.5 h-3.5" aria-hidden="true"></i>
+                    @elseif($isDetectedUnlinked)
+                        <i data-lucide="link" class="w-3.5 h-3.5" aria-hidden="true"></i>
                     @endif
                     <span class="text-sm font-medium">{{ $displayLabel }}</span>
                 </div>
 
-                <span class="text-sm text-gray-500">{{ $dmarcStatus['helper_text'] }}</span>
+                @if($isDetectedUnlinked)
+                    <p class="text-sm text-amber-800">Replace your current DMARC TXT value with the updated value below.</p>
+                @else
+                    <span class="text-sm text-gray-500">{{ $dmarcStatus['helper_text'] }}</span>
+                @endif
             </div>
 
             <!-- RUA Address + Check DNS Button -->
-            <div class="flex items-center gap-3">
+            <div class="flex items-center gap-3 shrink-0">
                 <div class="flex items-center gap-2" x-data="{ copied: false, showTooltip: false }">
                     <span class="text-sm text-gray-500">RUA:</span>
                     <div class="relative">
                         <code class="px-2 py-1 bg-gray-100 rounded text-sm font-mono text-gray-700 cursor-help" 
                               @mouseenter="showTooltip = true" @mouseleave="showTooltip = false">{{ $domain->dmarc_rua_email }}</code>
-                        <!-- RUA Tooltip -->
                         <div x-show="showTooltip" x-cloak 
                              class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-72 p-3 bg-gray-900 text-white text-xs rounded-lg shadow-lg z-50">
                             <p><strong>What is RUA?</strong></p>
@@ -91,16 +102,19 @@
                             <div class="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 w-2 h-2 bg-gray-900 rotate-45"></div>
                         </div>
                     </div>
-                    <button @click="navigator.clipboard.writeText('{{ $domain->dmarc_rua_email }}'); copied = true; setTimeout(() => copied = false, 2000)"
-                            class="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors">
+                    <button type="button"
+                            @click="navigator.clipboard.writeText(@js($domain->dmarc_rua_email)); copied = true; setTimeout(() => copied = false, 2000)"
+                            class="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            :aria-label="copied ? 'Copied' : 'Copy RUA address'">
                         <i data-lucide="copy" class="w-4 h-4" x-show="!copied"></i>
                         <i data-lucide="check" class="w-4 h-4 text-green-600" x-show="copied" x-cloak></i>
                     </button>
+                    <span class="sr-only" aria-live="polite" x-text="copied ? 'Copied' : ''"></span>
                 </div>
-                @if($dmarcStatus['status'] !== DmarcStatusService::STATUS_ACTIVE)
-                    <form action="{{ route('dmarc.check-dns', $domain) }}" method="POST" class="inline">
+                @if($dmarcStatus['status'] !== DmarcStatusService::STATUS_ACTIVE && !$needsRuaLink)
+                    <form action="{{ $checkDnsUrl }}" method="POST" class="inline">
                         @csrf
-                        <button type="submit" class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors">
+                        <button type="submit" class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500">
                             <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
                             Check DNS
                         </button>
@@ -456,23 +470,28 @@
 
     @else
         <!-- No Data State - Setup Instructions -->
-        <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
-            <div class="p-6 border-b border-gray-200 {{ $dmarcStatus['status'] === 'enabled_mxscan_waiting' ? 'bg-gradient-to-r from-blue-50 to-indigo-50' : 'bg-gradient-to-r from-amber-50 to-orange-50' }}">
+        <div class="bg-white rounded-xl border border-gray-200 overflow-hidden"
+             x-data="dmarcDnsVerify({
+                checkUrl: @js($checkDnsUrl),
+                csrf: @js(csrf_token()),
+                initiallyConnected: @js(($dmarcStatus['rua_link_state'] ?? '') === DmarcStatusService::RUA_LINK_CONNECTED)
+             })">
+            <div class="p-6 border-b border-gray-200 {{ $dmarcStatus['status'] === 'enabled_mxscan_waiting' ? 'bg-gradient-to-r from-blue-50 to-indigo-50' : ($isDetectedUnlinked ? 'bg-amber-50' : 'bg-gradient-to-r from-amber-50 to-orange-50') }}">
                 <div class="flex items-start gap-4">
                     <div class="flex-shrink-0 w-12 h-12 rounded-lg {{ $dmarcStatus['status'] === 'enabled_mxscan_waiting' ? 'bg-blue-100' : 'bg-amber-100' }} flex items-center justify-center">
                         @if($dmarcStatus['status'] === 'enabled_mxscan_waiting')
-                            <i data-lucide="clock" class="w-6 h-6 text-blue-600"></i>
+                            <i data-lucide="clock" class="w-6 h-6 text-blue-600" aria-hidden="true"></i>
                         @else
-                            <i data-lucide="settings" class="w-6 h-6 text-amber-600"></i>
+                            <i data-lucide="settings" class="w-6 h-6 text-amber-600" aria-hidden="true"></i>
                         @endif
                     </div>
-                    <div>
+                    <div class="min-w-0">
                         @if($dmarcStatus['status'] === 'enabled_mxscan_waiting')
                             <h3 class="text-lg font-semibold text-gray-900">Waiting for First Report</h3>
                             <p class="text-sm text-gray-600 mt-1">Waiting for the first aggregate report. Reports commonly arrive within 24–48 hours.</p>
-                        @elseif($needsRuaLink && ($dmarcStatus['rua_link_state'] ?? '') === DmarcStatusService::RUA_LINK_DETECTED_UNLINKED)
-                            <h3 class="text-lg font-semibold text-gray-900">{{ $dmarcStatus['rua_link_label'] }}</h3>
-                            <p class="text-sm text-gray-600 mt-1">MXScan reporting is present, but it is not linked to this domain.</p>
+                        @elseif($isDetectedUnlinked)
+                            <h3 class="text-lg font-semibold text-gray-900">Update your DMARC record</h3>
+                            <p class="text-sm text-gray-600 mt-1">This removes old MXScan reporting addresses, keeps external reporting destinations, and adds the correct MXScan address for this domain.</p>
                         @elseif($needsRuaLink)
                             <h3 class="text-lg font-semibold text-gray-900">Connect MXScan reporting</h3>
                             <p class="text-sm text-gray-600 mt-1">DMARC is active. Connect MXScan reporting to identify senders and authentication failures.</p>
@@ -485,127 +504,234 @@
             </div>
 
             <div class="p-6 space-y-4">
+                {{-- Success after live DNS verification --}}
+                <div x-show="connected" x-cloak class="rounded-lg border border-green-200 bg-green-50 p-4" role="status">
+                    <p class="text-sm font-semibold text-green-800">MXScan reporting is connected.</p>
+                    <p class="text-sm text-green-700 mt-1">DMARC aggregate reports will normally begin arriving within 24–48 hours.</p>
+                </div>
+
+                <div x-show="!connected">
                 @if($dmarcStatus['status'] === 'enabled_mxscan_waiting')
-                    {{-- Waiting state - just show info --}}
                     <div class="bg-blue-50 rounded-lg p-4">
                         <p class="text-sm text-blue-800">
                             <strong>No action needed.</strong> Providers send reports automatically once per day. You don't need to send test emails or create a mailbox.
                         </p>
                     </div>
-                @elseif($needsRuaLink)
-                    {{-- Has DMARC but needs connect or relink - Show smart update --}}
-                    @if(isset($dmarcUpdate) && $dmarcUpdate)
-                        <div class="space-y-4">
-                            {{-- Current Record --}}
-                            <div>
-                                <p class="text-sm text-gray-500 mb-2">Your Current DMARC Record</p>
-                                <code class="block px-3 py-2 bg-gray-100 border border-gray-200 rounded-lg text-sm font-mono text-gray-600 break-all">{{ $dmarcUpdate['current'] }}</code>
+                @elseif($needsRuaLink && isset($dmarcUpdate) && $dmarcUpdate)
+                    @php
+                        $dmarcHost = '_dmarc.' . $domain->domain;
+                        $removedRecipients = $dmarcUpdate['removed_recipients'] ?? [];
+                        $preservedRecipients = $dmarcUpdate['preserved_recipients'] ?? [];
+                        $addedRecipients = $dmarcUpdate['added_recipients'] ?? [];
+                    @endphp
+
+                    {{-- Structured DNS change panel --}}
+                    <div class="rounded-xl border border-gray-200 overflow-hidden">
+                        <dl class="grid grid-cols-1 sm:grid-cols-2 gap-0 divide-y divide-gray-100 sm:divide-y-0">
+                            <div class="px-4 py-3 sm:border-r sm:border-gray-100">
+                                <dt class="text-xs font-medium uppercase tracking-wide text-gray-500">Record type</dt>
+                                <dd class="mt-1 font-mono text-sm font-medium text-gray-900">TXT</dd>
                             </div>
-                            
-                            {{-- Updated Record --}}
-                            <div>
-                                <p class="text-sm text-gray-500 mb-2">
-                                    <span class="text-green-600 font-medium">✓ Updated Record</span> — Replace your current record with this:
-                                </p>
-                                <div class="flex items-start gap-2" x-data="{ copied: false }">
-                                    <code class="flex-1 block px-3 py-2 bg-green-50 border border-green-200 rounded-lg text-sm font-mono text-gray-800 break-all">{{ $dmarcUpdate['updated'] }}</code>
-                                    <button @click="navigator.clipboard.writeText(@js($dmarcUpdate['updated'])); copied = true; setTimeout(() => copied = false, 2000)"
-                                            class="flex-shrink-0 px-4 py-2 text-sm font-medium text-white bg-green-600 hover:bg-green-700 rounded-lg transition-colors">
-                                        <span x-show="!copied">{{ $dmarcStatus['rua_link_cta'] ?? 'Copy' }}</span>
-                                        <span x-show="copied" x-cloak>Copied!</span>
+                            <div class="px-4 py-3">
+                                <dt class="text-xs font-medium uppercase tracking-wide text-gray-500">Host / name</dt>
+                                <dd class="mt-1 font-mono text-sm font-medium text-gray-900 break-all">{{ $dmarcHost }}</dd>
+                            </div>
+                            <div class="px-4 py-3 sm:border-r sm:border-t sm:border-gray-100">
+                                <dt class="text-xs font-medium uppercase tracking-wide text-gray-500">Action</dt>
+                                <dd class="mt-1 text-sm font-medium text-gray-900">Replace existing value</dd>
+                            </div>
+                            <div class="px-4 py-3 sm:border-t sm:border-gray-100">
+                                <dt class="text-xs font-medium uppercase tracking-wide text-gray-500">TTL</dt>
+                                <dd class="mt-1 text-sm text-gray-700">Leave unchanged</dd>
+                            </div>
+                        </dl>
+
+                        <div class="border-t border-gray-100 px-4 py-4 space-y-3">
+                            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                                <p id="updated-dmarc-label" class="text-sm font-medium text-gray-900">Value</p>
+                                <div class="flex items-center gap-2" x-data="{ copied: false }">
+                                    <button type="button"
+                                            @click="navigator.clipboard.writeText(@js($dmarcUpdate['updated'])); copied = true; setTimeout(() => copied = false, 2000)"
+                                            class="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                                            :aria-label="copied ? 'Copied' : 'Copy updated record'">
+                                        <span x-show="!copied">Copy updated record</span>
+                                        <span x-show="copied" x-cloak>Copied</span>
                                     </button>
+                                    <span class="sr-only" aria-live="polite" x-text="copied ? 'Copied' : ''"></span>
                                 </div>
                             </div>
-                            
-                            @if(($dmarcUpdate['action'] ?? '') === 'relink_rua')
-                                <p class="text-xs text-gray-500">This removes stale MXScan destinations, keeps external reporting addresses, and sets exactly one canonical MXScan RUA for this domain.</p>
-                            @else
-                                <p class="text-xs text-gray-500">This preserves your existing policy settings and adds MXScan as an additional report recipient.</p>
-                            @endif
-                        </div>
-                    @else
-                        {{-- Fallback if no scan data available --}}
-                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
-                            <div>
-                                <p class="text-gray-500 mb-1">Record Type</p>
-                                <p class="font-mono font-medium text-gray-900">TXT</p>
-                            </div>
-                            <div>
-                                <p class="text-gray-500 mb-1">Host / Name</p>
-                                <p class="font-mono font-medium text-gray-900">_dmarc</p>
-                            </div>
-                            <div>
-                                <p class="text-gray-500 mb-1">Action</p>
-                                <p class="font-medium text-amber-600">Update existing record</p>
-                            </div>
-                        </div>
+                            <pre aria-labelledby="updated-dmarc-label"
+                                 class="max-w-full overflow-x-auto whitespace-pre-wrap break-all rounded-lg border border-green-200 bg-green-50 px-3 py-3 text-sm font-mono text-gray-800">{{ $dmarcUpdate['updated'] }}</pre>
 
-                        <div>
-                            <p class="text-sm text-gray-500 mb-2">Add this address to your existing rua (comma-separate if needed)</p>
-                            <div class="flex items-start gap-2" x-data="{ copied: false }">
-                                <code class="flex-1 block px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm font-mono text-gray-800 break-all">mailto:{{ $domain->dmarc_rua_email }}</code>
-                                <button @click="navigator.clipboard.writeText('mailto:{{ $domain->dmarc_rua_email }}'); copied = true; setTimeout(() => copied = false, 2000)"
-                                        class="flex-shrink-0 px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors">
-                                    <span x-show="!copied">{{ $dmarcStatus['rua_link_cta'] ?? 'Copy' }}</span>
-                                    <span x-show="copied" x-cloak>Copied!</span>
-                                </button>
+                            <p class="text-sm text-amber-800 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2" role="note">
+                                Do not create a second DMARC record. Replace the value of the existing TXT record.
+                            </p>
+                        </div>
+                    </div>
+
+                    {{-- Transformation summary --}}
+                    <div class="rounded-lg border border-gray-200 bg-gray-50 p-4 space-y-3">
+                        <p class="text-sm font-medium text-gray-900">MXScan will make these changes:</p>
+                        <ul class="text-sm text-gray-600 list-disc pl-5 space-y-1">
+                            <li>Remove generic or stale MXScan reporting addresses</li>
+                            <li>Preserve external reporting destinations</li>
+                            <li>Add the canonical MXScan reporting address for this domain</li>
+                        </ul>
+                        @if(count($removedRecipients) || count($preservedRecipients) || count($addedRecipients))
+                            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2 text-sm">
+                                @if(count($removedRecipients))
+                                    <div>
+                                        <p class="font-medium text-gray-800 mb-1">Removed:</p>
+                                        <ul class="space-y-1">
+                                            @foreach($removedRecipients as $email)
+                                                <li class="font-mono text-xs text-gray-600 break-all">{{ $email }}</li>
+                                            @endforeach
+                                        </ul>
+                                    </div>
+                                @endif
+                                @if(count($preservedRecipients))
+                                    <div>
+                                        <p class="font-medium text-gray-800 mb-1">Preserved:</p>
+                                        <ul class="space-y-1">
+                                            @foreach($preservedRecipients as $email)
+                                                <li class="font-mono text-xs text-gray-600 break-all">{{ $email }}</li>
+                                            @endforeach
+                                        </ul>
+                                    </div>
+                                @endif
+                                @if(count($addedRecipients))
+                                    <div>
+                                        <p class="font-medium text-gray-800 mb-1">Added:</p>
+                                        <ul class="space-y-1">
+                                            @foreach($addedRecipients as $email)
+                                                <li class="font-mono text-xs text-gray-600 break-all">{{ $email }}</li>
+                                            @endforeach
+                                        </ul>
+                                    </div>
+                                @endif
+                            </div>
+                        @endif
+                        <p class="text-xs text-gray-500">This is a DNS-record transformation summary, not a security guarantee.</p>
+                    </div>
+
+                    {{-- Collapsed technical comparison --}}
+                    <div x-data="{ open: false }">
+                        <button type="button"
+                                class="w-full flex items-center justify-between text-left text-sm font-medium text-gray-800 px-3 py-2 rounded-lg border border-gray-200 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                @click="open = !open"
+                                :aria-expanded="open.toString()"
+                                aria-controls="dmarc-tech-comparison">
+                            <span>Show current record and technical comparison</span>
+                            <i data-lucide="chevron-down" class="w-4 h-4 text-gray-400 transition-transform" :class="open && 'rotate-180'" aria-hidden="true"></i>
+                        </button>
+                        <div id="dmarc-tech-comparison" x-show="open" x-cloak class="mt-3 space-y-3 rounded-lg border border-gray-200 p-4">
+                            <div>
+                                <div class="flex items-center justify-between gap-2 mb-2">
+                                    <p id="current-dmarc-label" class="text-sm text-gray-500">Current record</p>
+                                    <div x-data="{ copied: false }">
+                                        <button type="button"
+                                                @click="navigator.clipboard.writeText(@js($dmarcUpdate['current'])); copied = true; setTimeout(() => copied = false, 2000)"
+                                                class="text-xs font-medium text-blue-700 hover:text-blue-800 focus:outline-none focus:ring-2 focus:ring-blue-500 rounded px-2 py-1"
+                                                :aria-label="copied ? 'Copied' : 'Copy current record'">
+                                            <span x-text="copied ? 'Copied' : 'Copy'"></span>
+                                        </button>
+                                    </div>
+                                </div>
+                                <pre aria-labelledby="current-dmarc-label"
+                                     class="max-w-full overflow-x-auto whitespace-pre-wrap break-all rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm font-mono text-gray-600">{{ $dmarcUpdate['current'] }}</pre>
+                            </div>
+                            <div>
+                                <p id="proposed-dmarc-label" class="text-sm text-gray-500 mb-2">Updated record</p>
+                                <pre aria-labelledby="proposed-dmarc-label"
+                                     class="max-w-full overflow-x-auto whitespace-pre-wrap break-all rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm font-mono text-gray-800">{{ $dmarcUpdate['updated'] }}</pre>
                             </div>
                         </div>
-                    @endif
+                    </div>
+                @elseif($needsRuaLink)
+                    {{-- Fallback if no scan data available --}}
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
+                        <div>
+                            <p class="text-gray-500 mb-1">Record type</p>
+                            <p class="font-mono font-medium text-gray-900">TXT</p>
+                        </div>
+                        <div>
+                            <p class="text-gray-500 mb-1">Host / name</p>
+                            <p class="font-mono font-medium text-gray-900 break-all">_dmarc.{{ $domain->domain }}</p>
+                        </div>
+                        <div>
+                            <p class="text-gray-500 mb-1">Action</p>
+                            <p class="font-medium text-gray-900">Replace existing value</p>
+                        </div>
+                    </div>
+                    <div class="flex items-start gap-2" x-data="{ copied: false }">
+                        <code class="flex-1 block px-3 py-2 bg-green-50 border border-green-200 rounded-lg text-sm font-mono text-gray-800 break-all overflow-x-auto">mailto:{{ $domain->dmarc_rua_email }}</code>
+                        <button type="button"
+                                @click="navigator.clipboard.writeText(@js('mailto:'.$domain->dmarc_rua_email)); copied = true; setTimeout(() => copied = false, 2000)"
+                                class="flex-shrink-0 px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            <span x-show="!copied">Copy updated record</span>
+                            <span x-show="copied" x-cloak>Copied</span>
+                        </button>
+                    </div>
+                    <p class="text-sm text-amber-800 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
+                        Do not create a second DMARC record. Replace the value of the existing TXT record.
+                    </p>
                 @else
                     {{-- No DMARC at all --}}
                     <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
                         <div>
-                            <p class="text-gray-500 mb-1">Record Type</p>
+                            <p class="text-gray-500 mb-1">Record type</p>
                             <p class="font-mono font-medium text-gray-900">TXT</p>
                         </div>
                         <div>
-                            <p class="text-gray-500 mb-1">Host / Name</p>
-                            <p class="font-mono font-medium text-gray-900">_dmarc</p>
+                            <p class="text-gray-500 mb-1">Host / name</p>
+                            <p class="font-mono font-medium text-gray-900 break-all">_dmarc.{{ $domain->domain }}</p>
                         </div>
                         <div>
                             <p class="text-gray-500 mb-1">TTL</p>
-                            <p class="font-mono font-medium text-gray-900">3600 (or default)</p>
+                            <p class="font-mono font-medium text-gray-900">Leave unchanged</p>
                         </div>
                     </div>
-
-                    <div>
-                        <p class="text-sm text-gray-500 mb-2">Value / Content</p>
-                        <div class="flex items-start gap-2" x-data="{ copied: false }">
-                            <code class="flex-1 block px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm font-mono text-gray-800 break-all">v=DMARC1; p=quarantine; rua=mailto:{{ $domain->dmarc_rua_email }}; pct=100; adkim=r; aspf=r;</code>
-                            <button @click="navigator.clipboard.writeText('v=DMARC1; p=quarantine; rua=mailto:{{ $domain->dmarc_rua_email }}; pct=100; adkim=r; aspf=r;'); copied = true; setTimeout(() => copied = false, 2000)"
-                                    class="flex-shrink-0 px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors">
-                                <span x-show="!copied">Copy</span>
-                                <span x-show="copied" x-cloak>Copied!</span>
-                            </button>
-                        </div>
+                    <div class="flex items-start gap-2" x-data="{ copied: false }">
+                        <code class="flex-1 block px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm font-mono text-gray-800 break-all overflow-x-auto">v=DMARC1; p=quarantine; rua=mailto:{{ $domain->dmarc_rua_email }}; pct=100; adkim=r; aspf=r;</code>
+                        <button type="button"
+                                @click="navigator.clipboard.writeText(@js('v=DMARC1; p=quarantine; rua=mailto:'.$domain->dmarc_rua_email.'; pct=100; adkim=r; aspf=r;')); copied = true; setTimeout(() => copied = false, 2000)"
+                                class="flex-shrink-0 px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            <span x-show="!copied">Copy</span>
+                            <span x-show="copied" x-cloak>Copied</span>
+                        </button>
                     </div>
                 @endif
 
                 @if($dmarcStatus['status'] !== 'enabled_mxscan_waiting')
-                    <div class="flex items-center gap-3 pt-2">
-                        <form action="{{ route('dmarc.check-dns', $domain) }}" method="POST" class="inline">
-                            @csrf
-                            <button type="submit" class="inline-flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-lg transition-colors">
-                                <i data-lucide="check-circle" class="w-4 h-4"></i>
-                                I Added It — Check DNS
-                            </button>
-                        </form>
+                    <div class="flex flex-col gap-3 pt-2">
+                        <button type="button"
+                                @click="checkDns()"
+                                :disabled="checking"
+                                class="inline-flex items-center justify-center gap-2 px-4 py-2 bg-white border border-gray-300 hover:bg-gray-50 text-gray-800 text-sm font-medium rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-60 disabled:cursor-not-allowed">
+                            <i data-lucide="refresh-cw" class="w-4 h-4" :class="checking && 'animate-spin'" aria-hidden="true"></i>
+                            <span x-text="checking ? 'Checking DNS…' : 'I’ve updated DNS — Check again'"></span>
+                        </button>
+                        <div class="sr-only" aria-live="polite" x-text="statusAnnouncement"></div>
+                        <div x-show="failed" x-cloak class="rounded-lg border border-amber-200 bg-amber-50 p-3" role="status">
+                            <p class="text-sm font-medium text-amber-900">The updated record was not detected yet.</p>
+                            <p class="text-sm text-amber-800 mt-1">DNS changes can take time to propagate. Check the value and try again shortly.</p>
+                        </div>
                     </div>
                 @endif
 
                 <div class="bg-gray-50 rounded-lg p-4 text-sm text-gray-600 space-y-1">
-                    <p><i data-lucide="info" class="w-4 h-4 inline mr-1"></i> <strong>No test email needed</strong> — providers send reports automatically.</p>
-                    <p><i data-lucide="info" class="w-4 h-4 inline mr-1"></i> <strong>No mailbox needed</strong> — MXScan hosts this address.</p>
+                    <p><i data-lucide="info" class="w-4 h-4 inline mr-1" aria-hidden="true"></i> <strong>No test email needed</strong> — providers send reports automatically.</p>
+                    <p><i data-lucide="info" class="w-4 h-4 inline mr-1" aria-hidden="true"></i> <strong>No mailbox needed</strong> — MXScan hosts this address.</p>
                 </div>
+                </div>{{-- !connected --}}
             </div>
         </div>
 
         <!-- Common Questions Accordion -->
         <div class="bg-white rounded-xl border border-gray-200 p-6" x-data="{ open: false }">
-            <button @click="open = !open" class="flex items-center justify-between w-full text-left">
+            <button type="button" @click="open = !open" class="flex items-center justify-between w-full text-left focus:outline-none focus:ring-2 focus:ring-blue-500 rounded" :aria-expanded="open.toString()">
                 <h3 class="font-semibold text-gray-900">Common Questions</h3>
-                <i data-lucide="chevron-down" class="w-5 h-5 text-gray-400 transition-transform" :class="{ 'rotate-180': open }"></i>
+                <i data-lucide="chevron-down" class="w-5 h-5 text-gray-400 transition-transform" :class="{ 'rotate-180': open }" aria-hidden="true"></i>
             </button>
             <div x-show="open" x-collapse class="mt-4 space-y-4 text-sm">
                 <div class="border-b border-gray-100 pb-3">
@@ -753,6 +879,57 @@
         </template>
     </div>
 </div>
+
+<script>
+function dmarcDnsVerify(config) {
+    return {
+        checkUrl: config.checkUrl,
+        csrf: config.csrf,
+        connected: !!config.initiallyConnected,
+        checking: false,
+        failed: false,
+        statusAnnouncement: '',
+        async checkDns() {
+            if (this.checking) return;
+            this.checking = true;
+            this.failed = false;
+            this.statusAnnouncement = 'Checking DNS';
+            try {
+                const res = await fetch(this.checkUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Accept': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'X-CSRF-TOKEN': this.csrf,
+                        'Content-Type': 'application/json',
+                    },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({}),
+                });
+                const data = await res.json();
+                const linked = !!(data.has_canonical_mxscan_rua
+                    || data.rua_link_state === 'connected'
+                    || data.is_configured);
+                if (linked) {
+                    this.connected = true;
+                    this.failed = false;
+                    this.statusAnnouncement = 'MXScan reporting is connected.';
+                    // Refresh so the top status strip matches connected state.
+                    window.setTimeout(() => window.location.reload(), 800);
+                } else {
+                    this.failed = true;
+                    this.statusAnnouncement = 'The updated record was not detected yet.';
+                }
+            } catch (e) {
+                this.failed = true;
+                this.statusAnnouncement = 'The updated record was not detected yet.';
+            } finally {
+                this.checking = false;
+            }
+        }
+    };
+}
+</script>
 
 <!-- Chart.js -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
