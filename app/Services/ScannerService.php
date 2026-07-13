@@ -2,6 +2,8 @@
 
 namespace App\Services;
 
+use App\Models\Domain;
+use App\Services\ScanReport\ScanRecommendationService;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Http;
 
@@ -21,7 +23,7 @@ class ScannerService
             $mxRecords = $this->safeDnsGetRecord($domain, DNS_MX, 'MX');
             $records['MX'] = !empty($mxRecords) ? ['status' => 'found', 'data' => $mxRecords] : ['status' => 'missing'];
             if (!empty($mxRecords)) {
-                $score += 15;
+                $score += (int) config('dns-scoring.mx.max', 15);
             }
 
             // Check SPF record (from TXT records)
@@ -33,13 +35,7 @@ class ScannerService
             $records['SPF'] = $spfRecord ? ['status' => 'found', 'data' => $spfRecord['txt']] : ['status' => 'missing'];
             
             if ($spfRecord) {
-                $score += 15;
-                // Bonus points for strict SPF
-                if (str_contains($spfRecord['txt'], '-all')) {
-                    $score += 5;
-                } elseif (str_contains($spfRecord['txt'], '~all')) {
-                    $score += 2;
-                }
+                $score += (int) config('dns-scoring.spf.base', 20);
             }
 
             // Check DKIM selectors (TXT records and CNAME-delegated setups)
@@ -101,7 +97,7 @@ class ScannerService
                 : ['status' => 'missing'];
 
             if (!empty($dkimFound)) {
-                $score += 15;
+                $score += (int) config('dns-scoring.dkim.max', 20);
             }
 
             // Check DMARC record
@@ -110,13 +106,7 @@ class ScannerService
             $records['DMARC'] = $dmarcRecord ? ['status' => 'found', 'data' => $dmarcRecord['txt']] : ['status' => 'missing'];
             
             if ($dmarcRecord) {
-                $score += 20;
-                // Bonus points for strict DMARC policy
-                if (str_contains($dmarcRecord['txt'], 'p=reject')) {
-                    $score += 5;
-                } elseif (str_contains($dmarcRecord['txt'], 'p=quarantine')) {
-                    $score += 3;
-                }
+                $score += (int) config('dns-scoring.dmarc.base', 30);
             }
 
             // Check TLS-RPT record
@@ -125,7 +115,7 @@ class ScannerService
             $records['TLS-RPT'] = $tlsRptRecord ? ['status' => 'found', 'data' => $tlsRptRecord['txt']] : ['status' => 'missing'];
             
             if ($tlsRptRecord) {
-                $score += 10;
+                $score += (int) config('dns-scoring.tlsrpt.max', 5);
             }
 
             // Check MTA-STS record
@@ -139,13 +129,13 @@ class ScannerService
                     $response = Http::timeout(5)->get("https://mta-sts.$domain/.well-known/mta-sts.txt");
                     if ($response->successful()) {
                         $mtaStsPolicy = $response->body();
-                        $score += 20; // Full points for working MTA-STS
+                        $score += (int) config('dns-scoring.mtasts.full', 10);
                     } else {
-                        $score += 10; // Partial points for DNS record only
+                        $score += (int) config('dns-scoring.mtasts.dns_only', 5);
                     }
                 } catch (\Exception $e) {
                     Log::info('MTA-STS policy not reachable', ['domain' => $domain, 'error' => $e->getMessage()]);
-                    $score += 10; // Partial points for DNS record only
+                    $score += (int) config('dns-scoring.mtasts.dns_only', 5);
                 }
             }
             
@@ -153,15 +143,13 @@ class ScannerService
                 ['status' => 'found', 'data' => $mtaStsRecord['txt'], 'policy' => $mtaStsPolicy] : 
                 ['status' => 'missing'];
 
-            // BIMI check
+            // BIMI check (informational only — never affects score)
             try {
                 $bimiResult = app(BimiChecker::class)->check($domain);
                 if ($bimiResult['record_found'] && $bimiResult['logo_valid']) {
                     $records['BIMI'] = ['status' => 'found', 'data' => $bimiResult];
-                    $score += (int) config('dns-scoring.bimi.valid', 5);
                 } elseif ($bimiResult['record_found']) {
                     $records['BIMI'] = ['status' => 'partial', 'data' => $bimiResult];
-                    $score += (int) config('dns-scoring.bimi.record_only', 2);
                 } else {
                     $records['BIMI'] = ['status' => 'missing', 'data' => $bimiResult];
                 }
@@ -175,8 +163,13 @@ class ScannerService
 
             $scoreBreakdown = app(ScoreBreakdownService::class)->buildFromDnsRecords($records);
 
-            // Generate recommendations based on actual DNS results
-            $recommendations = $this->generateRecommendations($domain, $records);
+            $domainModel = Domain::query()->where('domain', $domain)->first()
+                ?? new Domain(['domain' => $domain]);
+            $recommendations = app(ScanRecommendationService::class)->build(
+                $domainModel,
+                ['dns' => ['records' => $records]],
+                $records
+            );
 
             Log::info('Domain scan completed', [
                 'domain' => $domain,
@@ -202,77 +195,6 @@ class ScannerService
             'recommendations' => $recommendations,
             'score_breakdown' => $scoreBreakdown ?? [],
         ];
-    }
-
-    private function generateRecommendations(string $domain, array $records): array
-    {
-        $recommendations = [];
-
-        if ($records['MX']['status'] === 'missing') {
-            $recommendations[] = [
-                'type' => 'MX',
-                'title' => 'Add MX record',
-                'value' => "10 mail.$domain",
-                'description' => 'MX records tell other mail servers where to deliver email for your domain.',
-            ];
-        }
-
-        if ($records['SPF']['status'] === 'missing') {
-            $spfValue = $this->generateSpfRecord($domain, $records);
-            $recommendations[] = [
-                'type' => 'SPF',
-                'title' => 'Add SPF record',
-                'value' => $spfValue,
-                'description' => 'SPF records prevent email spoofing by specifying which servers can send email for your domain.',
-            ];
-        }
-
-        if (isset($records['DKIM']) && $records['DKIM']['status'] === 'missing') {
-            $recommendations[] = [
-                'type' => 'DKIM',
-                'title' => 'Configure DKIM signing',
-                'value' => 'Enable DKIM in your mail server or email provider settings',
-                'description' => 'DKIM adds a digital signature to outgoing emails, proving they haven\'t been tampered with in transit. Enable it via your email provider\'s admin panel.',
-            ];
-        }
-
-        if ($records['DMARC']['status'] === 'missing') {
-            $recommendations[] = [
-                'type' => 'DMARC',
-                'title' => 'Add DMARC record',
-                'value' => "v=DMARC1; p=quarantine; rua=mailto:dmarc@$domain",
-                'description' => 'DMARC policies tell receiving servers what to do with emails that fail SPF/DKIM checks.',
-            ];
-        }
-
-        if ($records['TLS-RPT']['status'] === 'missing') {
-            $recommendations[] = [
-                'type' => 'TLS-RPT',
-                'title' => 'Add TLS-RPT record',
-                'value' => "v=TLSRPTv1; rua=mailto:reports@$domain",
-                'description' => 'TLS-RPT records enable reporting of TLS connection failures for your domain.',
-            ];
-        }
-
-        if ($records['MTA-STS']['status'] === 'missing') {
-            $recommendations[] = [
-                'type' => 'MTA-STS',
-                'title' => 'Add MTA-STS record',
-                'value' => 'v=STSv1; id=20250910',
-                'description' => 'MTA-STS enforces secure TLS connections for email delivery to your domain.',
-            ];
-        }
-
-        if (isset($records['BIMI']) && $records['BIMI']['status'] === 'missing') {
-            $recommendations[] = [
-                'type' => 'BIMI',
-                'title' => 'Add BIMI record',
-                'value' => 'v=BIMI1; l=https://example.com/logo.svg',
-                'description' => 'BIMI enables verified brand logos in supporting inboxes (requires DMARC at enforcement).',
-            ];
-        }
-
-        return $recommendations;
     }
 
     /**

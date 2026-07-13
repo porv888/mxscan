@@ -36,8 +36,7 @@
                     <i data-lucide="clock" class="w-4 h-4 text-blue-600"></i>
                 </div>
                 <div>
-                    <h3 class="font-medium text-gray-900">Configured. First data arrives in 24–48 hours.</h3>
-                    <p class="text-sm text-gray-600 mt-1">Mail providers send DMARC reports once per day. No action needed — data will appear automatically.</p>
+                    <p class="text-sm text-gray-600">Waiting for the first aggregate report. Reports commonly arrive within 24–48 hours.</p>
                 </div>
             </div>
         </div>
@@ -56,6 +55,7 @@
     @endif
 
     <!-- Summary Cards -->
+    @if($domainsActive->count() > 0)
     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <!-- Domains with New Senders -->
         <div class="bg-white rounded-xl border border-gray-200 p-5">
@@ -113,6 +113,7 @@
             </div>
         </div>
     </div>
+    @endif
 
     @if($totalDomains === 0)
         <!-- State: No domains exist -->
@@ -175,7 +176,9 @@
                                         @elseif($status['status'] === DmarcStatusService::STATUS_STALE)
                                             <i data-lucide="alert-circle" class="w-3 h-3 mr-1"></i>
                                         @endif
-                                        {{ $status['label'] }}
+                                        {{ ($status['has_rua'] ?? false) && in_array($status['rua_link_state'] ?? '', [DmarcStatusService::RUA_LINK_DETECTED_UNLINKED, DmarcStatusService::RUA_LINK_NOT_CONNECTED], true)
+                                            ? ($status['rua_link_label'] ?? $status['label'])
+                                            : $status['label'] }}
                                     </span>
                                 </td>
                                 <td class="px-6 py-4 whitespace-nowrap">
@@ -323,6 +326,14 @@
                         @php
                             $status = $domain->dmarc_setup_status;
                             $isEnabledNotMxscan = $status['status'] === DmarcStatusService::STATUS_ENABLED_NOT_MXSCAN;
+                            $needsRuaLink = ($status['has_dmarc_record'] ?? false)
+                                && in_array($status['rua_link_state'] ?? '', [
+                                    DmarcStatusService::RUA_LINK_DETECTED_UNLINKED,
+                                    DmarcStatusService::RUA_LINK_NOT_CONNECTED,
+                                ], true);
+                            $setupLabel = $needsRuaLink
+                                ? ($status['rua_link_label'] ?? $status['label'])
+                                : $status['label'];
                         @endphp
                         <div class="p-6">
                             <div class="flex items-center justify-between mb-4">
@@ -332,16 +343,16 @@
                                     </div>
                                     <div>
                                         <p class="font-semibold text-gray-900">{{ $domain->domain }}</p>
-                                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium {{ $isEnabledNotMxscan ? 'bg-amber-100 text-amber-800' : 'bg-gray-100 text-gray-800' }}">
-                                            {{ $status['label'] }}
+                                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium {{ $needsRuaLink ? 'bg-amber-100 text-amber-800' : 'bg-gray-100 text-gray-800' }}">
+                                            {{ $setupLabel }}
                                         </span>
                                     </div>
                                 </div>
                             </div>
                             
                             <div class="bg-gray-50 rounded-lg p-4 space-y-4">
-                                @if($isEnabledNotMxscan)
-                                    {{-- Scenario: DMARC exists but not sending to MXScan - Smart Update --}}
+                                @if($needsRuaLink)
+                                    {{-- Scenario: DMARC exists but needs MXScan connect/relink - Smart Update --}}
                                     @if($domain->dmarc_update)
                                         <div class="space-y-3">
                                             <div>
@@ -352,13 +363,16 @@
                                                 <p class="text-xs text-gray-500 mb-1"><span class="text-green-600 font-medium">✓ Updated Record</span> — Replace with this:</p>
                                                 <div class="flex items-start gap-2" x-data="{ copied: false }">
                                                     <code class="flex-1 block px-3 py-2 bg-green-50 border border-green-200 rounded-lg text-xs font-mono text-gray-800 break-all">{{ $domain->dmarc_update['updated'] }}</code>
-                                                    <button @click="navigator.clipboard.writeText('{{ $domain->dmarc_update['updated'] }}'); copied = true; setTimeout(() => copied = false, 2000)"
+                                                    <button @click="navigator.clipboard.writeText(@js($domain->dmarc_update['updated'])); copied = true; setTimeout(() => copied = false, 2000)"
                                                             class="flex-shrink-0 px-4 py-2 text-sm font-medium text-white bg-green-600 hover:bg-green-700 rounded-lg transition-colors">
-                                                        <span x-show="!copied">Copy</span>
+                                                        <span x-show="!copied">{{ $status['rua_link_cta'] ?? 'Copy' }}</span>
                                                         <span x-show="copied" x-cloak>Copied!</span>
                                                     </button>
                                                 </div>
                                             </div>
+                                            @if(($domain->dmarc_update['action'] ?? '') === 'relink_rua')
+                                                <p class="text-xs text-gray-500">Removes stale MXScan destinations, keeps external recipients, and sets exactly one canonical MXScan RUA.</p>
+                                            @endif
                                         </div>
                                     @else
                                         <div>
@@ -367,7 +381,7 @@
                                                 <code class="flex-1 block px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm font-mono text-gray-800 break-all">mailto:{{ $domain->dmarc_rua_email }}</code>
                                                 <button @click="navigator.clipboard.writeText('mailto:{{ $domain->dmarc_rua_email }}'); copied = true; setTimeout(() => copied = false, 2000)"
                                                         class="flex-shrink-0 px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors">
-                                                    <span x-show="!copied">Copy</span>
+                                                    <span x-show="!copied">{{ $status['rua_link_cta'] ?? 'Copy' }}</span>
                                                     <span x-show="copied" x-cloak>Copied!</span>
                                                 </button>
                                             </div>

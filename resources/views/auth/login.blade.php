@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
-    <title>{{ config('app.name', 'Laravel') }} - Login</title>
+    <title>{{ config('app.name', 'MXScan') }} - Login</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
 </head>
@@ -16,7 +16,7 @@
                     <i data-lucide="shield-check" class="h-8 w-8 text-white"></i>
                 </div>
                 <h2 class="mt-6 text-center text-3xl font-extrabold text-gray-900">
-                    Sign in to your account
+                    Sign in to MXScan
                 </h2>
                 <p class="mt-2 text-center text-sm text-gray-600">
                     Or

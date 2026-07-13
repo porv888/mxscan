@@ -196,6 +196,10 @@
                                     </p>
                                     @elseif($dmarcStatus && ($dmarcStatus['status'] ?? '') === \App\Services\Dmarc\DmarcStatusService::STATUS_ENABLED_MXSCAN_WAITING)
                                     <p class="text-xs text-blue-600 mt-1">DMARC configured — awaiting reports</p>
+                                    @elseif($dmarcStatus && ($dmarcStatus['rua_link_state'] ?? '') === \App\Services\Dmarc\DmarcStatusService::RUA_LINK_DETECTED_UNLINKED)
+                                    <a href="{{ route('dmarc.show', $domain) }}" class="text-xs text-amber-600 hover:text-amber-700 mt-1 inline-block">{{ $dmarcStatus['rua_link_label'] }}</a>
+                                    @elseif($dmarcStatus && ($dmarcStatus['has_rua'] ?? false) && ($dmarcStatus['rua_link_state'] ?? '') === \App\Services\Dmarc\DmarcStatusService::RUA_LINK_NOT_CONNECTED)
+                                    <a href="{{ route('dmarc.show', $domain) }}" class="text-xs text-amber-600 hover:text-amber-700 mt-1 inline-block">{{ $dmarcStatus['rua_link_label'] }}</a>
                                     @else
                                     <a href="{{ route('dmarc.show', $domain) }}" class="text-xs text-gray-500 hover:text-blue-600 mt-1 inline-block">DMARC reporting not configured</a>
                                     @endif

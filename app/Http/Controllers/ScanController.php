@@ -292,28 +292,48 @@ class ScanController extends Controller
      */
     public function status(Scan $scan)
     {
-        // Only allow owner
         if ($scan->user_id !== Auth::id()) {
             abort(403, 'Unauthorized access to scan.');
         }
 
+        $progress = (int) ($scan->progress_pct ?? 0);
+        $status = $scan->status;
+
+        $stage = match (true) {
+            $status === 'queued' => 'queued',
+            $status === 'failed' => 'failed',
+            $status === 'finished' => 'completed',
+            $status === 'running' && $progress >= 90 => 'preparing_report',
+            $status === 'running' => 'scanning',
+            default => 'scanning',
+        };
+
         $messages = [
-            0   => 'Queued...',
-            10  => 'Checking MX records...',
-            30  => 'Checking SPF record...',
-            50  => 'Checking DMARC policy...',
-            70  => 'Checking TLS-RPT...',
-            90  => 'Checking MTA-STS...',
-            100 => 'Scan complete!',
+            'queued' => 'Queued — waiting to start',
+            'scanning' => 'Scanning DNS, SPF, and blacklist checks',
+            'preparing_report' => 'Preparing your report',
+            'completed' => 'Scan complete',
+            'failed' => 'Scan failed',
         ];
 
-        $message = $messages[$scan->progress_pct] ?? 'Scanning...';
+        $userError = null;
+        if ($status === 'failed') {
+            $result = $scan->result_json;
+            if (is_string($result)) {
+                $result = json_decode($result, true) ?? [];
+            }
+            $userError = is_array($result) ? ($result['user_error'] ?? 'The scan could not be completed. Please try again.') : 'The scan could not be completed. Please try again.';
+        }
 
         return response()->json([
-            'status' => $scan->status,
-            'progress' => $scan->progress_pct,
+            'status' => $status,
+            'stage' => $stage,
+            'progress' => $progress,
             'score' => $scan->score,
-            'message' => $message,
+            'message' => $userError ?? ($messages[$stage] ?? 'Scanning...'),
+            'domain' => $scan->domain?->domain,
+            'report_url' => route('reports.show', $scan),
+            'retry_url' => $scan->domain ? route('domains.scan.now', $scan->domain) : null,
         ]);
     }
 

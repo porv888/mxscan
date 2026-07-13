@@ -1,7 +1,7 @@
 @if(!empty($scoreDeductions))
 <div class="mt-4 rounded-lg border border-amber-200 bg-amber-50/50 dark:border-amber-800 dark:bg-amber-900/10 p-3">
-    <h4 class="text-sm font-semibold text-gray-900 dark:text-gray-100">Score breakdown</h4>
-    <p class="text-xs text-gray-600 dark:text-gray-400 mt-0.5">Points not earned toward 100</p>
+    <h4 class="text-sm font-semibold text-gray-900 dark:text-gray-100">Email Security Score breakdown</h4>
+    <p class="text-xs text-gray-600 dark:text-gray-400 mt-0.5">Points not earned toward authentication and transport-security configuration (100)</p>
     <ul class="mt-3 space-y-2">
         @foreach($scoreDeductions as $row)
         @php
@@ -28,7 +28,7 @@
     </ul>
     @if(collect($scoreBreakdown)->sum('earned') < 100)
     <p class="text-xs text-gray-500 mt-3">
-        Earned {{ collect($scoreBreakdown)->sum('earned') }} of 100 possible DNS points (capped at 100).
+        Earned {{ collect($scoreBreakdown)->sum('earned') }} of 100 possible Email Security Score points (capped at 100). Historical scans may use an older scoring model.
     </p>
     @endif
 </div>

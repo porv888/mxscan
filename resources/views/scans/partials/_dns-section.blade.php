@@ -192,12 +192,13 @@
                     <svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
                         <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path>
                     </svg>
-                    {{ count($dkimData['data']) }} selector{{ count($dkimData['data']) > 1 ? 's' : '' }} found
+                    {{ ($statusCards['dkim']['status'] ?? (count($dkimData['data']) . ' DKIM selector' . (count($dkimData['data']) > 1 ? 's' : '') . ' discovered')) }}
                 </span>
                 @endif
             </div>
             @if($dkimData && $dkimData['status'] === 'found')
             <div class="min-w-0 overflow-hidden bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-3 space-y-2">
+                <p class="text-xs text-green-800 dark:text-green-200">{{ $statusCards['dkim']['explanation'] ?? 'This confirms published DNS keys only. Live signing and alignment require DMARC report or email-header evidence.' }}</p>
                 @foreach($dkimData['data'] as $dkim)
                 <div>
                     <div class="flex items-center gap-2 mb-1">
@@ -214,10 +215,10 @@
                     <svg class="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
                         <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>
                     </svg>
-                    No DKIM selectors detected (checked {{ count(config('dkim.selectors', [])) }} common selectors)
+                    No DKIM selectors discovered (checked {{ count(config('dkim.selectors', [])) }} common selectors)
                 </div>
-                <p class="text-xs text-amber-600 dark:text-amber-400 mt-1 ml-6">Enable DKIM signing in your email provider settings. If using a custom selector, it may not be in our probe list.</p>
-                <p class="text-xs text-amber-700 dark:text-amber-300 mt-2 ml-6">This lowers inbox trust and makes DMARC protection weaker.</p>
+                <p class="text-xs text-amber-600 dark:text-amber-400 mt-1 ml-6">Publish DKIM DNS selectors with your email provider. This confirms DNS keys only — not live signing or alignment.</p>
+                <p class="text-xs text-amber-700 dark:text-amber-300 mt-2 ml-6">Missing DKIM DNS configuration weakens DMARC authentication.</p>
             </div>
             @endif
         </div>
@@ -288,7 +289,7 @@
                     @if($dmarcStatus['status'] === 'active')
                         <span class="w-1.5 h-1.5 rounded-full bg-green-500 mr-1 animate-pulse"></span>
                     @endif
-                    {{ $dmarcStatus['label'] }}
+                    {{ ($dmarcStatus['has_rua'] ?? false) ? ($dmarcStatus['rua_link_label'] ?? $dmarcStatus['label']) : $dmarcStatus['label'] }}
                 </span>
             </div>
             <div class="min-w-0 overflow-hidden border rounded-lg p-3 {{ $borderClasses }}">
@@ -301,6 +302,16 @@
                         @endif
                         <a href="{{ route('dmarc.show', $domain) }}" class="text-xs font-medium text-blue-600 dark:text-blue-400 hover:underline">
                             Open DMARC Activity →
+                        </a>
+                    @elseif(($dmarcStatus['rua_link_state'] ?? '') === \App\Services\Dmarc\DmarcStatusService::RUA_LINK_DETECTED_UNLINKED)
+                        <span class="text-xs text-gray-600 dark:text-gray-400">{{ $dmarcStatus['rua_link_label'] }}</span>
+                        <a href="{{ route('dmarc.show', $domain) }}" class="text-xs font-medium text-blue-600 dark:text-blue-400 hover:underline">
+                            {{ $dmarcStatus['rua_link_cta'] ?? 'Relink' }} →
+                        </a>
+                    @elseif(($dmarcStatus['rua_link_state'] ?? '') === \App\Services\Dmarc\DmarcStatusService::RUA_LINK_NOT_CONNECTED && ($dmarcStatus['has_rua'] ?? false))
+                        <span class="text-xs text-gray-600 dark:text-gray-400">{{ $dmarcStatus['rua_link_label'] }}</span>
+                        <a href="{{ route('dmarc.show', $domain) }}" class="text-xs font-medium text-blue-600 dark:text-blue-400 hover:underline">
+                            {{ $dmarcStatus['rua_link_cta'] ?? 'Connect' }} →
                         </a>
                     @else
                         <span class="text-xs text-gray-600 dark:text-gray-400">Add MXScan RUA to receive reports</span>

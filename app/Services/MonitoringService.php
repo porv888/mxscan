@@ -378,6 +378,36 @@ class MonitoringService
      */
     protected function createIncident(Domain $domain, string $kind, string $severity, string $message, array $context = []): void
     {
+        $field = $context['field'] ?? null;
+
+        $existingQuery = Incident::query()
+            ->where('domain_id', $domain->id)
+            ->where('type', $kind)
+            ->whereNull('resolved_at');
+
+        if ($field !== null) {
+            $existingQuery->where('meta->field', $field);
+        } else {
+            $existingQuery->where('message', $message);
+        }
+
+        $existing = $existingQuery->latest('occurred_at')->first();
+        if ($existing) {
+            $existing->update([
+                'occurred_at' => now(),
+                'severity' => $severity,
+                'meta' => $context,
+            ]);
+
+            Log::info('Incident deduplicated (updated existing open incident)', [
+                'domain' => $domain->domain,
+                'incident_id' => $existing->id,
+                'type' => $kind,
+            ]);
+
+            return;
+        }
+
         $incident = Incident::create([
             'domain_id' => $domain->id,
             'type' => $kind,

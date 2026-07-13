@@ -4,10 +4,7 @@ namespace App\Console\Commands;
 
 use Illuminate\Console\Command;
 use App\Models\Schedule;
-use App\Jobs\RunScan;
-use App\Services\BlacklistChecker;
 use App\Services\ScanRunner;
-use App\Models\Scan;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Arr;
 

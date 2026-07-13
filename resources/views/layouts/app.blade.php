@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
-    <title>{{ config('app.name', 'Laravel') }} - Email Security Dashboard</title>
+    <title>{{ config('app.name', 'MXScan') }} - MXScan</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
     <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
@@ -50,7 +50,7 @@
             <div class="flex items-center justify-between px-4 pt-5 pb-4 border-b border-gray-200">
                 <div class="flex items-center">
                     <i data-lucide="shield-check" class="h-8 w-8 text-blue-600"></i>
-                    <h1 class="ml-3 text-xl font-bold text-gray-900">EmailSec</h1>
+                    <h1 class="ml-3 text-xl font-bold text-gray-900">MXScan</h1>
                 </div>
                 <button @click="sidebarOpen = false" class="p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100">
                     <i data-lucide="x" class="h-6 w-6"></i>
@@ -117,7 +117,7 @@
                                 <i data-lucide="shield-check" class="h-8 w-8 text-blue-600"></i>
                             </div>
                             <div class="ml-3">
-                                <h1 class="text-xl font-bold text-gray-900">EmailSec</h1>
+                                <h1 class="text-xl font-bold text-gray-900">MXScan</h1>
                             </div>
                         </div>
                     </div>

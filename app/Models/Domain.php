@@ -401,37 +401,49 @@ class Domain extends Model
     }
 
     /**
-     * Check if the MXScan RUA address is configured in the domain's DMARC DNS record.
+     * Check if the canonical MXScan RUA address is configured in the domain's DMARC DNS record.
      */
     public function isDmarcRuaConfigured(): bool
     {
-        $latestScan = $this->scans()->where('status', 'completed')->latest()->first();
-        
-        if (!$latestScan || !isset($latestScan->facts_json['dmarc'])) {
-            return false;
-        }
-        
-        $dmarcRecord = $latestScan->facts_json['dmarc'];
+        $dmarcRecord = $this->dmarc_record;
         if (!$dmarcRecord) {
             return false;
         }
-        
-        // Check if our RUA address is in the DMARC record
-        return str_contains(strtolower($dmarcRecord), strtolower($this->dmarc_rua_email));
+
+        $classification = app(\App\Services\Dmarc\DmarcRuaClassifier::class)
+            ->classify($dmarcRecord, $this->dmarc_rua_email);
+
+        return $classification['has_canonical_mxscan_rua'];
     }
 
     /**
-     * Get the current DMARC record from DNS (from latest scan).
+     * Get the current DMARC record from DNS (from latest finished/completed scan).
      */
     public function getDmarcRecordAttribute(): ?string
     {
-        $latestScan = $this->scans()->where('status', 'completed')->latest()->first();
-        
-        if (!$latestScan || !isset($latestScan->facts_json['dmarc'])) {
+        $latestScan = $this->scans()
+            ->whereIn('status', ['finished', 'completed'])
+            ->latest()
+            ->first();
+
+        if (!$latestScan) {
             return null;
         }
-        
-        return $latestScan->facts_json['dmarc'];
+
+        $factsJson = $latestScan->facts_json;
+        if (is_array($factsJson) && !empty($factsJson['dmarc'])) {
+            return $factsJson['dmarc'];
+        }
+
+        $resultJson = $latestScan->result_json;
+        if (is_array($resultJson)) {
+            $dmarcData = $resultJson['dns']['records']['DMARC'] ?? $resultJson['DMARC'] ?? null;
+            if ($dmarcData && isset($dmarcData['data']) && ($dmarcData['status'] ?? null) === 'found') {
+                return $dmarcData['data'];
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -460,8 +472,8 @@ class Domain extends Model
             return self::DMARC_STATE_ACTIVE;
         }
 
-        // State B: DNS_CONFIRMED_WAITING - RUA verified but no reports yet
-        if ($this->dmarc_rua_verified_at || $this->isDmarcRuaConfigured()) {
+        // State B: DNS_CONFIRMED_WAITING - canonical RUA present in record (do not trust verified_at alone)
+        if ($this->isDmarcRuaConfigured()) {
             return self::DMARC_STATE_DNS_CONFIRMED_WAITING;
         }
 
@@ -474,8 +486,11 @@ class Domain extends Model
      */
     public function hasDmarcRecord(): bool
     {
-        $latestScan = $this->scans()->where('status', 'finished')->latest()->first();
-        
+        $latestScan = $this->scans()
+            ->whereIn('status', ['finished', 'completed'])
+            ->latest()
+            ->first();
+
         if (!$latestScan) {
             return false;
         }
@@ -494,7 +509,7 @@ class Domain extends Model
                 return true;
             }
         }
-        
+
         return false;
     }
 
@@ -538,24 +553,24 @@ class Domain extends Model
         try {
             $dmarcRecords = dns_get_record("_dmarc.{$this->domain}", DNS_TXT);
             $dmarcRecord = !empty($dmarcRecords) ? $dmarcRecords[0]['txt'] ?? null : null;
-            
+
             if (!$dmarcRecord) {
-                // No DMARC record found
                 if ($this->dmarc_rua_verified_at) {
                     $this->update(['dmarc_rua_verified_at' => null]);
                 }
                 return false;
             }
-            
-            // Check if our RUA address is in the DMARC record
-            $isConfigured = str_contains(strtolower($dmarcRecord), strtolower($this->dmarc_rua_email));
-            
+
+            $classification = app(\App\Services\Dmarc\DmarcRuaClassifier::class)
+                ->classify($dmarcRecord, $this->dmarc_rua_email);
+            $isConfigured = $classification['has_canonical_mxscan_rua'];
+
             if ($isConfigured && !$this->dmarc_rua_verified_at) {
                 $this->update(['dmarc_rua_verified_at' => now()]);
             } elseif (!$isConfigured && $this->dmarc_rua_verified_at) {
                 $this->update(['dmarc_rua_verified_at' => null]);
             }
-            
+
             return $isConfigured;
         } catch (\Exception $e) {
             \Illuminate\Support\Facades\Log::warning('DMARC DNS check failed', [

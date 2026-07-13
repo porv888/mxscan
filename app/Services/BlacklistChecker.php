@@ -253,7 +253,7 @@ class BlacklistChecker
             'providers_checked' => $results->pluck('provider')->unique()->count(),
         ];
 
-        $summary['is_clean'] = $summary['listed_count'] === 0;
+        $summary['is_clean'] = $summary['total_checks'] > 0 && $summary['listed_count'] === 0;
         
         return $summary;
     }

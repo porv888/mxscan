@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Concerns;
 
 use App\Models\Scan;
 use App\Services\Dmarc\DmarcStatusService;
+use App\Services\ScanReport\ScanRecommendationService;
+use App\Services\ScanReport\ScanReportStatusMapper;
 use App\Services\ScanTrendService;
 use App\Services\ScoreBreakdownService;
 
@@ -16,6 +18,49 @@ trait PreparesScanReport
     {
         $scan->load(['domain', 'blacklistResults']);
         $domain = $scan->domain->fresh();
+
+        if (in_array($scan->status, ['queued', 'running', 'failed'], true)) {
+            return [
+                'scan' => $scan,
+                'domain' => $domain,
+                'enabled' => ['dns' => false, 'spf' => false, 'blacklist' => false, 'delivery' => false],
+                'isBlacklistOnly' => false,
+                'hasDns' => false,
+                'hasSpf' => false,
+                'hasBlacklist' => false,
+                'snapshot' => null,
+                'lastSnapshot' => null,
+                'scoreDelta' => null,
+                'score' => null,
+                'resultData' => [],
+                'records' => [],
+                'spfLookupCount' => null,
+                'spfMax' => 10,
+                'spfSuggestion' => null,
+                'dmarcPolicy' => null,
+                'dmarcAligned' => null,
+                'tlsrptOk' => false,
+                'mtastsOk' => false,
+                'bimiHasData' => false,
+                'bimiOk' => false,
+                'blacklistHits' => 0,
+                'blacklistTotal' => 0,
+                'blacklistRows' => collect(),
+                'domainDays' => null,
+                'sslDays' => null,
+                'incidents' => collect(),
+                'deliveries' => collect(),
+                'cadence' => 'off',
+                'dmarcStatus' => null,
+                'scoreBreakdown' => [],
+                'scoreDeductions' => [],
+                'scoreTrend' => ['labels' => [], 'scores' => []],
+                'statusCards' => [],
+                'recommendations' => [],
+                'allClear' => ['state' => 'needs_fixes', 'message' => null],
+                'isFirstFinishedScan' => false,
+            ];
+        }
 
         $enabled = [
             'dns' => $scan->hasDnsResults(),
@@ -45,21 +90,31 @@ trait PreparesScanReport
             $resultData = json_decode($resultData, true) ?? [];
         }
         $records = $resultData['dns']['records'] ?? $resultData ?? [];
+        if (!is_array($records)) {
+            $records = [];
+        }
 
         $spfInfo = $resultData['spf'] ?? null;
-        $spfLookupCount = $spfInfo['lookups'] ?? $domain->spf_lookup_count ?? null;
+        // Do not fall back to domain.spf_lookup_count when SPF is missing on this scan.
+        $spfMissing = (($records['SPF']['status'] ?? null) !== 'found');
+        $spfLookupCount = null;
+        if (!$spfMissing && is_array($spfInfo) && array_key_exists('lookups', $spfInfo)) {
+            $spfLookupCount = $spfInfo['lookups'];
+        }
         $spfMax = 10;
-        $spfSuggestion = $spfInfo['flattened'] ?? null;
+        $spfSuggestion = is_array($spfInfo) ? ($spfInfo['flattened'] ?? null) : null;
 
         $dmarcData = $records['DMARC'] ?? null;
         $dmarcPolicy = null;
         $dmarcAligned = null;
         if ($dmarcData && ($dmarcData['status'] ?? '') === 'found') {
             $dmarcRecord = $dmarcData['data'];
-            if (preg_match('/p=([^;]+)/', $dmarcRecord, $matches)) {
+            if (is_string($dmarcRecord) && preg_match('/p=([^;]+)/', $dmarcRecord, $matches)) {
                 $dmarcPolicy = $matches[1];
             }
-            $dmarcAligned = (str_contains($dmarcRecord, 'aspf=') || str_contains($dmarcRecord, 'adkim='));
+            if (is_string($dmarcRecord)) {
+                $dmarcAligned = (str_contains($dmarcRecord, 'aspf=') || str_contains($dmarcRecord, 'adkim='));
+            }
         }
 
         $tlsrptOk = isset($records['TLS-RPT']) && $records['TLS-RPT']['status'] === 'found';
@@ -67,9 +122,9 @@ trait PreparesScanReport
         $bimiHasData = isset($records['BIMI']);
         $bimiOk = isset($records['BIMI']) && ($records['BIMI']['status'] ?? '') === 'found';
 
-        $blacklistData = $resultData['blacklist'] ?? [];
-        $blacklistHits = $blacklistData['listed_count'] ?? 0;
-        $blacklistTotal = $blacklistData['total_checks'] ?? 0;
+        $blacklistData = $resultData['blacklist'] ?? null;
+        $blacklistHits = is_array($blacklistData) ? (int) ($blacklistData['listed_count'] ?? 0) : 0;
+        $blacklistTotal = is_array($blacklistData) ? (int) ($blacklistData['total_checks'] ?? 0) : 0;
         $blacklistRows = $scan->blacklistResults;
 
         $domainDays = $domain->getDaysUntilDomainExpiry();
@@ -95,8 +150,20 @@ trait PreparesScanReport
 
         $breakdownService = app(ScoreBreakdownService::class);
         $scoreBreakdown = $resultData['dns']['score_breakdown']
-            ?? $breakdownService->buildFromDnsRecords(is_array($records) ? $records : []);
+            ?? $breakdownService->buildFromDnsRecords($records);
         $scoreDeductions = $breakdownService->deductions($scoreBreakdown);
+
+        $mapper = app(ScanReportStatusMapper::class);
+        $recommendationService = app(ScanRecommendationService::class);
+
+        $statusCards = $mapper->buildStatusCards(
+            $resultData,
+            $records,
+            $scan->score
+        );
+
+        $recommendations = $recommendationService->build($domain, $resultData, $records);
+        $allClear = $recommendationService->evaluateAllClear($resultData, $records);
 
         $includeIncidentTrend = auth()->user()->canUseMonitoring();
         $scoreTrend = app(ScanTrendService::class)->getDomainTrend(
@@ -104,6 +171,14 @@ trait PreparesScanReport
             30,
             $includeIncidentTrend
         );
+
+        $score = $scan->score;
+
+        $finishedCount = Scan::query()
+            ->where('domain_id', $domain->id)
+            ->where('status', 'finished')
+            ->count();
+        $isFirstFinishedScan = $scan->status === 'finished' && $finishedCount <= 1;
 
         return compact(
             'scan',
@@ -116,6 +191,7 @@ trait PreparesScanReport
             'snapshot',
             'lastSnapshot',
             'scoreDelta',
+            'score',
             'resultData',
             'records',
             'spfLookupCount',
@@ -139,6 +215,10 @@ trait PreparesScanReport
             'scoreBreakdown',
             'scoreDeductions',
             'scoreTrend',
+            'statusCards',
+            'recommendations',
+            'allClear',
+            'isFirstFinishedScan',
         );
     }
 }

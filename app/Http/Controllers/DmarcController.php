@@ -54,8 +54,14 @@ class DmarcController extends Controller
             $status = $this->statusService->getStatus($domain);
             $domain->dmarc_setup_status = $status; // Attach for view use
             
-            // For domains with existing DMARC, get the smart update suggestion
-            if ($status['status'] === DmarcStatusService::STATUS_ENABLED_NOT_MXSCAN) {
+            // For domains needing an MXScan RUA connect/relink, get the smart update suggestion
+            if (
+                $status['has_dmarc_record']
+                && in_array($status['rua_link_state'], [
+                    DmarcStatusService::RUA_LINK_DETECTED_UNLINKED,
+                    DmarcStatusService::RUA_LINK_NOT_CONNECTED,
+                ], true)
+            ) {
                 $domain->dmarc_update = $this->statusService->getUpdatedDmarcRecord($domain);
             }
             
@@ -135,9 +141,15 @@ class DmarcController extends Controller
         // Get unified DMARC setup status
         $dmarcStatus = $this->statusService->getStatus($domain);
         
-        // Get updated DMARC record suggestion for domains with existing DMARC
+        // Get updated DMARC record suggestion when MXScan reporting needs connect/relink
         $dmarcUpdate = null;
-        if ($dmarcStatus['status'] === 'enabled_not_mxscan') {
+        if (
+            $dmarcStatus['has_dmarc_record']
+            && in_array($dmarcStatus['rua_link_state'], [
+                DmarcStatusService::RUA_LINK_DETECTED_UNLINKED,
+                DmarcStatusService::RUA_LINK_NOT_CONNECTED,
+            ], true)
+        ) {
             $dmarcUpdate = $this->statusService->getUpdatedDmarcRecord($domain);
         }
 
@@ -324,6 +336,11 @@ class DmarcController extends Controller
                 'message' => $dnsResult['message'],
                 'dmarc_record' => $dnsResult['dmarc_record'],
                 'checklist' => $status['checklist'],
+                'rua_link_state' => $status['rua_link_state'],
+                'rua_link_label' => $status['rua_link_label'],
+                'rua_link_cta' => $status['rua_link_cta'],
+                'has_any_mxscan_rua' => $status['has_any_mxscan_rua'],
+                'has_canonical_mxscan_rua' => $status['has_canonical_mxscan_rua'],
             ]);
         }
 

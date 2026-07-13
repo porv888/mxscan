@@ -5,7 +5,10 @@ namespace App\Http\Controllers;
 use App\Models\Domain;
 use App\Models\Schedule;
 use App\Models\DeliveryMonitor;
+use App\Models\Scan;
+use App\Jobs\RunFullScan;
 use App\Rules\WithinDomainLimit;
+use App\Support\DomainNormalizer;
 use App\Services\Dmarc\DmarcAnalyticsService;
 use App\Services\Dmarc\DmarcStatusService;
 use App\Services\Expiry\ExpiryCoordinator;
@@ -55,6 +58,11 @@ class DomainController extends Controller
      */
     public function store(Request $request)
     {
+        $normalized = DomainNormalizer::normalize((string) $request->input('domain', ''));
+        if ($normalized !== null) {
+            $request->merge(['domain' => $normalized]);
+        }
+
         $validated = $request->validate([
             'domain' => [
                 'required',
@@ -66,66 +74,66 @@ class DomainController extends Controller
                 }),
                 new WithinDomainLimit($request->user())
             ],
-            'environment' => 'required|in:prod,dev',
-            'services' => ['array'],
+            'environment' => 'nullable|in:prod,dev',
+            'services' => ['nullable', 'array'],
             'services.*' => ['string'],
-            'schedule' => ['nullable', 'string'], // "off" or "daily@09:00" / "weekly@09:00"
+            'schedule' => ['nullable', 'string'],
         ], [
             'domain.required' => 'Domain name is required.',
             'domain.regex' => 'Please enter a valid domain name (e.g., example.com).',
             'domain.unique' => 'You have already added this domain.',
-            'environment.required' => 'Environment selection is required.',
             'environment.in' => 'Environment must be either Production or Development.'
         ]);
 
-        // Guess provider based on domain
+        if ($normalized === null) {
+            return redirect()->back()
+                ->withInput()
+                ->withErrors(['domain' => 'Please enter a valid domain name (e.g., example.com).']);
+        }
+
         $providerGuess = $this->guessProvider($validated['domain']);
         $user = $request->user();
+        $environment = $validated['environment'] ?? 'prod';
 
         try {
             $domain = Domain::create([
                 'user_id' => $user->id,
                 'domain' => strtolower($validated['domain']),
-                'environment' => $validated['environment'],
+                'environment' => $environment,
                 'provider_guess' => $providerGuess,
                 'status' => 'active',
             ]);
 
-            // Normalize service selections
             $selected = collect($validated['services'] ?? []);
-            $enabledServices = $selected->values()->unique()->intersect(['dns', 'blacklist', 'spf', 'delivery'])->all();
-            
-            // Default to dns, spf, blacklist if nothing selected
+            $enabledServices = $selected->values()->unique()->intersect([
+                'dns', 'blacklist', 'spf', 'delivery', 'domain_expiry', 'ssl_expiry',
+            ])->values()->all();
+
             if (empty($enabledServices)) {
-                $enabledServices = ['dns', 'spf', 'blacklist'];
+                $enabledServices = ['dns', 'spf', 'blacklist', 'domain_expiry', 'ssl_expiry'];
             }
 
-            // Parse cadence
             $cadRaw = $validated['schedule'] ?? 'off';
             [$cadence, $at] = str_contains($cadRaw, '@') ? explode('@', $cadRaw, 2) : [$cadRaw, null];
             $cadence = in_array($cadence, ['off', 'daily', 'weekly'], true) ? $cadence : 'off';
             $runAt = $at && preg_match('/^\d{2}:\d{2}$/', $at) ? $at . ':00' : null;
 
-            // Persist schedule using existing schedules table
-            // Note: we keep scan_type='both' to reuse current runner; granular services live in settings JSON
             Schedule::create([
                 'domain_id' => $domain->id,
                 'user_id' => $user->id,
-                'scan_type' => 'both', // do not change enum, reuse it
-                'frequency' => $cadence === 'off' ? 'daily' : $cadence, // daily/weekly required by enum
+                'scan_type' => 'both',
+                'frequency' => $cadence === 'off' ? 'daily' : $cadence,
                 'cron_expression' => null,
                 'status' => $cadence === 'off' ? 'paused' : 'active',
-                'next_run_at' => null, // let existing scheduler compute this if you have logic
+                'next_run_at' => null,
                 'last_run_at' => null,
                 'settings' => [
-                    'services' => $enabledServices, // <-- the important bit
-                    'run_at' => $runAt, // optional HH:MM:SS
+                    'services' => $enabledServices,
+                    'run_at' => $runAt,
                 ],
             ]);
 
-            // If Delivery Monitor was enabled, create one monitor row
             if (in_array('delivery', $enabledServices, true)) {
-                // Generate unique token/address
                 $token = Str::uuid()->toString();
                 $local = 'monitor+' . $token;
                 $addr = $local . '@mxscan.me';
@@ -142,17 +150,41 @@ class DomainController extends Controller
                 ]);
             }
 
-            return redirect()->route('dashboard.domains')
-                            ->with('success', 'Domain added successfully! You can now run a security scan.');
+            $scan = Scan::create([
+                'domain_id' => $domain->id,
+                'user_id' => $user->id,
+                'type' => 'full',
+                'status' => 'queued',
+                'progress_pct' => 0,
+            ]);
+
+            $scanOptions = [
+                'dns' => in_array('dns', $enabledServices, true),
+                'spf' => in_array('spf', $enabledServices, true),
+                'blacklist' => in_array('blacklist', $enabledServices, true),
+                'monitoring' => true,
+                'scan_id' => $scan->id,
+            ];
+            if (!$scanOptions['dns'] && !$scanOptions['spf'] && !$scanOptions['blacklist']) {
+                $scanOptions['dns'] = true;
+                $scanOptions['spf'] = true;
+                $scanOptions['blacklist'] = true;
+            }
+
+            RunFullScan::dispatch($domain->id, $scanOptions);
+
+            return redirect()->route('reports.show', $scan)
+                ->with('toast', [
+                    'type' => 'success',
+                    'text' => 'Domain added. Your first scan is starting.',
+                ]);
         } catch (\Illuminate\Database\QueryException $e) {
-            // Handle any database constraint violations that slip through validation
-            if ($e->errorInfo[1] == 1062) { // Duplicate entry error
+            if ($e->errorInfo[1] == 1062) {
                 return redirect()->back()
                                 ->withInput()
                                 ->withErrors(['domain' => 'You have already added this domain.']);
             }
-            
-            // Re-throw other database errors
+
             throw $e;
         }
     }

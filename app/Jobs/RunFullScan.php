@@ -7,6 +7,8 @@ use App\Models\Scan;
 use App\Services\ScannerService;
 use App\Services\Spf\SpfResolver;
 use App\Services\BlacklistChecker;
+use App\Services\ScanReport\ScanFinalizer;
+use App\Services\ScanReport\ScanRecommendationService;
 use App\Events\ScanProgressed;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -22,7 +24,7 @@ class RunFullScan implements ShouldQueue
 
     public function __construct(
         public int $domainId,
-        public array $options = [] // e.g. ['dns' => true, 'spf' => true, 'blacklist' => true]
+        public array $options = [] // e.g. ['dns' => true, 'spf' => true, 'blacklist' => true, 'monitoring' => true, 'scan_id' => uuid]
     ) {}
 
     public function handle(): void
@@ -30,18 +32,35 @@ class RunFullScan implements ShouldQueue
         $domain = Domain::findOrFail($this->domainId);
         $results = [];
         $startTime = microtime(true);
-        $scan = Scan::create([
-            'domain_id' => $domain->id,
-            'user_id' => $domain->user_id,
-            'type' => $this->determineScanType(),
-            'status' => 'running',
-            'progress_pct' => 0,
-            'started_at' => now(),
-        ]);
+        $scanType = $this->determineScanType();
+
+        $scanId = $this->options['scan_id'] ?? null;
+        if ($scanId) {
+            $scan = Scan::query()
+                ->where('id', $scanId)
+                ->where('domain_id', $domain->id)
+                ->firstOrFail();
+            $scan->update([
+                'status' => 'running',
+                'type' => $scanType,
+                'progress_pct' => 0,
+                'started_at' => now(),
+            ]);
+        } else {
+            $scan = Scan::create([
+                'domain_id' => $domain->id,
+                'user_id' => $domain->user_id,
+                'type' => $scanType,
+                'status' => 'running',
+                'progress_pct' => 0,
+                'started_at' => now(),
+            ]);
+        }
 
         Log::info('Starting full scan', [
             'domain_id' => $domain->id,
             'domain' => $domain->domain,
+            'scan_id' => $scan->id,
             'options' => $this->options
         ]);
 
@@ -67,12 +86,7 @@ class RunFullScan implements ShouldQueue
                 $spfResolver = app(SpfResolver::class);
                 $spfResult = $spfResolver->resolve($domain->domain);
                 
-                $results['spf'] = [
-                    'record' => $spfResult->currentRecord,
-                    'lookups' => $spfResult->lookupsUsed,
-                    'flattened' => $spfResult->flattenedSpf,
-                    'status' => $spfResult->lookupsUsed >= 10 ? 'error' : ($spfResult->lookupsUsed >= 9 ? 'warning' : 'safe')
-                ];
+                $results['spf'] = $this->buildSpfResultPayload($spfResult);
                 
                 event(new ScanProgressed($domain->id, 'spf_done', $results['spf']));
                 $scan->update(['progress_pct' => 66]);
@@ -83,7 +97,7 @@ class RunFullScan implements ShouldQueue
                 Log::info('Running blacklist check', ['domain' => $domain->domain]);
 
                 $blacklistChecker = app(BlacklistChecker::class);
-                $blacklistResults = $blacklistChecker->checkDomain($scan, $domain->domain);
+                $blacklistChecker->checkDomain($scan, $domain->domain);
                 $blacklistSummary = $blacklistChecker->getScanSummary($scan);
 
                 $results['blacklist'] = $blacklistSummary;
@@ -92,7 +106,7 @@ class RunFullScan implements ShouldQueue
                 
                 // Update domain with blacklist results
                 $domain->update([
-                    'blacklist_status' => $blacklistSummary['is_clean'] ? 'clean' : 'listed',
+                    'blacklist_status' => $this->blacklistStatusLabel($blacklistSummary),
                     'blacklist_count' => $blacklistSummary['listed_count'] ?? 0,
                 ]);
             }
@@ -101,12 +115,7 @@ class RunFullScan implements ShouldQueue
             $report = $this->buildReport($domain, $results);
             event(new ScanProgressed($domain->id, 'complete', $report));
 
-            $recommendations = $results['dns']['recommendations'] ?? [];
-            if (($results['spf']['lookups'] ?? 0) >= 10) {
-                $recommendations[] = 'SPF record exceeds 10 DNS lookups limit. Consider flattening your SPF record.';
-            } elseif (($results['spf']['lookups'] ?? 0) >= 9) {
-                $recommendations[] = 'SPF record is close to 10 DNS lookups limit. Monitor for changes.';
-            }
+            $recommendations = app(ScanRecommendationService::class)->build($domain, $results);
 
             $scan->update([
                 'status' => 'finished',
@@ -115,12 +124,25 @@ class RunFullScan implements ShouldQueue
                 'facts_json' => [
                     'spf_record' => $results['spf']['record'] ?? null,
                     'spf_lookups' => $results['spf']['lookups'] ?? null,
+                    'blacklist_status' => isset($results['blacklist'])
+                        ? $this->blacklistStatusLabel($results['blacklist'])
+                        : null,
+                    'blacklist_count' => $results['blacklist']['listed_count'] ?? null,
                 ],
                 'result_json' => $results,
                 'recommendations_json' => $recommendations,
                 'finished_at' => now(),
                 'duration_ms' => (int) round((microtime(true) - $startTime) * 1000),
             ]);
+
+            $raiseIncidents = (bool) ($this->options['monitoring'] ?? true);
+            app(ScanFinalizer::class)->finalizeMonitoredScan(
+                $domain,
+                $scan,
+                $results,
+                $scanType,
+                $raiseIncidents
+            );
 
             Log::info('Full scan completed successfully', [
                 'domain_id' => $domain->id,
@@ -137,21 +159,70 @@ class RunFullScan implements ShouldQueue
                 'status' => 'failed',
                 'finished_at' => now(),
                 'duration_ms' => (int) round((microtime(true) - $startTime) * 1000),
+                'result_json' => array_merge(
+                    is_array($scan->result_json) ? $scan->result_json : [],
+                    ['user_error' => 'The scan could not be completed. Please try again.']
+                ),
             ]);
 
             Log::error('Full scan failed', [
                 'domain_id' => $domain->id,
                 'domain' => $domain->domain,
+                'scan_id' => $scan->id,
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString()
             ]);
 
             event(new ScanProgressed($domain->id, 'failed', [
-                'error' => $e->getMessage()
+                'error' => 'The scan could not be completed. Please try again.',
             ]));
 
             throw $e;
         }
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function buildSpfResultPayload(\App\Services\Spf\DTOs\SpfResultDTO $spfResult): array
+    {
+        $warnings = $spfResult->warnings;
+        $invalid = in_array(SpfResolver::WARNING_PLUS_ALL, $warnings, true)
+            || in_array(SpfResolver::WARNING_MULTIPLE_SPF, $warnings, true);
+        $error = null;
+        if (in_array(SpfResolver::WARNING_PLUS_ALL, $warnings, true)) {
+            $error = 'SPF uses +all which allows any sender.';
+        } elseif (in_array(SpfResolver::WARNING_MULTIPLE_SPF, $warnings, true)) {
+            $error = 'Multiple SPF records found; only one is allowed.';
+        }
+
+        $lookups = $spfResult->lookupsUsed;
+        $status = $lookups >= 10 ? 'error' : ($lookups >= 9 ? 'warning' : 'safe');
+        if ($invalid) {
+            $status = 'error';
+        }
+
+        return [
+            'record' => $spfResult->currentRecord,
+            'lookups' => $lookups,
+            'flattened' => $spfResult->flattenedSpf,
+            'status' => $status,
+            'valid' => !$invalid && $spfResult->currentRecord !== null,
+            'error' => $error,
+            'warnings' => $warnings,
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $summary
+     */
+    private function blacklistStatusLabel(array $summary): string
+    {
+        if (($summary['total_checks'] ?? 0) <= 0) {
+            return 'not-checked';
+        }
+
+        return !empty($summary['is_clean']) ? 'clean' : 'listed';
     }
 
     private function buildReport(Domain $domain, array $results): array
@@ -174,7 +245,7 @@ class RunFullScan implements ShouldQueue
         }
 
         if (isset($results['blacklist'])) {
-            $report['summary']['blacklist_status'] = $results['blacklist']['is_clean'] ? 'clean' : 'listed';
+            $report['summary']['blacklist_status'] = $this->blacklistStatusLabel($results['blacklist']);
             $report['summary']['blacklist_count'] = $results['blacklist']['listed_count'] ?? 0;
             $report['blacklist'] = $results['blacklist'];
         }
@@ -188,14 +259,12 @@ class RunFullScan implements ShouldQueue
         $spf = $this->options['spf'] ?? true;
         $blacklist = $this->options['blacklist'] ?? true;
 
-        if ($dns && !$spf && !$blacklist) {
-            return 'dns';
-        }
-        if (!$dns && $spf && !$blacklist) {
-            return 'spf';
-        }
-        if (!$dns && !$spf && $blacklist) {
-            return 'blacklist';
+        $enabledCount = ($dns ? 1 : 0) + ($spf ? 1 : 0) + ($blacklist ? 1 : 0);
+
+        if ($enabledCount === 1) {
+            if ($dns) return 'dns';
+            if ($spf) return 'spf';
+            if ($blacklist) return 'blacklist';
         }
 
         return 'full';

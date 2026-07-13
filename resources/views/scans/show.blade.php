@@ -3,6 +3,10 @@
 @section('content')
 <div class="space-y-6">
 
+@if(in_array($scan->status, ['queued', 'running', 'failed'], true))
+    @include('scans.partials._pending-scan', ['scan' => $scan, 'domain' => $domain])
+@else
+
     {{-- Header --}}
     <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div class="min-w-0">
@@ -14,7 +18,7 @@
             </div>
         </div>
         <div class="flex w-full flex-wrap gap-2 sm:w-auto sm:justify-end">
-            <button onclick="shareReport()" class="inline-flex flex-1 items-center justify-center px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-600 dark:hover:bg-gray-700 transition-colors sm:flex-none">
+            <button onclick="shareReport()" class="inline-flex flex-1 items-center justify-center px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-600 dark:hover:bg-gray-700 transition-colors sm:flex-none focus:outline-none focus:ring-2 focus:ring-blue-500">
                 <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.367 2.684 3 3 0 00-5.367-2.684z"></path>
                 </svg>
@@ -23,7 +27,7 @@
             <form method="POST" action="{{ route('domains.scan.now', $domain) }}">
                 @csrf
                 <input type="hidden" name="mode" value="full">
-                <button class="inline-flex flex-1 items-center justify-center px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-600 dark:hover:bg-gray-700 transition-colors sm:flex-none">
+                <button class="inline-flex flex-1 items-center justify-center px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-600 dark:hover:bg-gray-700 transition-colors sm:flex-none focus:outline-none focus:ring-2 focus:ring-blue-500">
                     <i data-lucide="scan" class="w-4 h-4 mr-2"></i>
                     Scan
                 </button>
@@ -36,6 +40,7 @@
         'enabled' => $enabled,
         'score' => $scan->score,
         'scoreDelta' => $scoreDelta,
+        'statusCards' => $statusCards ?? [],
         'blacklistHits' => $blacklistHits,
         'blacklistTotal' => $blacklistTotal,
         'spfLookupCount' => $spfLookupCount,
@@ -46,6 +51,7 @@
         'mtastsOk' => $mtastsOk,
         'domainDays' => $domainDays,
         'sslDays' => $sslDays,
+        'domain' => $domain,
         'bimiOk' => $bimiOk ?? false,
         'bimiHasData' => $bimiHasData ?? false,
         'scoreBreakdown' => $scoreBreakdown ?? [],
@@ -67,13 +73,34 @@
             
             {{-- DNS Security Section --}}
             @if($enabled['dns'])
+                @if($isFirstFinishedScan ?? false)
+                <details class="group rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 open:shadow-sm">
+                    <summary class="cursor-pointer list-none px-4 py-3 text-sm font-semibold text-gray-900 dark:text-gray-100 flex items-center justify-between focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-xl">
+                        <span>DNS & technical details</span>
+                        <span class="text-xs font-normal text-gray-500 group-open:hidden">Show</span>
+                        <span class="text-xs font-normal text-gray-500 hidden group-open:inline">Hide</span>
+                    </summary>
+                    <div class="border-t border-gray-100 dark:border-gray-700 p-4">
+                        @include('scans.partials._dns-section', [
+                            'records' => $records,
+                            'spfLookupCount' => $spfLookupCount,
+                            'domain' => $domain,
+                            'dmarcStatus' => $dmarcStatus ?? null,
+                            'statusCards' => $statusCards ?? [],
+                        ])
+                    </div>
+                </details>
+                @else
                 @include('scans.partials._dns-section', [
                     'records' => $records,
                     'spfLookupCount' => $spfLookupCount,
                     'domain' => $domain,
                     'dmarcStatus' => $dmarcStatus ?? null,
+                    'statusCards' => $statusCards ?? [],
                 ])
+                @endif
             @endif
+
 
             {{-- Blacklist Section --}}
             @if($enabled['blacklist'])
@@ -100,13 +127,13 @@
             
             {{-- Fix Pack --}}
             @include('scans.partials._fix-pack', [
-                'blacklistHits' => $blacklistHits,
-                'dmarcPolicy' => $dmarcPolicy,
-                'spfLookupCount' => $spfLookupCount,
-                'spfSuggestion' => $spfSuggestion,
-                'tlsrptOk' => $tlsrptOk,
-                'mtastsOk' => $mtastsOk,
+                'recommendations' => ($isFirstFinishedScan ?? false)
+                    ? collect($recommendations ?? [])->reject(fn ($r) => ($r['severity'] ?? '') === 'optional')->take(3)->values()->all()
+                    : ($recommendations ?? []),
+                'allClear' => $allClear ?? ['state' => 'needs_fixes'],
                 'domain' => $domain,
+                'domainDays' => $domainDays,
+                'sslDays' => $sslDays,
             ])
 
             {{-- Quick Actions --}}
@@ -166,6 +193,7 @@
     </div>
 
 </div>
+@endif
 
 <script>
     // Copy to clipboard function

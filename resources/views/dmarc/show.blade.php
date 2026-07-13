@@ -44,6 +44,14 @@
             'gray' => 'bg-gray-100 text-gray-700',
             default => 'bg-gray-100 text-gray-700',
         };
+        $displayLabel = $dmarcStatus['has_rua']
+            ? ($dmarcStatus['rua_link_label'] ?? $dmarcStatus['label'])
+            : $dmarcStatus['label'];
+        $needsRuaLink = $dmarcStatus['has_dmarc_record']
+            && in_array($dmarcStatus['rua_link_state'] ?? '', [
+                DmarcStatusService::RUA_LINK_DETECTED_UNLINKED,
+                DmarcStatusService::RUA_LINK_NOT_CONNECTED,
+            ], true);
     @endphp
 
     <!-- Status Strip with unified status -->
@@ -58,8 +66,10 @@
                         <i data-lucide="clock" class="w-3.5 h-3.5"></i>
                     @elseif($dmarcStatus['status'] === DmarcStatusService::STATUS_STALE)
                         <i data-lucide="alert-circle" class="w-3.5 h-3.5"></i>
+                    @elseif(($dmarcStatus['rua_link_state'] ?? '') === DmarcStatusService::RUA_LINK_DETECTED_UNLINKED)
+                        <i data-lucide="link" class="w-3.5 h-3.5"></i>
                     @endif
-                    <span class="text-sm font-medium">{{ $dmarcStatus['label'] }}</span>
+                    <span class="text-sm font-medium">{{ $displayLabel }}</span>
                 </div>
 
                 <span class="text-sm text-gray-500">{{ $dmarcStatus['helper_text'] }}</span>
@@ -459,10 +469,13 @@
                     <div>
                         @if($dmarcStatus['status'] === 'enabled_mxscan_waiting')
                             <h3 class="text-lg font-semibold text-gray-900">Waiting for First Report</h3>
-                            <p class="text-sm text-gray-600 mt-1">DNS configured correctly. Reports usually arrive within 24–48 hours.</p>
-                        @elseif($dmarcStatus['status'] === 'enabled_not_mxscan')
-                            <h3 class="text-lg font-semibold text-gray-900">Add MXScan to Your DMARC Record</h3>
-                            <p class="text-sm text-gray-600 mt-1">Your domain has DMARC, but reports aren't sent to MXScan.</p>
+                            <p class="text-sm text-gray-600 mt-1">Waiting for the first aggregate report. Reports commonly arrive within 24–48 hours.</p>
+                        @elseif($needsRuaLink && ($dmarcStatus['rua_link_state'] ?? '') === DmarcStatusService::RUA_LINK_DETECTED_UNLINKED)
+                            <h3 class="text-lg font-semibold text-gray-900">{{ $dmarcStatus['rua_link_label'] }}</h3>
+                            <p class="text-sm text-gray-600 mt-1">MXScan reporting is present, but it is not linked to this domain.</p>
+                        @elseif($needsRuaLink)
+                            <h3 class="text-lg font-semibold text-gray-900">Connect MXScan reporting</h3>
+                            <p class="text-sm text-gray-600 mt-1">DMARC is active. Connect MXScan reporting to identify senders and authentication failures.</p>
                         @else
                             <h3 class="text-lg font-semibold text-gray-900">Enable DMARC Reporting</h3>
                             <p class="text-sm text-gray-600 mt-1">Add a DMARC record to start receiving aggregate reports.</p>
@@ -479,8 +492,8 @@
                             <strong>No action needed.</strong> Providers send reports automatically once per day. You don't need to send test emails or create a mailbox.
                         </p>
                     </div>
-                @elseif($dmarcStatus['status'] === 'enabled_not_mxscan')
-                    {{-- Has DMARC but not MXScan RUA - Show smart update --}}
+                @elseif($needsRuaLink)
+                    {{-- Has DMARC but needs connect or relink - Show smart update --}}
                     @if(isset($dmarcUpdate) && $dmarcUpdate)
                         <div class="space-y-4">
                             {{-- Current Record --}}
@@ -496,15 +509,19 @@
                                 </p>
                                 <div class="flex items-start gap-2" x-data="{ copied: false }">
                                     <code class="flex-1 block px-3 py-2 bg-green-50 border border-green-200 rounded-lg text-sm font-mono text-gray-800 break-all">{{ $dmarcUpdate['updated'] }}</code>
-                                    <button @click="navigator.clipboard.writeText('{{ $dmarcUpdate['updated'] }}'); copied = true; setTimeout(() => copied = false, 2000)"
+                                    <button @click="navigator.clipboard.writeText(@js($dmarcUpdate['updated'])); copied = true; setTimeout(() => copied = false, 2000)"
                                             class="flex-shrink-0 px-4 py-2 text-sm font-medium text-white bg-green-600 hover:bg-green-700 rounded-lg transition-colors">
-                                        <span x-show="!copied">Copy</span>
+                                        <span x-show="!copied">{{ $dmarcStatus['rua_link_cta'] ?? 'Copy' }}</span>
                                         <span x-show="copied" x-cloak>Copied!</span>
                                     </button>
                                 </div>
                             </div>
                             
-                            <p class="text-xs text-gray-500">This preserves your existing policy settings and adds MXScan as an additional report recipient.</p>
+                            @if(($dmarcUpdate['action'] ?? '') === 'relink_rua')
+                                <p class="text-xs text-gray-500">This removes stale MXScan destinations, keeps external reporting addresses, and sets exactly one canonical MXScan RUA for this domain.</p>
+                            @else
+                                <p class="text-xs text-gray-500">This preserves your existing policy settings and adds MXScan as an additional report recipient.</p>
+                            @endif
                         </div>
                     @else
                         {{-- Fallback if no scan data available --}}
@@ -529,7 +546,7 @@
                                 <code class="flex-1 block px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm font-mono text-gray-800 break-all">mailto:{{ $domain->dmarc_rua_email }}</code>
                                 <button @click="navigator.clipboard.writeText('mailto:{{ $domain->dmarc_rua_email }}'); copied = true; setTimeout(() => copied = false, 2000)"
                                         class="flex-shrink-0 px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors">
-                                    <span x-show="!copied">Copy</span>
+                                    <span x-show="!copied">{{ $dmarcStatus['rua_link_cta'] ?? 'Copy' }}</span>
                                     <span x-show="copied" x-cloak>Copied!</span>
                                 </button>
                             </div>

@@ -7,6 +7,7 @@ use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\Log;
 use App\Models\Scan;
 use App\Services\BlacklistChecker;
+use App\Services\ScanReport\ScanRecommendationService;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Http;
@@ -154,9 +155,29 @@ class RunScan implements ShouldQueue
             // Cap score at 100
             $score = min($score, 100);
 
-            // Generate recommendations
+            // Generate recommendations via shared service
             try {
-                $recommendations = $this->generateRecommendations($domain, $facts);
+                $records = [
+                    'MX' => ['status' => !empty($facts['mx']) ? 'found' : 'missing', 'data' => $facts['mx'] ?? []],
+                    'SPF' => ['status' => !empty($facts['spf']) ? 'found' : 'missing', 'data' => $facts['spf'] ?? null],
+                    'DKIM' => ['status' => 'missing'],
+                    'DMARC' => ['status' => !empty($facts['dmarc']) ? 'found' : 'missing', 'data' => $facts['dmarc'] ?? null],
+                    'TLS-RPT' => ['status' => !empty($facts['tlsrpt']) ? 'found' : 'missing', 'data' => $facts['tlsrpt'] ?? null],
+                    'MTA-STS' => [
+                        'status' => !empty($facts['mta_sts']) ? 'found' : 'missing',
+                        'data' => $facts['mta_sts'] ?? null,
+                        'policy' => $facts['mta_sts_policy'] ?? null,
+                    ],
+                ];
+                $resultJson = [
+                    'dns' => ['records' => $records],
+                    'blacklist' => $blacklistSummary,
+                ];
+                $recommendations = app(ScanRecommendationService::class)->build(
+                    $scan->domain,
+                    $resultJson,
+                    $records
+                );
                 Log::info('Scan debug - facts:', $facts);
                 Log::info('Scan debug - recommendations:', $recommendations);
             } catch (\Exception $e) {
@@ -169,16 +190,12 @@ class RunScan implements ShouldQueue
                 'recommendations' => $recommendations,
             ]);
 
-            // Save final results
-            $recommendationsJson = json_encode($recommendations, JSON_PRETTY_PRINT);
-            Log::info('Saving recommendations JSON', ['json' => $recommendationsJson]);
-            
             $scan->update([
                 'status' => 'finished',
                 'progress_pct' => 100,
                 'score' => $score,
-                'facts_json' => json_encode($facts, JSON_PRETTY_PRINT),
-                'recommendations_json' => $recommendationsJson,
+                'facts_json' => $facts,
+                'recommendations_json' => $recommendations,
                 'finished_at' => now(),
             ]);
 
@@ -197,64 +214,5 @@ class RunScan implements ShouldQueue
                 'error_message' => $e->getMessage(),
             ]);
         }
-    }
-
-    private function generateRecommendations($domain, $facts)
-    {
-        $recommendations = [];
-
-        if (empty($facts['mx'])) {
-            $recommendations['MX'] = [
-                'title' => 'Missing MX Record',
-                'record' => $domain,
-                'type' => 'MX',
-                'priority' => 10,
-                'value' => 'mail.' . $domain,
-                'ttl' => 3600,
-            ];
-        }
-
-        if (empty($facts['spf'])) {
-            $recommendations['SPF'] = [
-                'title' => 'Missing SPF Record',
-                'record' => $domain,
-                'type' => 'TXT',
-                'value' => 'v=spf1 -all',
-                'ttl' => 3600,
-            ];
-        }
-
-        if (empty($facts['dmarc'])) {
-            $recommendations['DMARC'] = [
-                'title' => 'Missing DMARC Record',
-                'record' => '_dmarc.' . $domain,
-                'type' => 'TXT',
-                'value' => 'v=DMARC1; p=quarantine; rua=mailto:postmaster@' . $domain,
-                'ttl' => 3600,
-            ];
-        }
-
-        if (empty($facts['tlsrpt'])) {
-            $recommendations['TLS-RPT'] = [
-                'title' => 'Missing TLS-RPT Record',
-                'record' => '_smtp._tls.' . $domain,
-                'type' => 'TXT',
-                'value' => 'v=TLSRPTv1; rua=mailto:reports@' . $domain,
-                'ttl' => 3600,
-            ];
-        }
-
-        if (empty($facts['mta_sts'])) {
-            $recommendations['MTA-STS'] = [
-                'title' => 'Missing MTA-STS Record',
-                'record' => '_mta-sts.' . $domain,
-                'type' => 'TXT',
-                'value' => 'v=STSv1; id=20250910',
-                'policy_url' => 'https://mta-sts.' . $domain . '/.well-known/mta-sts.txt',
-                'ttl' => 3600,
-            ];
-        }
-
-        return $recommendations;
     }
 }

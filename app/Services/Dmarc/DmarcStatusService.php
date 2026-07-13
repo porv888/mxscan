@@ -7,25 +7,37 @@ use Illuminate\Support\Facades\Log;
 
 /**
  * Unified DMARC Setup Status Evaluator
- * 
+ *
  * This service provides a single source of truth for DMARC setup status
  * across all pages: Scan page, DMARC Activity (global), and Domain DMARC Visibility page.
+ *
+ * Lifecycle status (not_enabled … stale) is orthogonal to rua_link_state
+ * (connected | detected_unlinked | not_connected).
  */
 class DmarcStatusService
 {
-    // Status constants - these are the 5 defined states
+    // Status constants - these are the 5 defined lifecycle states
     public const STATUS_NOT_ENABLED = 'not_enabled';
     public const STATUS_ENABLED_NOT_MXSCAN = 'enabled_not_mxscan';
     public const STATUS_ENABLED_MXSCAN_WAITING = 'enabled_mxscan_waiting';
     public const STATUS_ACTIVE = 'active';
     public const STATUS_STALE = 'stale';
 
+    public const RUA_LINK_CONNECTED = 'connected';
+    public const RUA_LINK_DETECTED_UNLINKED = 'detected_unlinked';
+    public const RUA_LINK_NOT_CONNECTED = 'not_connected';
+
     // Default threshold for stale reports (days)
     public const DEFAULT_STALE_THRESHOLD_DAYS = 7;
 
+    public function __construct(
+        protected DmarcRuaClassifier $ruaClassifier = new DmarcRuaClassifier()
+    ) {
+    }
+
     /**
      * Get the unified DMARC setup status for a domain.
-     * 
+     *
      * @param Domain $domain
      * @param int $staleThresholdDays Days after which reports are considered stale
      * @return array{
@@ -41,26 +53,35 @@ class DmarcStatusService
      *   has_reports: bool,
      *   last_report_at: \Carbon\Carbon|null,
      *   last_dns_check_at: \Carbon\Carbon|null,
-     *   checklist: array
+     *   checklist: array,
+     *   rua_link_state: string,
+     *   rua_link_label: string,
+     *   rua_link_cta: string|null,
+     *   has_any_mxscan_rua: bool,
+     *   has_canonical_mxscan_rua: bool
      * }
      */
     public function getStatus(Domain $domain, int $staleThresholdDays = self::DEFAULT_STALE_THRESHOLD_DAYS): array
     {
-        // Gather all inputs for status determination
         $hasDmarcRecord = $this->hasDmarcRecord($domain);
         $hasRua = $this->hasRuaInDmarc($domain);
-        $hasMxscanRua = $this->hasMxscanRua($domain);
+        $link = $this->classifyDomainRua($domain);
+        $hasCanonicalMxscanRua = $link['has_canonical_mxscan_rua'];
+        $hasAnyMxscanRua = $link['has_any_mxscan_rua'];
+        $ruaLinkState = $link['rua_link_state'];
+
+        // Existing has_mxscan_rua means canonical link (drives lifecycle).
+        $hasMxscanRua = $hasCanonicalMxscanRua;
+
         $hasReports = $domain->dmarc_last_report_at !== null;
         $lastReportAt = $domain->dmarc_last_report_at;
         $lastDnsCheckAt = $domain->dmarc_rua_verified_at ?? $domain->last_scanned_at;
 
-        // Determine if reports are stale
         $isStale = false;
         if ($hasReports && $lastReportAt) {
             $isStale = $lastReportAt->lt(now()->subDays($staleThresholdDays));
         }
 
-        // Determine status based on the decision tree
         $status = $this->determineStatus(
             $hasDmarcRecord,
             $hasRua,
@@ -69,14 +90,27 @@ class DmarcStatusService
             $isStale
         );
 
-        // Build the response with all metadata
+        $ctaAction = $this->getCtaAction($status);
+        $ctaText = $this->getCtaText($status);
+
+        // When DMARC+RUA exist, connection CTAs come from rua_link_state.
+        if ($hasDmarcRecord && $hasRua) {
+            if ($ruaLinkState === self::RUA_LINK_DETECTED_UNLINKED) {
+                $ctaAction = 'relink';
+                $ctaText = 'Relink MXScan reporting';
+            } elseif ($ruaLinkState === self::RUA_LINK_NOT_CONNECTED) {
+                $ctaAction = 'add_rua';
+                $ctaText = 'Connect MXScan reporting';
+            }
+        }
+
         return [
             'status' => $status,
             'label' => $this->getStatusLabel($status),
             'badge_color' => $this->getBadgeColor($status),
             'helper_text' => $this->getHelperText($status, $lastReportAt),
-            'cta_text' => $this->getCtaText($status),
-            'cta_action' => $this->getCtaAction($status),
+            'cta_text' => $ctaText,
+            'cta_action' => $ctaAction,
             'has_dmarc_record' => $hasDmarcRecord,
             'has_rua' => $hasRua,
             'has_mxscan_rua' => $hasMxscanRua,
@@ -85,11 +119,16 @@ class DmarcStatusService
             'last_report_at' => $lastReportAt,
             'last_dns_check_at' => $lastDnsCheckAt,
             'checklist' => $this->buildChecklist($hasDmarcRecord, $hasMxscanRua, $hasReports),
+            'rua_link_state' => $ruaLinkState,
+            'rua_link_label' => $this->getRuaLinkLabel($ruaLinkState),
+            'rua_link_cta' => $this->getRuaLinkCta($ruaLinkState),
+            'has_any_mxscan_rua' => $hasAnyMxscanRua,
+            'has_canonical_mxscan_rua' => $hasCanonicalMxscanRua,
         ];
     }
 
     /**
-     * Determine the status based on inputs.
+     * Determine the lifecycle status based on inputs.
      */
     protected function determineStatus(
         bool $hasDmarcRecord,
@@ -98,29 +137,22 @@ class DmarcStatusService
         bool $hasReports,
         bool $isStale
     ): string {
-        // Status 1: Not Enabled - No DMARC TXT record exists, OR DMARC exists but no RUA at all
         if (!$hasDmarcRecord || !$hasRua) {
             return self::STATUS_NOT_ENABLED;
         }
 
-        // Status 2: Enabled (Not to MXScan) - DMARC TXT exists, has rua, but does not include @mxscan.me
         if (!$hasMxscanRua) {
             return self::STATUS_ENABLED_NOT_MXSCAN;
         }
 
-        // At this point, DMARC exists and includes MXScan RUA
-
-        // Status 5: Stale - Reports exist historically, but last report older than threshold
         if ($hasReports && $isStale) {
             return self::STATUS_STALE;
         }
 
-        // Status 4: Active - Reports exist and latest report within threshold
         if ($hasReports) {
             return self::STATUS_ACTIVE;
         }
 
-        // Status 3: Enabled (MXScan) — Waiting for First Report
         return self::STATUS_ENABLED_MXSCAN_WAITING;
     }
 
@@ -142,55 +174,73 @@ class DmarcStatusService
         if (!$dmarcRecord) {
             return false;
         }
-        
-        // Check for rua= tag in the DMARC record
-        return (bool) preg_match('/rua\s*=\s*mailto:/i', $dmarcRecord);
-    }
 
-    /**
-     * Check if DMARC record includes MXScan RUA address.
-     */
-    protected function hasMxscanRua(Domain $domain): bool
-    {
-        // First check if we have a verified timestamp (from DNS check or scan sync)
-        if ($domain->dmarc_rua_verified_at) {
-            return true;
-        }
-
-        // Fall back to checking the DMARC record directly
-        $dmarcRecord = $this->getDmarcRecord($domain);
-        if (!$dmarcRecord) {
+        $parts = $this->ruaClassifier->parseDmarcTags($dmarcRecord);
+        if (!isset($parts['rua']) || trim($parts['rua']) === '') {
             return false;
         }
 
-        // Check if our RUA address is in the DMARC record
-        $ourRua = strtolower($domain->dmarc_rua_email);
-        return str_contains(strtolower($dmarcRecord), $ourRua);
+        return count($this->ruaClassifier->parseRuaRecipients($parts['rua'])) > 0;
     }
 
     /**
-     * Get the DMARC record from the latest scan.
+     * Check if DMARC record includes the canonical MXScan RUA address.
+     * Does not trust dmarc_rua_verified_at alone.
+     */
+    protected function hasMxscanRua(Domain $domain): bool
+    {
+        return $this->classifyDomainRua($domain)['has_canonical_mxscan_rua'];
+    }
+
+    /**
+     * Classify the domain's current scan/DNS DMARC RUA link state.
+     *
+     * @return array{
+     *   rua_link_state: string,
+     *   has_any_mxscan_rua: bool,
+     *   has_canonical_mxscan_rua: bool,
+     *   recipients: list,
+     *   mxscan_recipients: list,
+     *   external_recipients: list
+     * }
+     */
+    protected function classifyDomainRua(Domain $domain): array
+    {
+        $dmarcRecord = $this->getDmarcRecord($domain);
+        if (!$dmarcRecord) {
+            return [
+                'rua_link_state' => self::RUA_LINK_NOT_CONNECTED,
+                'has_any_mxscan_rua' => false,
+                'has_canonical_mxscan_rua' => false,
+                'recipients' => [],
+                'mxscan_recipients' => [],
+                'external_recipients' => [],
+            ];
+        }
+
+        return $this->ruaClassifier->classify($dmarcRecord, $domain->dmarc_rua_email);
+    }
+
+    /**
+     * Get the DMARC record from the latest finished/completed scan.
      */
     protected function getDmarcRecord(Domain $domain): ?string
     {
-        $latestScan = $domain->scans()->where('status', 'finished')->latest()->first();
-        
+        $latestScan = $this->latestCompletedScan($domain);
+
         if (!$latestScan) {
             return null;
         }
 
-        // Try facts_json first (newer format)
         $factsJson = $latestScan->facts_json;
-        if (is_array($factsJson) && isset($factsJson['dmarc'])) {
+        if (is_array($factsJson) && isset($factsJson['dmarc']) && !empty($factsJson['dmarc'])) {
             return $factsJson['dmarc'];
         }
 
-        // Try result_json (alternative format)
         $resultJson = $latestScan->result_json;
         if (is_array($resultJson)) {
-            // Check dns.records.DMARC.data format
             $dmarcData = $resultJson['dns']['records']['DMARC'] ?? $resultJson['DMARC'] ?? null;
-            if ($dmarcData && isset($dmarcData['data']) && $dmarcData['status'] === 'found') {
+            if ($dmarcData && isset($dmarcData['data']) && ($dmarcData['status'] ?? null) === 'found') {
                 return $dmarcData['data'];
             }
         }
@@ -199,7 +249,18 @@ class DmarcStatusService
     }
 
     /**
-     * Get human-readable status label.
+     * Latest scan with a completed status (canonical: finished; legacy: completed).
+     */
+    protected function latestCompletedScan(Domain $domain)
+    {
+        return $domain->scans()
+            ->whereIn('status', ['finished', 'completed'])
+            ->latest()
+            ->first();
+    }
+
+    /**
+     * Get human-readable lifecycle status label.
      */
     public function getStatusLabel(string $status): string
     {
@@ -210,6 +271,26 @@ class DmarcStatusService
             self::STATUS_ACTIVE => 'Active',
             self::STATUS_STALE => 'Stale',
             default => 'Unknown',
+        };
+    }
+
+    public function getRuaLinkLabel(string $ruaLinkState): string
+    {
+        return match ($ruaLinkState) {
+            self::RUA_LINK_CONNECTED => 'MXScan reporting connected',
+            self::RUA_LINK_DETECTED_UNLINKED => 'MXScan reporting is present, but it is not linked to this domain.',
+            self::RUA_LINK_NOT_CONNECTED => 'DMARC is active. Connect MXScan reporting to identify senders and authentication failures.',
+            default => 'DMARC active — MXScan reporting not connected',
+        };
+    }
+
+    public function getRuaLinkCta(string $ruaLinkState): ?string
+    {
+        return match ($ruaLinkState) {
+            self::RUA_LINK_CONNECTED => null,
+            self::RUA_LINK_DETECTED_UNLINKED => 'Relink MXScan reporting',
+            self::RUA_LINK_NOT_CONNECTED => 'Connect MXScan reporting',
+            default => null,
         };
     }
 
@@ -237,10 +318,10 @@ class DmarcStatusService
             self::STATUS_NOT_ENABLED => 'Add an RUA address to start receiving aggregate reports.',
             self::STATUS_ENABLED_NOT_MXSCAN => "You're sending reports elsewhere. Add MXScan to see sender visibility here.",
             self::STATUS_ENABLED_MXSCAN_WAITING => 'Good — reports usually arrive within 24–48 hours.',
-            self::STATUS_ACTIVE => $lastReportAt 
-                ? 'Last report: ' . $lastReportAt->diffForHumans() 
+            self::STATUS_ACTIVE => $lastReportAt
+                ? 'Last report: ' . $lastReportAt->diffForHumans()
                 : 'Receiving reports.',
-            self::STATUS_STALE => $lastReportAt 
+            self::STATUS_STALE => $lastReportAt
                 ? 'Last report: ' . $lastReportAt->diffForHumans() . '. Check DNS / provider sending / forwarding issues.'
                 : 'No recent reports. Check DNS / provider sending / forwarding issues.',
             default => '',
@@ -303,14 +384,17 @@ class DmarcStatusService
 
     /**
      * Perform a fresh DNS check for DMARC configuration.
-     * Updates the domain's verification state.
-     * 
+     * Updates the domain's verification state based on the canonical address only.
+     *
      * @return array{
      *   success: bool,
      *   dmarc_record: string|null,
      *   has_dmarc: bool,
      *   has_rua: bool,
      *   has_mxscan_rua: bool,
+     *   has_any_mxscan_rua: bool,
+     *   has_canonical_mxscan_rua: bool,
+     *   rua_link_state: string,
      *   message: string
      * }
      */
@@ -321,26 +405,37 @@ class DmarcStatusService
             $dmarcRecord = !empty($dmarcRecords) ? ($dmarcRecords[0]['txt'] ?? null) : null;
 
             $hasDmarc = !empty($dmarcRecord);
-            $hasRua = $hasDmarc && preg_match('/rua\s*=\s*mailto:/i', $dmarcRecord);
-            $hasMxscanRua = $hasRua && str_contains(strtolower($dmarcRecord), strtolower($domain->dmarc_rua_email));
+            $hasRua = false;
+            $hasAnyMxscanRua = false;
+            $hasCanonicalMxscanRua = false;
+            $ruaLinkState = self::RUA_LINK_NOT_CONNECTED;
 
-            // Update verification state
-            if ($hasMxscanRua && !$domain->dmarc_rua_verified_at) {
+            if ($hasDmarc) {
+                $parts = $this->ruaClassifier->parseDmarcTags($dmarcRecord);
+                $hasRua = isset($parts['rua'])
+                    && count($this->ruaClassifier->parseRuaRecipients($parts['rua'])) > 0;
+
+                $classification = $this->ruaClassifier->classify($dmarcRecord, $domain->dmarc_rua_email);
+                $hasAnyMxscanRua = $classification['has_any_mxscan_rua'];
+                $hasCanonicalMxscanRua = $classification['has_canonical_mxscan_rua'];
+                $ruaLinkState = $classification['rua_link_state'];
+            }
+
+            if ($hasCanonicalMxscanRua && !$domain->dmarc_rua_verified_at) {
                 $domain->update(['dmarc_rua_verified_at' => now()]);
-            } elseif (!$hasMxscanRua && $domain->dmarc_rua_verified_at) {
+            } elseif (!$hasCanonicalMxscanRua && $domain->dmarc_rua_verified_at) {
                 $domain->update(['dmarc_rua_verified_at' => null]);
             }
 
-            // Determine message
             $message = match (true) {
                 !$hasDmarc => 'No DMARC record found. Please add the DNS record.',
                 !$hasRua => 'DMARC record found, but no RUA address configured.',
-                !$hasMxscanRua => 'DMARC record found with RUA, but MXScan address not detected. Please add our RUA to your record.',
+                $ruaLinkState === self::RUA_LINK_DETECTED_UNLINKED => 'MXScan reporting address detected, but it is not linked to this domain. Relink required.',
+                !$hasCanonicalMxscanRua => 'DMARC record found with RUA, but MXScan address not detected. Please add our RUA to your record.',
                 default => 'DNS confirmed! MXScan RUA is configured. Waiting for reports (24-48 hours).',
             };
 
-            // If we have reports, update message
-            if ($hasMxscanRua && $domain->dmarc_last_report_at) {
+            if ($hasCanonicalMxscanRua && $domain->dmarc_last_report_at) {
                 $message = 'DMARC reporting is active.';
             }
 
@@ -349,7 +444,10 @@ class DmarcStatusService
                 'dmarc_record' => $dmarcRecord,
                 'has_dmarc' => $hasDmarc,
                 'has_rua' => (bool) $hasRua,
-                'has_mxscan_rua' => $hasMxscanRua,
+                'has_mxscan_rua' => $hasCanonicalMxscanRua,
+                'has_any_mxscan_rua' => $hasAnyMxscanRua,
+                'has_canonical_mxscan_rua' => $hasCanonicalMxscanRua,
+                'rua_link_state' => $ruaLinkState,
                 'message' => $message,
             ];
         } catch (\Exception $e) {
@@ -364,6 +462,9 @@ class DmarcStatusService
                 'has_dmarc' => false,
                 'has_rua' => false,
                 'has_mxscan_rua' => false,
+                'has_any_mxscan_rua' => false,
+                'has_canonical_mxscan_rua' => false,
+                'rua_link_state' => self::RUA_LINK_NOT_CONNECTED,
                 'message' => 'DNS check failed: ' . $e->getMessage(),
             ];
         }
@@ -386,27 +487,11 @@ class DmarcStatusService
     }
 
     /**
-     * Get the current DMARC record from the latest scan.
+     * Get the current DMARC record from the latest finished/completed scan.
      */
     public function getCurrentDmarcRecord(Domain $domain): ?string
     {
-        $latestScan = $domain->scans()
-            ->where('status', 'finished')
-            ->latest()
-            ->first();
-
-        if (!$latestScan) {
-            return null;
-        }
-
-        $resultJson = $latestScan->result_json ?? [];
-        $records = $resultJson['dns']['records'] ?? $resultJson ?? [];
-        
-        if (isset($records['DMARC']) && $records['DMARC']['status'] === 'found') {
-            return $records['DMARC']['data'] ?? null;
-        }
-
-        return null;
+        return $this->getDmarcRecord($domain);
     }
 
     /**
@@ -414,73 +499,30 @@ class DmarcStatusService
      */
     public function parseDmarcRecord(string $record): array
     {
-        $parts = [];
-        
-        // Split by semicolon and parse each tag
-        $tags = preg_split('/\s*;\s*/', trim($record, '; '));
-        
-        foreach ($tags as $tag) {
-            $tag = trim($tag);
-            if (empty($tag)) continue;
-            
-            if (preg_match('/^([a-z]+)\s*=\s*(.+)$/i', $tag, $matches)) {
-                $key = strtolower($matches[1]);
-                $value = $matches[2];
-                $parts[$key] = $value;
-            }
-        }
-        
-        return $parts;
+        return $this->ruaClassifier->parseDmarcTags($record);
     }
 
     /**
      * Generate a safe updated DMARC record that preserves existing settings
-     * and adds/updates the MXScan RUA address.
+     * and adds/relinks the MXScan RUA address.
      */
     public function getUpdatedDmarcRecord(Domain $domain): ?array
     {
         $currentRecord = $this->getCurrentDmarcRecord($domain);
-        
+
         if (!$currentRecord) {
             return null;
         }
 
-        $mxscanRua = $domain->dmarc_rua_email;
-        $parts = $this->parseDmarcRecord($currentRecord);
-        
-        // Check if MXScan RUA is already present
-        $existingRua = $parts['rua'] ?? '';
-        $hasMxscanRua = str_contains(strtolower($existingRua), strtolower($mxscanRua));
-        
-        if ($hasMxscanRua) {
-            return [
-                'current' => $currentRecord,
-                'updated' => $currentRecord,
-                'mxscan_already_present' => true,
-                'action' => 'none',
-            ];
-        }
+        $result = $this->ruaClassifier->rewriteRua($currentRecord, $domain->dmarc_rua_email);
 
-        // Build updated RUA - append MXScan address to existing
-        if (!empty($existingRua)) {
-            // Existing RUA - append MXScan
-            $newRua = $existingRua . ',mailto:' . $mxscanRua;
-        } else {
-            // No RUA - add MXScan
-            $newRua = 'mailto:' . $mxscanRua;
-        }
-        
-        $parts['rua'] = $newRua;
-        
-        // Rebuild the record preserving all existing tags
-        $updatedRecord = $this->buildDmarcRecord($parts);
-        
+        // Preserve prior public shape; include action including relink_rua.
         return [
-            'current' => $currentRecord,
-            'updated' => $updatedRecord,
-            'mxscan_already_present' => false,
-            'action' => empty($existingRua) ? 'add_rua' : 'append_rua',
-            'existing_rua' => $existingRua ?: null,
+            'current' => $result['current'],
+            'updated' => $result['updated'],
+            'mxscan_already_present' => $result['mxscan_already_present'],
+            'action' => $result['action'],
+            'existing_rua' => $result['existing_rua'],
         ];
     }
 
@@ -489,25 +531,6 @@ class DmarcStatusService
      */
     protected function buildDmarcRecord(array $parts): string
     {
-        // Ensure v=DMARC1 comes first
-        $record = 'v=DMARC1';
-        unset($parts['v']);
-        
-        // Standard order for readability: p, sp, rua, ruf, pct, adkim, aspf, fo, rf, ri
-        $order = ['p', 'sp', 'rua', 'ruf', 'pct', 'adkim', 'aspf', 'fo', 'rf', 'ri'];
-        
-        foreach ($order as $key) {
-            if (isset($parts[$key])) {
-                $record .= '; ' . $key . '=' . $parts[$key];
-                unset($parts[$key]);
-            }
-        }
-        
-        // Add any remaining tags
-        foreach ($parts as $key => $value) {
-            $record .= '; ' . $key . '=' . $value;
-        }
-        
-        return $record;
+        return $this->ruaClassifier->buildDmarcRecord($parts);
     }
 }

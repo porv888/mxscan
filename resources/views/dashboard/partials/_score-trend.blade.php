@@ -1,5 +1,6 @@
 <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-    <h3 class="text-sm font-semibold text-gray-900">Deliverability score (30 days)</h3>
+    <h3 class="text-sm font-semibold text-gray-900">Email Security Score (30 days)</h3>
+    <p class="text-xs text-gray-500 mt-0.5">Authentication and transport-security configuration</p>
     <p class="text-xs text-gray-500 mt-0.5">Average score across your domains per day</p>
     <div class="mt-4 h-48 min-w-0 overflow-hidden">
         <canvas id="{{ $chartId }}" class="max-w-full"></canvas>

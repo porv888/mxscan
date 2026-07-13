@@ -69,7 +69,7 @@ class BlacklistAlert extends Notification implements ShouldQueue
             ->line('3. Request delisting from affected RBL providers')
             ->line('4. Monitor your domain reputation closely')
             ->action('View Detailed Results', route('scans.show', $this->scan))
-            ->line('This alert was generated automatically by your EmailSec monitoring system.');
+            ->line('This alert was generated automatically by your MXScan monitoring system.');
 
         return $message;
     }

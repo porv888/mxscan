@@ -35,9 +35,9 @@
                 </p>
                 <div class="mt-6 flex flex-col gap-3 sm:flex-row">
                     <a href="{{ route('dashboard.domains.create') }}"
-                       class="inline-flex w-full items-center justify-center rounded-lg bg-white px-5 py-3 text-sm font-semibold text-blue-700 shadow-sm transition hover:bg-blue-50 sm:w-auto">
+                       class="inline-flex w-full items-center justify-center rounded-lg bg-white px-5 py-3 text-sm font-semibold text-blue-700 shadow-sm transition hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-white sm:w-auto">
                         <i data-lucide="plus" class="mr-2 h-4 w-4"></i>
-                        Add your first domain
+                        Scan your first domain
                     </a>
                     <a href="{{ route('tools.index') }}"
                        class="inline-flex w-full items-center justify-center rounded-lg border border-white/30 px-5 py-3 text-sm font-semibold text-white transition hover:bg-white/10 sm:w-auto">
@@ -94,7 +94,84 @@
             </div>
         </div>
     </section>
+    @elseif($awaitingFirstScan ?? false)
+    @php
+        $pendingDomain = $firstScanDomain;
+        $pendingScan = $firstScanPending;
+    @endphp
+    <section class="rounded-2xl border border-blue-200 bg-white p-6 shadow-sm">
+        <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+                <p class="text-xs font-medium uppercase tracking-wide text-blue-600">Getting started</p>
+                <h2 class="mt-1 text-xl font-semibold text-gray-900">{{ $pendingDomain?->domain ?? 'Your domain' }}</h2>
+                @if($pendingScan && in_array($pendingScan->status, ['queued', 'running'], true))
+                    <p class="mt-2 text-sm text-gray-600">First scan in progress</p>
+                @elseif($pendingScan && $pendingScan->status === 'failed')
+                    <p class="mt-2 text-sm text-red-600">The first scan failed. You can retry it.</p>
+                @else
+                    <p class="mt-2 text-sm text-gray-600">Your domain is ready to scan</p>
+                @endif
+            </div>
+            <div class="flex flex-col gap-2 sm:flex-row">
+                @if($pendingScan && in_array($pendingScan->status, ['queued', 'running'], true))
+                    <a href="{{ route('reports.show', $pendingScan) }}"
+                       class="inline-flex items-center justify-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                        View scan progress
+                    </a>
+                @elseif($pendingScan && $pendingScan->status === 'failed')
+                    <form method="POST" action="{{ route('domains.scan.now', $pendingDomain) }}">
+                        @csrf
+                        <input type="hidden" name="mode" value="full">
+                        <button type="submit"
+                                class="inline-flex w-full items-center justify-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                            Retry scan
+                        </button>
+                    </form>
+                @elseif($pendingDomain)
+                    <form method="POST" action="{{ route('domains.scan.now', $pendingDomain) }}">
+                        @csrf
+                        <input type="hidden" name="mode" value="full">
+                        <button type="submit"
+                                class="inline-flex w-full items-center justify-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                            Scan domain
+                        </button>
+                    </form>
+                @endif
+            </div>
+        </div>
+    </section>
     @else
+
+    @if(($finishedScanCount ?? 0) > 0 && $latestFinishedScan)
+    <section class="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+        <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div>
+                <p class="text-xs font-medium uppercase tracking-wide text-gray-500">Latest Email Security Score</p>
+                <p class="mt-1 text-3xl font-bold text-gray-900">{{ $latestFinishedScan->score ?? '—' }}<span class="text-base font-normal text-gray-500">/100</span></p>
+                <p class="mt-1 text-sm text-gray-500">{{ $latestFinishedScan->domain?->domain }}</p>
+            </div>
+            @if($primaryFindingAction)
+            <a href="{{ $primaryFindingAction['url'] }}"
+               class="inline-flex items-center justify-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                {{ $primaryFindingAction['label'] }}
+            </a>
+            @endif
+        </div>
+        @if(($latestFindings ?? collect())->isNotEmpty())
+        <ul class="mt-4 space-y-2 border-t border-gray-100 pt-4">
+            @foreach($latestFindings as $finding)
+                <li class="text-sm text-gray-700">
+                    <span class="font-medium text-gray-900">{{ $finding['title'] }}</span>
+                    <span class="block text-gray-500">{{ $finding['explanation'] }}</span>
+                </li>
+            @endforeach
+        </ul>
+        @endif
+        <a href="{{ route('reports.show', $latestFinishedScan) }}" class="mt-4 inline-flex text-sm font-medium text-blue-700 hover:underline focus:outline-none focus:ring-2 focus:ring-blue-500 rounded">
+            View full report
+        </a>
+    </section>
+    @endif
 
     <!-- Incident Alert Banner - FIRST (most important) -->
     @if(($incidentCount ?? 0) > 0)
@@ -252,22 +329,21 @@
 
     <!-- DMARC + monitoring summary -->
     <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <a href="{{ route('dmarc.index') }}" class="bg-white rounded-lg shadow-sm p-4 border border-gray-200 hover:border-blue-300 transition-colors">
-            <p class="text-xs font-medium text-gray-500 uppercase tracking-wide">DMARC volume (7d)</p>
-            <p class="text-2xl font-bold text-gray-900 mt-1">
-                @if($dmarcDashboard['has_data'] ?? false)
-                    {{ number_format($dmarcDashboard['total_volume']) }}
-                @else
-                    —
-                @endif
-            </p>
-            <p class="text-xs text-gray-500 mt-1">
-                @if($dmarcDashboard['has_data'] ?? false)
-                    {{ $dmarcDashboard['alignment_rate'] }}% aligned
-                @else
-                    Set up DMARC reporting
-                @endif
-            </p>
+        <a href="{{ ($dmarcDashboard['has_data'] ?? false) ? route('dmarc.index') : ($dmarcEmptyState['url'] ?? route('dmarc.index')) }}"
+           class="bg-white rounded-lg shadow-sm p-4 border border-gray-200 hover:border-blue-300 transition-colors">
+            <p class="text-xs font-medium text-gray-500 uppercase tracking-wide">DMARC</p>
+            @if($dmarcDashboard['has_data'] ?? false)
+                <p class="text-2xl font-bold text-gray-900 mt-1">{{ number_format($dmarcDashboard['total_volume']) }}</p>
+                <p class="text-xs text-gray-500 mt-1">{{ $dmarcDashboard['alignment_rate'] }}% aligned (7d)</p>
+            @elseif(($dmarcEmptyState['kind'] ?? null) === 'detected_unlinked')
+                <p class="text-sm text-gray-600 mt-2">{{ $dmarcEmptyState['copy'] }}</p>
+                <p class="text-xs font-medium text-blue-600 mt-2">{{ $dmarcEmptyState['cta'] }}</p>
+            @elseif(($dmarcEmptyState['kind'] ?? null) === 'not_connected')
+                <p class="text-sm text-gray-600 mt-2">{{ $dmarcEmptyState['copy'] }}</p>
+                <p class="text-xs font-medium text-blue-600 mt-2">{{ $dmarcEmptyState['cta'] }}</p>
+            @else
+                <p class="text-sm text-gray-600 mt-2">{{ $dmarcEmptyState['copy'] ?? 'Waiting for the first aggregate report. Reports commonly arrive within 24–48 hours.' }}</p>
+            @endif
         </a>
         <a href="{{ route('monitoring.incidents') }}" class="bg-white rounded-lg shadow-sm p-4 border border-gray-200 hover:border-red-300 transition-colors">
             <p class="text-xs font-medium text-gray-500 uppercase tracking-wide">Active incidents</p>

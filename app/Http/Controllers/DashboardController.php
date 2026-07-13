@@ -8,6 +8,7 @@ use App\Models\Domain;
 use App\Models\Scan;
 use App\Models\Incident;
 use App\Services\Dmarc\DmarcAnalyticsService;
+use App\Services\Dmarc\DmarcStatusService;
 use App\Services\ScanTrendService;
 
 class DashboardController extends Controller
@@ -203,7 +204,57 @@ class DashboardController extends Controller
         })->count();
 
         $dmarcDashboard = app(DmarcAnalyticsService::class)->getDashboardSummary($user->id, 7);
+        $dmarcEmptyState = ($dmarcDashboard['has_data'] ?? false)
+            ? null
+            : $this->resolveDmarcDashboardEmptyState($domains);
         $scoreTrend = app(ScanTrendService::class)->getUserTrend($user->id, 30);
+
+        $finishedScanCount = Scan::query()
+            ->where('user_id', $user->id)
+            ->where('status', 'finished')
+            ->count();
+
+        $awaitingFirstScan = $totalDomains > 0 && $finishedScanCount === 0;
+        $firstScanPending = null;
+        $firstScanDomain = null;
+        $latestFindings = collect();
+        $primaryFindingAction = null;
+        $latestFinishedScan = null;
+
+        if ($awaitingFirstScan) {
+            $firstScanDomain = $domains->first();
+            $firstScanPending = Scan::query()
+                ->where('user_id', $user->id)
+                ->whereIn('status', ['queued', 'running', 'failed'])
+                ->latest()
+                ->first();
+        } elseif ($finishedScanCount > 0) {
+            $latestFinishedScan = Scan::with('domain')
+                ->where('user_id', $user->id)
+                ->where('status', 'finished')
+                ->latest('finished_at')
+                ->first();
+
+            if ($latestFinishedScan && $latestFinishedScan->domain) {
+                $resultJson = $latestFinishedScan->result_json ?? [];
+                if (is_string($resultJson)) {
+                    $resultJson = json_decode($resultJson, true) ?? [];
+                }
+                $recs = app(\App\Services\ScanReport\ScanRecommendationService::class)
+                    ->build($latestFinishedScan->domain, $resultJson);
+                $latestFindings = collect($recs)
+                    ->reject(fn ($r) => ($r['severity'] ?? '') === 'optional')
+                    ->take(3)
+                    ->values();
+
+                $top = $latestFindings->first();
+                $primaryFindingAction = $this->mapFindingToPrimaryAction(
+                    $top,
+                    $latestFinishedScan->domain,
+                    $latestFinishedScan
+                );
+            }
+        }
 
         return view('dashboard.index', compact(
             'totalDomains',
@@ -218,7 +269,133 @@ class DashboardController extends Controller
             'expiringSoon',
             'monitoringGap',
             'dmarcDashboard',
-            'scoreTrend'
+            'dmarcEmptyState',
+            'scoreTrend',
+            'awaitingFirstScan',
+            'firstScanPending',
+            'firstScanDomain',
+            'latestFindings',
+            'primaryFindingAction',
+            'latestFinishedScan',
+            'finishedScanCount'
         ));
+    }
+
+    /**
+     * Resolve dashboard DMARC empty-state copy from rua_link_state across domains.
+     *
+     * Priority when no aggregate report data: detected_unlinked → not_connected → waiting.
+     *
+     * @param \Illuminate\Support\Collection<int, Domain> $domains
+     * @return array{kind: string, copy: string, cta: string|null, url: string}|null
+     */
+    protected function resolveDmarcDashboardEmptyState($domains): ?array
+    {
+        if ($domains->isEmpty()) {
+            return null;
+        }
+
+        $statusService = app(DmarcStatusService::class);
+        $unlinkedDomain = null;
+        $notConnectedDomain = null;
+        $waitingDomain = null;
+
+        foreach ($domains as $domain) {
+            $status = $statusService->getStatus($domain);
+            $ruaState = $status['rua_link_state'] ?? null;
+
+            if ($ruaState === DmarcStatusService::RUA_LINK_DETECTED_UNLINKED && $unlinkedDomain === null) {
+                $unlinkedDomain = $domain;
+            } elseif ($ruaState === DmarcStatusService::RUA_LINK_NOT_CONNECTED
+                && ($status['has_dmarc_record'] ?? false)
+                && $notConnectedDomain === null) {
+                $notConnectedDomain = $domain;
+            } elseif (
+                ($ruaState === DmarcStatusService::RUA_LINK_CONNECTED
+                    || ($status['status'] ?? null) === DmarcStatusService::STATUS_ENABLED_MXSCAN_WAITING)
+                && $waitingDomain === null
+            ) {
+                $waitingDomain = $domain;
+            }
+        }
+
+        if ($unlinkedDomain) {
+            return [
+                'kind' => 'detected_unlinked',
+                'copy' => 'MXScan reporting is present, but it is not linked to this domain.',
+                'cta' => 'Relink MXScan reporting',
+                'url' => route('dmarc.show', $unlinkedDomain),
+            ];
+        }
+
+        if ($notConnectedDomain) {
+            return [
+                'kind' => 'not_connected',
+                'copy' => 'DMARC is active. Connect MXScan reporting to identify senders and authentication failures.',
+                'cta' => 'Connect MXScan reporting',
+                'url' => route('dmarc.show', $notConnectedDomain),
+            ];
+        }
+
+        if ($waitingDomain) {
+            return [
+                'kind' => 'waiting',
+                'copy' => 'Waiting for the first aggregate report. Reports commonly arrive within 24–48 hours.',
+                'cta' => null,
+                'url' => route('dmarc.show', $waitingDomain),
+            ];
+        }
+
+        return [
+            'kind' => 'waiting',
+            'copy' => 'Waiting for the first aggregate report. Reports commonly arrive within 24–48 hours.',
+            'cta' => null,
+            'url' => route('dmarc.index'),
+        ];
+    }
+
+    /**
+     * @param array<string, mixed>|null $finding
+     * @return array{label: string, url: string}|null
+     */
+    protected function mapFindingToPrimaryAction(?array $finding, Domain $domain, Scan $scan): ?array
+    {
+        $dmarcStatus = app(DmarcStatusService::class)->getStatus($domain);
+        $ruaState = $dmarcStatus['rua_link_state'] ?? null;
+
+        if ($ruaState === DmarcStatusService::RUA_LINK_NOT_CONNECTED
+            && ($dmarcStatus['has_dmarc_record'] ?? false)) {
+            return [
+                'label' => 'Connect DMARC reporting',
+                'url' => route('dmarc.show', $domain),
+            ];
+        }
+        if ($ruaState === DmarcStatusService::RUA_LINK_DETECTED_UNLINKED) {
+            return [
+                'label' => 'Relink MXScan reporting',
+                'url' => route('dmarc.show', $domain),
+            ];
+        }
+
+        if (!$finding) {
+            return [
+                'label' => 'View full report',
+                'url' => route('reports.show', $scan),
+            ];
+        }
+
+        $label = match ($finding['key'] ?? '') {
+            'blacklist' => 'Review blacklist listing',
+            'spf_missing' => 'Add SPF record',
+            'spf_invalid', 'spf_lookups' => 'Fix SPF record',
+            'dmarc_missing', 'dmarc_policy', 'dmarc_alignment' => 'Fix DMARC policy',
+            'dkim_dns' => 'Add DKIM DNS configuration',
+            default => $finding['action'] ?? 'View full report',
+        };
+
+        return [
+            'label' => $label,
+            'url' => route('reports.show', $scan) . '#fix-pack',
+        ];
     }
 }

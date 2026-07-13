@@ -10,7 +10,7 @@ use Illuminate\Support\Collection;
 class ScanTrendService
 {
     /**
-     * Average deliverability score per day for all user domains.
+     * Average Email Security Score per day for all user domains.
      *
      * @return array{labels: list<string>, scores: list<int|null>, incident_counts: list<int>}
      */

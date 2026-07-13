@@ -1,12 +1,15 @@
-{{-- KPI Cards v2 - Two rows with Domain/SSL expiry --}}
+{{-- KPI Cards — consume normalized $statusCards from PreparesScanReport --}}
 @php
   $tone = fn($val, $ok=30) => $val === null ? 'gray' : ($val < 7 ? 'red' : ($val < $ok ? 'amber' : 'green'));
+  $scoreCard = $statusCards['score'] ?? [];
+  $blCard = $statusCards['blacklist'] ?? [];
+  $spfCard = $statusCards['spf'] ?? [];
 @endphp
 
 <div class="mt-4 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-  {{-- Deliverability Score --}}
+  {{-- Email Security Score --}}
   <div class="rounded-xl border border-gray-200 dark:border-gray-700 p-4">
-    <div class="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Deliverability Score</div>
+    <div class="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">{{ $scoreCard['label'] ?? 'Email Security Score' }}</div>
     <div class="mt-2 flex items-baseline gap-2">
       <div class="text-3xl font-semibold text-gray-900 dark:text-gray-100">{{ $score ?? '—' }}<span class="text-base font-normal text-gray-500">/100</span></div>
       @isset($scoreDelta)
@@ -15,6 +18,7 @@
         </span>
       @endisset
     </div>
+    <div class="text-xs text-gray-500 mt-1">{{ $scoreCard['subtitle'] ?? 'Authentication and transport-security configuration' }}</div>
     @include('scans.partials._score-breakdown', [
       'scoreBreakdown' => $scoreBreakdown ?? [],
       'scoreDeductions' => $scoreDeductions ?? [],
@@ -26,37 +30,48 @@
   <div class="rounded-xl border border-gray-200 dark:border-gray-700 p-4">
     <div class="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Blacklist Status</div>
     <div class="mt-2 flex items-baseline gap-2">
-      @if(($blacklistHits ?? 0) > 0)
+      @php $blState = $blCard['state'] ?? 'not_checked'; @endphp
+      @if($blState === 'fail')
         <div class="text-2xl font-semibold text-red-600 dark:text-red-400">
-          {{ $blacklistHits }} listed
+          {{ $blCard['label'] ?? 'Listed' }}
         </div>
-        <div class="text-sm text-gray-500">of {{ $blacklistTotal ?? 0 }} checked</div>
+        <div class="text-sm text-gray-500">{{ $blCard['subtext'] ?? '' }}</div>
         <a href="#blacklist" class="ml-auto text-xs underline text-red-600 dark:text-red-400">Fix now</a>
-      @else
+      @elseif($blState === 'pass')
         <div class="text-2xl font-semibold text-green-700 dark:text-green-300">
-          Clean
+          {{ $blCard['label'] ?? 'Clean' }}
         </div>
-        <div class="text-sm text-gray-500">{{ $blacklistTotal ?? 0 }} lists checked</div>
+        <div class="text-sm text-gray-500">{{ $blCard['subtext'] ?? '' }}</div>
+      @else
+        <div class="text-2xl font-semibold text-gray-600 dark:text-gray-300">
+          {{ $blCard['label'] ?? 'Not scanned' }}
+        </div>
+        <div class="text-sm text-gray-500">{{ $blCard['subtext'] ?? '' }}</div>
       @endif
     </div>
   </div>
   @endif
 
-  {{-- SPF Lookups --}}
+  {{-- SPF Lookups (single KPI; state from mapper) --}}
   @if(($enabled['spf'] ?? true) || ($enabled['dns'] ?? true))
-  @php 
-    $spfTone = $spfLookupCount === null ? 'gray' : ($spfLookupCount >= 10 ? 'red' : ($spfLookupCount >= 7 ? 'amber' : 'green'));
-    $spfStatus = $spfLookupCount === null ? 'Unknown' : ($spfLookupCount >= 10 ? 'Over limit' : ($spfLookupCount >= 7 ? 'Near limit' : 'OK'));
+  @php
+    $spfState = $spfCard['state'] ?? 'unknown';
+    $spfTone = match($spfState) {
+      'fail', 'missing' => 'red',
+      'warning' => 'amber',
+      'pass' => 'green',
+      default => 'gray',
+    };
   @endphp
   <div class="rounded-xl border border-gray-200 dark:border-gray-700 p-4">
     <div class="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">SPF Lookups</div>
     <div class="mt-2 flex items-baseline gap-2">
       <div class="text-2xl font-semibold
-        {{ $spfTone === 'red' ? 'text-red-600 dark:text-red-400' : ($spfTone === 'amber' ? 'text-amber-600 dark:text-amber-400' : 'text-green-700 dark:text-green-300') }}">
-        {{ $spfStatus }}
+        {{ $spfTone === 'red' ? 'text-red-600 dark:text-red-400' : ($spfTone === 'amber' ? 'text-amber-600 dark:text-amber-400' : ($spfTone === 'green' ? 'text-green-700 dark:text-green-300' : 'text-gray-600 dark:text-gray-300')) }}">
+        {{ $spfCard['status'] ?? 'Unknown' }}
       </div>
-      <div class="text-sm text-gray-500">{{ $spfLookupCount ?? '—' }} of 10 max</div>
-      @if(($spfLookupCount ?? 0) >= 7)
+      <div class="text-sm text-gray-500">{{ $spfCard['subtext'] ?? '' }}</div>
+      @if(in_array($spfState, ['fail', 'missing', 'warning'], true))
         <a href="#fix-pack" class="ml-auto text-xs underline">Fix SPF</a>
       @endif
     </div>
@@ -99,10 +114,11 @@
   <div class="rounded-xl border border-gray-200 dark:border-gray-700 p-4">
     <div class="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">BIMI</div>
     <div class="mt-2 text-lg font-medium {{ ($bimiOk ?? false) ? 'text-green-700 dark:text-green-300' : 'text-amber-600 dark:text-amber-400' }}">
-      {{ ($bimiOk ?? false) ? 'Valid' : 'Not set up' }}
+      {{ ($statusCards['bimi']['status'] ?? (($bimiOk ?? false) ? 'Valid' : 'Not set up')) }}
     </div>
     <div class="text-xs text-gray-500 mt-1">
-      <a href="{{ route('tools.bimi') }}" class="underline">Check in Tools</a>
+      {{ $statusCards['bimi']['subtext'] ?? 'Optional branding feature' }}
+      · <a href="{{ route('tools.bimi') }}" class="underline">Check in Tools</a>
     </div>
   </div>
   @endif

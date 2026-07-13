@@ -7,8 +7,10 @@ use App\Models\Scan;
 use App\Services\ScannerService;
 use App\Services\Spf\SpfResolver;
 use App\Services\BlacklistChecker;
-use App\Services\MonitoringService;
 use App\Services\Expiry\ExpiryCoordinator;
+use App\Services\ScanReport\ScanFinalizer;
+use App\Services\ScanReport\ScanRecommendationService;
+use App\Services\Spf\SpfResolver;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Log;
 use Exception;
@@ -19,8 +21,9 @@ class ScanRunner
         private ScannerService $scannerService,
         private SpfResolver $spfResolver,
         private BlacklistChecker $blacklistChecker,
-        private MonitoringService $monitoringService,
-        private ExpiryCoordinator $expiryCoordinator
+        private ExpiryCoordinator $expiryCoordinator,
+        private ScanRecommendationService $recommendationService,
+        private ScanFinalizer $scanFinalizer
     ) {}
 
     /**
@@ -72,7 +75,6 @@ class ScanRunner
                 $dnsResults = $this->scannerService->scanDomain($domain->domain);
                 $results['dns'] = $dnsResults;
                 $facts = array_merge($facts, $dnsResults['facts'] ?? []);
-                $recommendations = array_merge($recommendations, $dnsResults['recommendations'] ?? []);
                 $score = $dnsResults['score'] ?? null;
                 
                 $scan->update(['progress_pct' => 33]);
@@ -91,24 +93,13 @@ class ScanRunner
                 
                 $spfResult = $this->spfResolver->resolve($domain->domain);
                 
-                $spfData = [
-                    'record' => $spfResult->currentRecord,
-                    'lookups' => $spfResult->lookupsUsed,
-                    'flattened' => $spfResult->flattenedSpf,
-                    'status' => $spfResult->lookupsUsed >= 10 ? 'error' : ($spfResult->lookupsUsed >= 9 ? 'warning' : 'safe')
-                ];
+                $spfData = $this->buildSpfResultPayload($spfResult);
                 
                 $results['spf'] = $spfData;
                 
                 // Add SPF facts and recommendations
                 $facts['spf_record'] = $spfResult->currentRecord ?: 'No SPF record found';
                 $facts['spf_lookups'] = $spfResult->lookupsUsed;
-                
-                if ($spfResult->lookupsUsed >= 10) {
-                    $recommendations[] = 'SPF record exceeds 10 DNS lookups limit. Consider flattening your SPF record.';
-                } elseif ($spfResult->lookupsUsed >= 9) {
-                    $recommendations[] = 'SPF record is close to 10 DNS lookups limit. Monitor for changes.';
-                }
                 
                 $scan->update(['progress_pct' => 66]);
             }
@@ -123,21 +114,19 @@ class ScanRunner
                 $results['blacklist'] = $blacklistSummary;
                 
                 // Add blacklist facts
-                $facts['blacklist_status'] = $blacklistSummary['is_clean'] ? 'clean' : 'listed';
+                $facts['blacklist_status'] = $this->blacklistStatusLabel($blacklistSummary);
                 $facts['blacklist_count'] = $blacklistSummary['listed_count'] ?? 0;
-                
-                if (!$blacklistSummary['is_clean']) {
-                    $recommendations[] = 'Domain is listed on ' . $blacklistSummary['listed_count'] . ' blacklist(s). Review and resolve any issues.';
-                }
                 
                 // Update domain with blacklist results
                 $domain->update([
-                    'blacklist_status' => $blacklistSummary['is_clean'] ? 'clean' : 'listed',
+                    'blacklist_status' => $this->blacklistStatusLabel($blacklistSummary),
                     'blacklist_count' => $blacklistSummary['listed_count'] ?? 0,
                 ]);
                 
                 $scan->update(['progress_pct' => 90]);
             }
+
+            $recommendations = $this->recommendationService->build($domain, $results);
 
             // Calculate duration
             $endTime = microtime(true);
@@ -184,18 +173,15 @@ class ScanRunner
                 // Don't fail the scan if expiry check fails
             }
 
-            // Create monitoring snapshot and check for incidents
-            try {
-                $snapshot = $this->monitoringService->persistSnapshot($domain, $scanType, $results);
-                $this->monitoringService->computeDeltaAndIncidents($domain, $snapshot);
-            } catch (Exception $e) {
-                Log::error('Failed to create monitoring snapshot', [
-                    'scan_id' => $scan->id,
-                    'domain' => $domain->domain,
-                    'error' => $e->getMessage()
-                ]);
-                // Don't fail the scan if monitoring fails
-            }
+            // Create monitoring snapshot and check for incidents (shared finalizer)
+            $raiseIncidents = (bool) Arr::get($options, 'monitoring', true);
+            $this->scanFinalizer->finalizeMonitoredScan(
+                $domain,
+                $scan,
+                $results,
+                $scanType,
+                $raiseIncidents
+            );
 
             // Sync DMARC RUA verification state based on scan results
             // This ensures DMARC Activity page reflects DNS confirmation from scans
@@ -242,6 +228,50 @@ class ScanRunner
         }
 
         return $scan->fresh();
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function buildSpfResultPayload(\App\Services\Spf\DTOs\SpfResultDTO $spfResult): array
+    {
+        $warnings = $spfResult->warnings;
+        $invalid = in_array(SpfResolver::WARNING_PLUS_ALL, $warnings, true)
+            || in_array(SpfResolver::WARNING_MULTIPLE_SPF, $warnings, true);
+        $error = null;
+        if (in_array(SpfResolver::WARNING_PLUS_ALL, $warnings, true)) {
+            $error = 'SPF uses +all which allows any sender.';
+        } elseif (in_array(SpfResolver::WARNING_MULTIPLE_SPF, $warnings, true)) {
+            $error = 'Multiple SPF records found; only one is allowed.';
+        }
+
+        $lookups = $spfResult->lookupsUsed;
+        $status = $lookups >= 10 ? 'error' : ($lookups >= 9 ? 'warning' : 'safe');
+        if ($invalid) {
+            $status = 'error';
+        }
+
+        return [
+            'record' => $spfResult->currentRecord,
+            'lookups' => $lookups,
+            'flattened' => $spfResult->flattenedSpf,
+            'status' => $status,
+            'valid' => !$invalid && $spfResult->currentRecord !== null,
+            'error' => $error,
+            'warnings' => $warnings,
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $summary
+     */
+    private function blacklistStatusLabel(array $summary): string
+    {
+        if (($summary['total_checks'] ?? 0) <= 0) {
+            return 'not-checked';
+        }
+
+        return !empty($summary['is_clean']) ? 'clean' : 'listed';
     }
 
     /**

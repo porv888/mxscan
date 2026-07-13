@@ -30,7 +30,10 @@ class ScoreBreakdownService
      */
     public function deductions(array $breakdown): array
     {
-        return array_values(array_filter($breakdown, fn (array $row) => $row['earned'] < $row['possible']));
+        return array_values(array_filter(
+            $breakdown,
+            fn (array $row) => ($row['possible'] ?? 0) > 0 && $row['earned'] < $row['possible']
+        ));
     }
 
     public function totalEarned(array $breakdown): int
@@ -58,29 +61,11 @@ class ScoreBreakdownService
 
     private function scoreSpf(?array $data): array
     {
-        $base = (int) config('dns-scoring.spf.base', 15);
-        $bonusStrict = (int) config('dns-scoring.spf.bonus_strict', 5);
-        $bonusSoft = (int) config('dns-scoring.spf.bonus_soft', 2);
-        $possible = $base + $bonusStrict;
+        $base = (int) config('dns-scoring.spf.base', 20);
+        $possible = $base;
         $found = ($data['status'] ?? '') === 'found';
-        $earned = 0;
-        $hint = null;
-
-        if ($found) {
-            $txt = is_string($data['data'] ?? null) ? $data['data'] : '';
-            $earned = $base;
-            if (str_contains($txt, '-all')) {
-                $earned += $bonusStrict;
-            } elseif (str_contains($txt, '~all')) {
-                $earned += $bonusSoft;
-                $possible = $base + $bonusSoft;
-            } else {
-                $possible = $base;
-                $hint = 'Consider adding ~all or -all to your SPF record.';
-            }
-        } else {
-            $hint = 'Publish an SPF TXT record to prevent spoofing.';
-        }
+        $earned = $found ? $base : 0;
+        $hint = $found ? null : 'Publish an SPF TXT record to prevent spoofing.';
 
         return [
             'key' => 'spf',
@@ -94,40 +79,33 @@ class ScoreBreakdownService
 
     private function scoreDkim(?array $data): array
     {
-        $max = (int) config('dns-scoring.dkim.max', 15);
+        $max = (int) config('dns-scoring.dkim.max', 20);
         $found = ($data['status'] ?? '') === 'found';
 
         return [
             'key' => 'dkim',
-            'label' => config('dns-scoring.dkim.label', 'DKIM'),
+            'label' => config('dns-scoring.dkim.label', 'DKIM DNS configuration'),
             'earned' => $found ? $max : 0,
             'possible' => $max,
             'status' => $found ? 'ok' : 'missing',
-            'hint' => $found ? null : 'Enable DKIM signing with your mail provider.',
+            'hint' => $found
+                ? 'Published DKIM DNS keys only — not proof of live signing or alignment.'
+                : 'Publish DKIM DNS selectors with your mail provider.',
         ];
     }
 
     private function scoreDmarc(?array $data): array
     {
-        $base = (int) config('dns-scoring.dmarc.base', 20);
-        $bonusReject = (int) config('dns-scoring.dmarc.bonus_reject', 5);
-        $bonusQuarantine = (int) config('dns-scoring.dmarc.bonus_quarantine', 3);
-        $possible = $base + $bonusReject;
+        $base = (int) config('dns-scoring.dmarc.base', 30);
+        $possible = $base;
         $found = ($data['status'] ?? '') === 'found';
-        $earned = 0;
+        $earned = $found ? $base : 0;
         $hint = null;
 
         if ($found) {
             $txt = is_string($data['data'] ?? null) ? $data['data'] : '';
-            $earned = $base;
-            if (str_contains($txt, 'p=reject')) {
-                $earned += $bonusReject;
-            } elseif (str_contains($txt, 'p=quarantine')) {
-                $earned += $bonusQuarantine;
-                $possible = $base + $bonusQuarantine;
-            } else {
-                $possible = $base;
-                $hint = 'Strengthen DMARC policy to quarantine or reject.';
+            if (!str_contains($txt, 'p=reject') && !str_contains($txt, 'p=quarantine')) {
+                $hint = 'DMARC is present; consider quarantine or reject for stronger protection.';
             }
         } else {
             $hint = 'Add a DMARC record at _dmarc.yourdomain.';
@@ -145,7 +123,7 @@ class ScoreBreakdownService
 
     private function scoreTlsRpt(?array $data): array
     {
-        $max = (int) config('dns-scoring.tlsrpt.max', 10);
+        $max = (int) config('dns-scoring.tlsrpt.max', 5);
         $found = ($data['status'] ?? '') === 'found';
 
         return [
@@ -160,19 +138,18 @@ class ScoreBreakdownService
 
     private function scoreMtaSts(?array $data): array
     {
-        $dnsOnly = (int) config('dns-scoring.mtasts.dns_only', 10);
-        $full = (int) config('dns-scoring.mtasts.full', 20);
+        $dnsOnly = (int) config('dns-scoring.mtasts.dns_only', 5);
+        $full = (int) config('dns-scoring.mtasts.full', 10);
         $found = ($data['status'] ?? '') === 'found';
         $hasPolicy = !empty($data['policy']);
         $earned = 0;
         $possible = $full;
+        $hint = null;
 
         if ($found) {
             $earned = $hasPolicy ? $full : $dnsOnly;
             if (!$hasPolicy) {
                 $hint = 'DNS record found; publish a valid policy file for full points.';
-            } else {
-                $hint = null;
             }
         } else {
             $hint = 'Add MTA-STS to enforce TLS for incoming mail.';
@@ -184,29 +161,22 @@ class ScoreBreakdownService
             'earned' => $earned,
             'possible' => $possible,
             'status' => $found ? ($hasPolicy ? 'ok' : 'partial') : 'missing',
-            'hint' => $hint ?? null,
+            'hint' => $hint,
         ];
     }
 
     private function scoreBimi(?array $data): array
     {
-        $validPts = (int) config('dns-scoring.bimi.valid', 5);
-        $recordPts = (int) config('dns-scoring.bimi.record_only', 2);
+        // BIMI is optional and never contributes to or deducts from the score.
         $status = $data['status'] ?? 'missing';
-        $earned = match ($status) {
-            'found' => $validPts,
-            'partial' => $recordPts,
-            default => 0,
-        };
-        $possible = $validPts;
 
         return [
             'key' => 'bimi',
             'label' => config('dns-scoring.bimi.label', 'BIMI'),
-            'earned' => $earned,
-            'possible' => $possible,
+            'earned' => 0,
+            'possible' => 0,
             'status' => $status,
-            'hint' => $status === 'missing' ? 'Optional: publish a BIMI record for inbox brand logos.' : null,
+            'hint' => 'Optional branding feature — does not affect Email Security Score.',
         ];
     }
 }
