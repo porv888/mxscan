@@ -117,14 +117,14 @@
                     }
                 @endphp
 
-                <div class="bg-white rounded-xl border overflow-hidden transition-all duration-200 hover:shadow-md
+                <div class="relative z-0 min-w-0 bg-white rounded-xl border transition-all duration-200 hover:shadow-md
                     {{ $worstSeverity === 'critical' ? 'border-red-200 hover:border-red-300' : 
                        ($worstSeverity === 'warning' ? 'border-amber-200 hover:border-amber-300' : 
                        'border-gray-200 hover:border-gray-300') }}">
                     
                     <!-- Worst Issue Banner (Main Visual Anchor) -->
                     @if($worstIssue)
-                    <div class="px-4 py-2.5 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between
+                    <div class="rounded-t-xl px-4 py-2.5 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between
                         {{ $worstSeverity === 'critical' ? 'bg-red-50' : 
                            ($worstSeverity === 'warning' ? 'bg-amber-50' : 'bg-blue-50') }}">
                         <div class="flex min-w-0 items-center gap-2">
@@ -153,7 +153,7 @@
                     </div>
                     @else
                     <!-- All Good Banner -->
-                    <div class="px-4 py-2.5 bg-green-50 flex items-center gap-2">
+                    <div class="rounded-t-xl px-4 py-2.5 bg-green-50 flex items-center gap-2">
                         <i data-lucide="check-circle" class="w-4 h-4 text-green-600"></i>
                         <span class="text-sm font-medium text-green-800">All checks passed</span>
                     </div>
@@ -204,8 +204,9 @@
                                 </div>
                             </div>
                             <!-- Actions Menu -->
-                            <div class="relative flex-shrink-0" x-data="{ open: false }">
-                                <button @click="open = !open" class="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">
+                            <div class="relative flex-shrink-0" x-data="{ open: false }" :class="open && 'z-30'">
+                                <button @click="open = !open" type="button" aria-haspopup="true" :aria-expanded="open.toString()"
+                                        class="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">
                                     <i data-lucide="more-vertical" class="w-4 h-4"></i>
                                 </button>
                                 <div x-show="open" @click.away="open = false" x-cloak
@@ -215,7 +216,7 @@
                                      x-transition:leave="transition ease-in duration-75"
                                      x-transition:leave-start="transform opacity-100 scale-100"
                                      x-transition:leave-end="transform opacity-0 scale-95"
-                                     class="absolute right-0 mt-1 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-20">
+                                     class="absolute right-0 bottom-full mb-1 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50">
                                     <a href="{{ route('dashboard.domains.edit', $domain) }}" 
                                        class="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50">
                                         <i data-lucide="settings" class="w-4 h-4"></i>
@@ -247,38 +248,43 @@
                     </div>
 
                     <!-- Card Footer - View report primary -->
-                    <div class="p-3 border-t border-gray-100 flex flex-wrap items-center gap-2">
+                    <div class="rounded-b-xl p-3 border-t border-gray-100 flex items-stretch gap-2">
                         @if($domain->scans()->exists())
                             @php $latestScanFooter = $domain->scans()->latest()->first(); @endphp
-                            <a href="{{ route('reports.show', $latestScanFooter) }}"
-                               class="mx-btn mx-btn-primary min-w-[9rem] flex-1">
-                                <i data-lucide="file-text" class="w-4 h-4"></i>
-                                View Report
-                            </a>
+                            <div class="flex-1 min-w-0">
+                                <a href="{{ route('reports.show', $latestScanFooter) }}"
+                                   class="mx-btn mx-btn-primary mx-btn-block">
+                                    <i data-lucide="file-text" class="w-4 h-4"></i>
+                                    View Report
+                                </a>
+                            </div>
                         @else
-                            <form action="{{ route('domains.scan.now', $domain) }}" method="POST" class="flex-1">
-                                @csrf
-                                <input type="hidden" name="mode" value="full">
-                                <button type="submit" class="mx-btn mx-btn-primary mx-btn-block">
-                                    <i data-lucide="scan" class="w-4 h-4"></i>
-                                    Run first scan
-                                </button>
-                            </form>
+                            <div class="flex-1 min-w-0">
+                                <form action="{{ route('domains.scan.now', $domain) }}" method="POST">
+                                    @csrf
+                                    <input type="hidden" name="mode" value="full">
+                                    <button type="submit" class="mx-btn mx-btn-primary mx-btn-block">
+                                        <i data-lucide="scan" class="w-4 h-4"></i>
+                                        Run first scan
+                                    </button>
+                                </form>
+                            </div>
                         @endif
 
+                        <div class="flex flex-shrink-0 items-stretch gap-2">
                         <form action="{{ route('domains.scan.now', $domain) }}" method="POST">
                             @csrf
                             <input type="hidden" name="mode" value="full">
                             <button type="submit" title="Scan now"
-                                    class="mx-btn mx-btn-secondary">
+                                    class="mx-btn mx-btn-secondary h-full">
                                 <i data-lucide="scan" class="w-4 h-4"></i>
                             </button>
                         </form>
 
                         <!-- Scan Options Dropdown -->
-                        <div class="relative" x-data="{ open: false }">
-                            <button @click="open = !open" 
-                                    class="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors border border-gray-200"
+                        <div class="relative" x-data="{ open: false }" :class="open && 'z-30'">
+                            <button @click="open = !open" type="button" aria-haspopup="true" :aria-expanded="open.toString()"
+                                    class="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors border border-gray-200 h-full"
                                     title="Scan options">
                                 <i data-lucide="chevron-down" class="w-4 h-4"></i>
                             </button>
@@ -286,7 +292,7 @@
                                  x-transition:enter="transition ease-out duration-100"
                                  x-transition:enter-start="transform opacity-0 scale-95"
                                  x-transition:enter-end="transform opacity-100 scale-100"
-                                 class="absolute right-0 bottom-full mb-1 w-44 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-20">
+                                 class="absolute right-0 bottom-full mb-1 w-44 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50">
                                 <div class="px-3 py-1.5 text-xs font-medium text-gray-400 uppercase tracking-wider">Scan Type</div>
                                 <form action="{{ route('domains.scan.now', $domain) }}" method="POST">
                                     @csrf
@@ -323,6 +329,7 @@
                             </div>
                         </div>
 
+                        </div>
                     </div>
                 </div>
             @endforeach
