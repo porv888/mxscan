@@ -2,6 +2,7 @@
 
 namespace App\Domain\EmailSecurity\Support;
 
+use App\Domain\EmailSecurity\Checks\SPF\Support\SpfAnalysisReader;
 use App\Services\Spf\DTOs\SpfResultDTO;
 use App\Services\Spf\SpfResolver;
 
@@ -85,7 +86,7 @@ final class ScanPayloadBuilder
      */
     public static function buildFactsForAsyncJob(array $results): array
     {
-        return [
+        $facts = [
             'spf_record' => $results['spf']['record'] ?? null,
             'spf_lookups' => $results['spf']['lookups'] ?? null,
             'blacklist_status' => isset($results['blacklist'])
@@ -93,12 +94,31 @@ final class ScanPayloadBuilder
                 : null,
             'blacklist_count' => $results['blacklist']['listed_count'] ?? null,
         ];
+
+        if (isset($results['spf']) && is_array($results['spf'])) {
+            $protocolStatus = SpfAnalysisReader::protocolStatus($results['spf']);
+            $riskStatus = SpfAnalysisReader::riskStatus($results['spf']);
+            $terminalPolicy = SpfAnalysisReader::terminalPolicy($results['spf']);
+
+            if ($protocolStatus !== null) {
+                $facts['spf_protocol_status'] = $protocolStatus;
+            }
+            if ($riskStatus !== null) {
+                $facts['spf_risk_status'] = $riskStatus;
+            }
+            if ($terminalPolicy !== null) {
+                $facts['spf_terminal_policy'] = $terminalPolicy;
+            }
+        }
+
+        return $facts;
     }
 
     /**
      * Facts payload used by synchronous ScanRunner persistence.
      *
      * @param array<string, mixed> $results
+     * @return array<string, mixed>
      */
     public static function buildFactsForSyncRunner(array $results, ?SpfResultDTO $spfResult = null): array
     {
@@ -107,6 +127,22 @@ final class ScanPayloadBuilder
         if ($spfResult !== null) {
             $facts['spf_record'] = $spfResult->currentRecord ?: 'No SPF record found';
             $facts['spf_lookups'] = $spfResult->lookupsUsed;
+        }
+
+        if (isset($results['spf']) && is_array($results['spf'])) {
+            $protocolStatus = SpfAnalysisReader::protocolStatus($results['spf']);
+            $riskStatus = SpfAnalysisReader::riskStatus($results['spf']);
+            $terminalPolicy = SpfAnalysisReader::terminalPolicy($results['spf']);
+
+            if ($protocolStatus !== null) {
+                $facts['spf_protocol_status'] = $protocolStatus;
+            }
+            if ($riskStatus !== null) {
+                $facts['spf_risk_status'] = $riskStatus;
+            }
+            if ($terminalPolicy !== null) {
+                $facts['spf_terminal_policy'] = $terminalPolicy;
+            }
         }
 
         if (isset($results['blacklist'])) {

@@ -5,11 +5,17 @@ namespace App\Domain\EmailSecurity\Support;
 use App\Domain\EmailSecurity\Contracts\ScanPersisterInterface;
 use App\Domain\EmailSecurity\DTO\ScanExecutionResultDTO;
 use App\Domain\EmailSecurity\DTO\ScanOptionsDTO;
+use App\Domain\EmailSecurity\Scoring\ScoreInvariantGuard;
 use App\Models\Domain;
 use App\Models\Scan;
 
 final class ScanPersister implements ScanPersisterInterface
 {
+    public function __construct(
+        private ScoreInvariantGuard $scoreInvariantGuard,
+    ) {
+    }
+
     public function saveFinished(
         Scan $scan,
         Domain $domain,
@@ -17,6 +23,11 @@ final class ScanPersister implements ScanPersisterInterface
         ScanOptionsDTO $options,
         array $factsJson,
     ): void {
+        $breakdown = $execution->resultJson['dns']['score_breakdown'] ?? [];
+        if ($execution->score !== null && $breakdown !== []) {
+            $this->scoreInvariantGuard->assertConsistent($execution->score, $breakdown);
+        }
+
         $scan->update([
             'status' => 'finished',
             'progress_pct' => 100,

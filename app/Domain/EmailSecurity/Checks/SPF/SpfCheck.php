@@ -3,10 +3,11 @@
 namespace App\Domain\EmailSecurity\Checks\SPF;
 
 use App\Domain\EmailSecurity\Checks\SPF\Compatibility\SpfLegacyPayloadAdapter;
+use App\Domain\EmailSecurity\Checks\SPF\SpfTerminalPolicy;
 use App\Domain\EmailSecurity\Checks\SPF\Discovery\SpfRecordDiscovery;
-use App\Domain\EmailSecurity\Checks\SPF\Evaluation\SpfDnsDependencyResolver;
 use App\Domain\EmailSecurity\Checks\SPF\Evaluation\SpfEvaluator;
 use App\Domain\EmailSecurity\Checks\SPF\Evidence\SpfEvidenceBuilder;
+use App\Domain\EmailSecurity\Checks\SPF\Macros\SpfMacroAnalyzer;
 use App\Domain\EmailSecurity\Checks\SPF\Parsing\SpfParser;
 use App\Domain\EmailSecurity\Checks\SPF\Validation\SpfValidator;
 use App\Domain\EmailSecurity\Contracts\SecurityCheckInterface;
@@ -25,6 +26,7 @@ final class SpfCheck implements SecurityCheckInterface
         private SpfEvaluator $evaluator,
         private SpfEvidenceBuilder $evidenceBuilder,
         private SpfLegacyPayloadAdapter $legacyAdapter,
+        private SpfMacroAnalyzer $macroAnalyzer,
     ) {
     }
 
@@ -45,13 +47,27 @@ final class SpfCheck implements SecurityCheckInterface
         } else {
             $record = (string) $spfDiscovery->record;
             $terms = $this->parser->parse($record, $domain);
+            $macroAssessment = $this->macroAnalyzer->assess($terms);
             $validation = $this->validator->validate($terms, $spfDiscovery, $record);
-            $evaluation = $this->evaluator->evaluate($terms, $domain, $validation);
+            if ($macroAssessment->hasUnsupportedMacro) {
+                $validation = new \App\Domain\EmailSecurity\Checks\SPF\Validation\SpfValidationResult(
+                    terms: $validation->terms,
+                    errors: $validation->errors,
+                    warnings: array_merge($validation->warnings, [[
+                        'code' => 'UNSUPPORTED_SPF_MACRO',
+                        'message' => 'SPF record contains unsupported macros.',
+                    ]]),
+                    hasTerminalAll: $validation->hasTerminalAll,
+                    terminalPolicy: $validation->terminalPolicy,
+                );
+            }
+            $evaluation = $this->evaluator->evaluate($terms, $domain, $validation, $macroAssessment);
             $native = $this->evidenceBuilder->build(
                 $spfDiscovery,
                 $validation,
                 $evaluation,
                 $this->evaluator->lookupCounter(),
+                $macroAssessment,
             );
         }
 
@@ -75,11 +91,14 @@ final class SpfCheck implements SecurityCheckInterface
     {
         return new SpfNativeResult(
             state: SpfStates::MISSING,
-            summary: 'No SPF record found.',
+            protocolStatus: SpfProtocolStatus::NONE,
+            riskStatus: SpfRiskStatus::CRITICAL,
+            summary: 'SPF record missing.',
             rawRecord: null,
             normalizedRecord: null,
             parsedTerms: [],
-            terminalPolicy: null,
+            parsedTerminalPolicy: null,
+            terminalPolicy: SpfTerminalPolicy::IMPLICIT_NEUTRAL,
             lookupCount: 0,
             lookupLimit: 10,
             lookupsRemaining: 10,
@@ -105,11 +124,14 @@ final class SpfCheck implements SecurityCheckInterface
     {
         return new SpfNativeResult(
             state: SpfStates::UNKNOWN,
-            summary: 'SPF record discovery failed due to DNS resolver error.',
+            protocolStatus: SpfProtocolStatus::TEMPERROR,
+            riskStatus: SpfRiskStatus::UNKNOWN,
+            summary: 'SPF configuration could not be fully evaluated.',
             rawRecord: null,
             normalizedRecord: null,
             parsedTerms: [],
-            terminalPolicy: null,
+            parsedTerminalPolicy: null,
+            terminalPolicy: SpfTerminalPolicy::UNKNOWN,
             lookupCount: 0,
             lookupLimit: 10,
             lookupsRemaining: 10,

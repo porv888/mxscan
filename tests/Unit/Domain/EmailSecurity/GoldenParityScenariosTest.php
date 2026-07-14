@@ -29,6 +29,13 @@ class GoldenParityScenariosTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+        config(['email-security.spf_engine' => 'legacy']);
+        $this->app->forgetInstance(\App\Domain\EmailSecurity\Checks\CheckRegistry::class);
+    }
+
     protected function tearDown(): void
     {
         Mockery::close();

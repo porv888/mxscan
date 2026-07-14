@@ -13,14 +13,18 @@ final class SpfNativeResult
      * @param list<array{code: string, message: string}> $warnings
      * @param list<array<string, mixed>> $resolverDiagnostics
      * @param array<string, mixed> $discovery
+     * @param ?array{qualifier: string, mechanism?: string, position?: int} $parsedTerminalPolicy
      */
     public function __construct(
         public readonly string $state,
+        public readonly string $protocolStatus,
+        public readonly string $riskStatus,
         public readonly string $summary,
         public readonly ?string $rawRecord,
         public readonly ?string $normalizedRecord,
         public readonly array $parsedTerms,
-        public readonly ?array $terminalPolicy,
+        public readonly ?array $parsedTerminalPolicy,
+        public readonly string $terminalPolicy,
         public readonly int $lookupCount,
         public readonly int $lookupLimit,
         public readonly int $lookupsRemaining,
@@ -43,6 +47,8 @@ final class SpfNativeResult
     {
         return [
             'state' => $this->state,
+            'protocol_status' => $this->protocolStatus,
+            'risk_status' => $this->riskStatus,
             'summary' => $this->summary,
             'raw_record' => $this->rawRecord,
             'normalized_record' => $this->normalizedRecord,

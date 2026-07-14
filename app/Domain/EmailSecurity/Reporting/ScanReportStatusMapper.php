@@ -2,6 +2,8 @@
 
 namespace App\Domain\EmailSecurity\Reporting;
 
+use App\Domain\EmailSecurity\Checks\SPF\Support\SpfAnalysisReader;
+
 /**
  * Derives normalized display states from existing scan payloads.
  * Does not persist new enums into result_json / score_breakdown.
@@ -111,6 +113,9 @@ class ScanReportStatusMapper
             ];
         }
 
+        $uiState = SpfAnalysisReader::state($spfInfo);
+        $protocolStatus = SpfAnalysisReader::protocolStatus($spfInfo);
+
         $valid = $spfInfo['valid'] ?? true;
         $error = $spfInfo['error'] ?? null;
         if ($valid === false) {
@@ -120,7 +125,17 @@ class ScanReportStatusMapper
                 'status' => 'Invalid',
                 'subtext' => is_string($error) && $error !== ''
                     ? $error
-                    : 'SPF record failed validation',
+                    : 'SPF configuration invalid',
+            ];
+        }
+
+        if ($protocolStatus === 'temperror' || $uiState === self::UNKNOWN) {
+            return [
+                'card_label' => $cardLabel,
+                'state' => self::UNKNOWN,
+                'status' => 'Could not evaluate',
+                'subtext' => SpfAnalysisReader::summary($spfInfo)
+                    ?? 'SPF configuration could not be fully evaluated',
             ];
         }
 
@@ -134,11 +149,19 @@ class ScanReportStatusMapper
         }
 
         $lookups = (int) $spfInfo['lookups'];
-        if ($lookups >= 10) {
+        if ($lookups > 10) {
             return [
                 'card_label' => $cardLabel,
                 'state' => self::FAIL,
                 'status' => 'Over limit',
+                'subtext' => $lookups . ' of 10 DNS lookups',
+            ];
+        }
+        if ($lookups === 10) {
+            return [
+                'card_label' => $cardLabel,
+                'state' => self::WARNING,
+                'status' => 'At limit',
                 'subtext' => $lookups . ' of 10 DNS lookups',
             ];
         }

@@ -105,7 +105,7 @@ class ScanReportStatusMapperTest extends TestCase
             [6, ScanReportStatusMapper::PASS, 'OK'],
             [7, ScanReportStatusMapper::WARNING, 'Near limit'],
             [9, ScanReportStatusMapper::WARNING, 'Near limit'],
-            [10, ScanReportStatusMapper::FAIL, 'Over limit'],
+            [10, ScanReportStatusMapper::WARNING, 'At limit'],
             [11, ScanReportStatusMapper::FAIL, 'Over limit'],
         ];
     }

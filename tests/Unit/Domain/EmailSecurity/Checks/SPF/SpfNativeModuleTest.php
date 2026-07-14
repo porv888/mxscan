@@ -78,6 +78,14 @@ class SpfNativeModuleTest extends TestCase
         $this->assertSame('v=spf1 include:example.com -all', $joined);
     }
 
+    public function test_unknown_modifier_is_ignored(): void
+    {
+        $terms = (new SpfParser())->parse('v=spf1 ara=foo -all', 'example.test');
+        $this->assertSame('modifier', $terms[0]->type);
+        $this->assertSame('ara', $terms[0]->name);
+        $this->assertEmpty((new \App\Domain\EmailSecurity\Checks\SPF\Validation\SpfValidator())->validate($terms, new \App\Domain\EmailSecurity\Checks\SPF\Discovery\SpfDiscoveryResult('example.test', 'dns_collection', 'v=spf1 ara=foo -all'), 'v=spf1 ara=foo -all')->errors);
+    }
+
     public function test_lookup_counter_thresholds(): void
     {
         $counter = new SpfLookupCounter();
@@ -94,11 +102,14 @@ class SpfNativeModuleTest extends TestCase
     {
         $native = new SpfNativeResult(
             state: SpfStates::WARNING,
+            protocolStatus: \App\Domain\EmailSecurity\Checks\SPF\SpfProtocolStatus::VALID,
+            riskStatus: \App\Domain\EmailSecurity\Checks\SPF\SpfRiskStatus::WARNING,
             summary: 'near limit',
             rawRecord: 'v=spf1 -all',
             normalizedRecord: 'v=spf1 -all',
             parsedTerms: [],
-            terminalPolicy: ['qualifier' => '-', 'mechanism' => 'all', 'position' => 1],
+            parsedTerminalPolicy: ['qualifier' => '-', 'mechanism' => 'all', 'position' => 1],
+            terminalPolicy: \App\Domain\EmailSecurity\Checks\SPF\SpfTerminalPolicy::HARD_FAIL,
             lookupCount: 9,
             lookupLimit: 10,
             lookupsRemaining: 1,
@@ -122,11 +133,14 @@ class SpfNativeModuleTest extends TestCase
     {
         $native = new SpfNativeResult(
             state: SpfStates::FAIL,
+            protocolStatus: \App\Domain\EmailSecurity\Checks\SPF\SpfProtocolStatus::PERMERROR,
+            riskStatus: \App\Domain\EmailSecurity\Checks\SPF\SpfRiskStatus::CRITICAL,
             summary: 'multiple',
             rawRecord: 'v=spf1 -all',
             normalizedRecord: 'v=spf1 -all',
             parsedTerms: [],
-            terminalPolicy: null,
+            parsedTerminalPolicy: null,
+            terminalPolicy: \App\Domain\EmailSecurity\Checks\SPF\SpfTerminalPolicy::IMPLICIT_NEUTRAL,
             lookupCount: 0,
             lookupLimit: 10,
             lookupsRemaining: 10,

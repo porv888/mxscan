@@ -27,6 +27,7 @@ final class SpfDnsDependencyResolver
                 error: $result->error,
                 empty: $result->isEmpty(),
                 nxdomain: $result->success && $result->isEmpty(),
+                outcome: $this->resolveOutcome($result),
             );
         });
     }
@@ -43,6 +44,7 @@ final class SpfDnsDependencyResolver
                 records: $records,
                 empty: $records === [],
                 nxdomain: $records === [],
+                outcome: $records === [] ? SpfDnsQueryResult::OUTCOME_EMPTY : SpfDnsQueryResult::OUTCOME_SUCCESS,
             );
         });
     }
@@ -59,6 +61,7 @@ final class SpfDnsDependencyResolver
                 records: $records,
                 empty: $records === [],
                 nxdomain: $records === [],
+                outcome: $records === [] ? SpfDnsQueryResult::OUTCOME_EMPTY : SpfDnsQueryResult::OUTCOME_SUCCESS,
             );
         });
     }
@@ -75,6 +78,7 @@ final class SpfDnsDependencyResolver
                 records: $records,
                 empty: $records === [],
                 nxdomain: $records === [],
+                outcome: $records === [] ? SpfDnsQueryResult::OUTCOME_EMPTY : SpfDnsQueryResult::OUTCOME_SUCCESS,
             );
         });
     }
@@ -97,5 +101,26 @@ final class SpfDnsDependencyResolver
         }
 
         return $this->cache[$key];
+    }
+
+    private function resolveOutcome(\App\Services\Dns\DnsResult $result): string
+    {
+        if (!$result->success) {
+            $error = strtolower((string) $result->error);
+            if (str_contains($error, 'timeout') || str_contains($error, 'timed out')) {
+                return SpfDnsQueryResult::OUTCOME_TIMEOUT;
+            }
+            if (str_contains($error, 'servfail')) {
+                return SpfDnsQueryResult::OUTCOME_SERVFAIL;
+            }
+
+            return SpfDnsQueryResult::OUTCOME_ERROR;
+        }
+
+        if ($result->isEmpty()) {
+            return SpfDnsQueryResult::OUTCOME_EMPTY;
+        }
+
+        return SpfDnsQueryResult::OUTCOME_SUCCESS;
     }
 }

@@ -36,6 +36,7 @@ final class FixtureLoader
             score: (int) ($payload['score'] ?? 0),
             scoreBreakdown: $payload['score_breakdown'] ?? [],
             legacyDnsPayload: $payload,
+            rootTxtRecords: self::rootTxtRecordsFromPayload($payload),
         );
     }
 
@@ -53,8 +54,27 @@ final class FixtureLoader
                     score: (int) ($this->payload['score'] ?? 0),
                     scoreBreakdown: $this->payload['score_breakdown'] ?? [],
                     legacyDnsPayload: $this->payload,
+                    rootTxtRecords: FixtureLoader::rootTxtRecordsFromPayload($this->payload, $domain),
                 );
             }
         });
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     * @return list<array{host: string, txt: string, ttl: ?int}>
+     */
+    public static function rootTxtRecordsFromPayload(array $payload, ?string $domain = 'example.test'): array
+    {
+        if (isset($payload['root_txt_records']) && is_array($payload['root_txt_records'])) {
+            return $payload['root_txt_records'];
+        }
+
+        $spf = $payload['records']['SPF']['data'] ?? null;
+        if (is_string($spf) && $spf !== '') {
+            return [['host' => $domain ?? 'example.test', 'txt' => $spf, 'ttl' => 3600]];
+        }
+
+        return [];
     }
 }

@@ -101,6 +101,6 @@ final class SpfRecordDiscovery
 
     public static function isSpfRecord(string $txt): bool
     {
-        return preg_match('/\bv=spf1\b/i', $txt) === 1;
+        return preg_match('/^v=spf1\b/i', trim($txt)) === 1;
     }
 }

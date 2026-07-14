@@ -1,0 +1,16 @@
+{
+  "version": "spf-native-v1",
+  "protocol_status": "valid",
+  "risk_status": "healthy",
+  "state": "pass",
+  "summary": "SPF configuration valid.",
+  "terminal_policy": "hard_fail",
+  "lookup_count": 2,
+  "lookup_limit": 10,
+  "lookups_remaining": 8,
+  "void_lookup_count": 0,
+  "evaluation_completeness": "complete",
+  "errors": [],
+  "warnings": [],
+  "dependencies": []
+}

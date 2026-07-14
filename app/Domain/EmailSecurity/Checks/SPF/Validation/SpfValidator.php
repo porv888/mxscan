@@ -7,7 +7,6 @@ use App\Domain\EmailSecurity\Checks\SPF\Parsing\SpfParsedTerm;
 
 final class SpfValidator
 {
-    private const LOOKUP_LIMIT = 10;
     private const MAX_RECORD_LENGTH = 255;
 
     /**
@@ -20,6 +19,7 @@ final class SpfValidator
         $hasTerminalAll = false;
         $terminalPolicy = null;
         $redirectCount = 0;
+        $expCount = 0;
         $afterAll = false;
 
         if (trim($record) === '' || !preg_match('/^v=spf1\b/i', trim($record))) {
@@ -35,14 +35,18 @@ final class SpfValidator
         }
 
         foreach ($terms as $term) {
+            if ($term->type === 'modifier' && !in_array($term->name, ['redirect', 'exp'], true)) {
+                continue;
+            }
+
             foreach ($term->errors as $termError) {
                 $errors[] = $termError + ['position' => $term->position];
             }
 
             if ($afterAll) {
-                $errors[] = [
-                    'code' => 'TERMS_AFTER_ALL',
-                    'message' => 'Terms found after the all mechanism.',
+                $warnings[] = [
+                    'code' => 'DEAD_CONFIGURATION_AFTER_ALL',
+                    'message' => 'Unreachable configuration found after the all mechanism.',
                     'position' => $term->position,
                 ];
             }
@@ -51,6 +55,13 @@ final class SpfValidator
                 $redirectCount++;
                 if ($redirectCount > 1) {
                     $errors[] = ['code' => 'DUPLICATE_REDIRECT', 'message' => 'Only one redirect modifier is allowed.'];
+                }
+            }
+
+            if ($term->name === 'exp') {
+                $expCount++;
+                if ($expCount > 1) {
+                    $errors[] = ['code' => 'DUPLICATE_EXP', 'message' => 'Only one exp modifier is allowed.'];
                 }
             }
 
@@ -70,6 +81,14 @@ final class SpfValidator
                 $errors[] = ['code' => 'INVALID_IPV6', 'message' => "Invalid ip6 value: {$term->raw}", 'position' => $term->position];
             }
 
+            if ($term->name === 'a' && !$this->isValidAMechanism($term)) {
+                $errors[] = ['code' => 'INVALID_A_MECHANISM', 'message' => "Invalid a mechanism: {$term->raw}", 'position' => $term->position];
+            }
+
+            if ($term->name === 'mx' && !$this->isValidMxMechanism($term)) {
+                $errors[] = ['code' => 'INVALID_MX_MECHANISM', 'message' => "Invalid mx mechanism: {$term->raw}", 'position' => $term->position];
+            }
+
             if (in_array($term->name, ['include', 'redirect'], true) && !$this->isValidDomain($term->argument)) {
                 $errors[] = ['code' => 'INVALID_DOMAIN', 'message' => "Invalid domain in {$term->name}: {$term->raw}", 'position' => $term->position];
             }
@@ -85,7 +104,7 @@ final class SpfValidator
                     $errors[] = ['code' => 'PLUS_ALL', 'message' => 'SPF uses +all which allows any sender.', 'position' => $term->position];
                 }
                 if (in_array($term->qualifier, ['~', '?'], true)) {
-                    $warnings[] = ['code' => 'WEAK_TERMINAL_POLICY', 'message' => 'SPF terminal policy is weak.', 'position' => $term->position];
+                    $warnings[] = ['code' => 'WEAK_TERMINAL_POLICY', 'message' => 'SPF policy uses a weak terminal qualifier.', 'position' => $term->position];
                 }
                 $afterAll = true;
             }
@@ -134,12 +153,42 @@ final class SpfValidator
         return true;
     }
 
+    private function isValidAMechanism(SpfParsedTerm $term): bool
+    {
+        if ($term->argument === null) {
+            return true;
+        }
+
+        if ($term->cidrV4 !== null && ($term->cidrV4 < 0 || $term->cidrV4 > 32)) {
+            return false;
+        }
+
+        if ($term->cidrV6 !== null && ($term->cidrV6 < 0 || $term->cidrV6 > 128)) {
+            return false;
+        }
+
+        if (!$this->isValidDomain($term->argument)) {
+            return false;
+        }
+
+        return true;
+    }
+
+    private function isValidMxMechanism(SpfParsedTerm $term): bool
+    {
+        if ($term->argument === null) {
+            return true;
+        }
+
+        return $this->isValidDomain($term->argument);
+    }
+
     private function isValidDomain(?string $domain): bool
     {
         if ($domain === null || trim($domain) === '') {
             return false;
         }
 
-        return (bool) preg_match('/^[a-z0-9._-]+$/i', $domain);
+        return (bool) preg_match('/^[a-z0-9._%-]+$/i', $domain);
     }
 }

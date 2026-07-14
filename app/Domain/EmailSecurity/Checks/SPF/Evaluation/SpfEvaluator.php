@@ -3,7 +3,9 @@
 namespace App\Domain\EmailSecurity\Checks\SPF\Evaluation;
 
 use App\Domain\EmailSecurity\Checks\SPF\Discovery\SpfRecordDiscovery;
+use App\Domain\EmailSecurity\Checks\SPF\Macros\SpfMacroAssessment;
 use App\Domain\EmailSecurity\Checks\SPF\Parsing\SpfParsedTerm;
+use App\Domain\EmailSecurity\Checks\SPF\Parsing\SpfParser;
 use App\Domain\EmailSecurity\Checks\SPF\Validation\SpfValidationResult;
 
 final class SpfEvaluator
@@ -12,9 +14,11 @@ final class SpfEvaluator
     private const MAX_REDIRECT_CHAIN = 3;
 
     private SpfLookupCounter $lookupCounter;
+    private bool $hasTemperror = false;
 
     public function __construct(
         private SpfDnsDependencyResolver $resolver,
+        private SpfParser $parser,
     ) {
         $this->lookupCounter = new SpfLookupCounter();
     }
@@ -22,10 +26,15 @@ final class SpfEvaluator
     /**
      * @param list<SpfParsedTerm> $terms
      */
-    public function evaluate(array $terms, string $domain, SpfValidationResult $validation): SpfEvaluationResult
-    {
+    public function evaluate(
+        array $terms,
+        string $domain,
+        SpfValidationResult $validation,
+        ?SpfMacroAssessment $macroAssessment = null,
+    ): SpfEvaluationResult {
         $this->resolver->reset();
         $this->lookupCounter = new SpfLookupCounter();
+        $this->hasTemperror = false;
 
         $resolvedIps = [];
         $dependencies = [];
@@ -36,6 +45,8 @@ final class SpfEvaluator
         $this->walkTerms(
             terms: $terms,
             domain: strtolower(trim($domain)),
+            validation: $validation,
+            macroAssessment: $macroAssessment,
             resolvedIps: $resolvedIps,
             dependencies: $dependencies,
             warnings: $warnings,
@@ -58,7 +69,7 @@ final class SpfEvaluator
             $errors[] = ['code' => 'VOID_LOOKUP_LIMIT', 'message' => 'SPF void lookup limit exceeded.'];
         }
 
-        if ($this->lookupCounter->exceeded()) {
+        if ($this->lookupCounter->attemptedOverLimit()) {
             $errors[] = ['code' => 'LOOKUP_LIMIT', 'message' => 'SPF exceeds the 10-lookup limit.'];
         }
 
@@ -68,7 +79,8 @@ final class SpfEvaluator
             warnings: $warnings,
             errors: $errors,
             diagnostics: $diagnostics,
-            lookupLimitExceeded: $this->lookupCounter->exceeded(),
+            lookupLimitExceeded: $this->lookupCounter->attemptedOverLimit(),
+            hasTemperror: $this->hasTemperror,
         );
     }
 
@@ -90,6 +102,8 @@ final class SpfEvaluator
     private function walkTerms(
         array $terms,
         string $domain,
+        SpfValidationResult $validation,
+        ?SpfMacroAssessment $macroAssessment,
         array &$resolvedIps,
         array &$dependencies,
         array &$warnings,
@@ -114,18 +128,52 @@ final class SpfEvaluator
 
         $visitedDomains[] = $domain;
 
+        $redirectTerm = null;
         foreach ($terms as $term) {
             if ($term->type === 'modifier' && $term->name === 'redirect') {
-                $this->processRedirect($term, $domain, $resolvedIps, $dependencies, $warnings, $errors, $diagnostics, $visitedDomains, $depth, $redirectChain);
+                $redirectTerm = $term;
+            }
+        }
 
-                return;
+        foreach ($terms as $term) {
+            if ($term->type === 'modifier') {
+                continue;
             }
 
-            $this->processMechanism($term, $domain, $resolvedIps, $dependencies, $warnings, $errors, $diagnostics, $visitedDomains, $depth, $redirectChain, $parentMechanism);
+            $this->processMechanism(
+                $term,
+                $domain,
+                $macroAssessment,
+                $resolvedIps,
+                $dependencies,
+                $warnings,
+                $errors,
+                $diagnostics,
+                $visitedDomains,
+                $depth,
+                $redirectChain,
+                $parentMechanism,
+            );
 
             if ($term->name === 'all') {
                 break;
             }
+        }
+
+        if ($redirectTerm !== null && !$validation->hasTerminalAll) {
+            $this->processRedirect(
+                $redirectTerm,
+                $domain,
+                $macroAssessment,
+                $resolvedIps,
+                $dependencies,
+                $warnings,
+                $errors,
+                $diagnostics,
+                $visitedDomains,
+                $depth,
+                $redirectChain,
+            );
         }
     }
 
@@ -141,6 +189,7 @@ final class SpfEvaluator
     private function processMechanism(
         SpfParsedTerm $term,
         string $domain,
+        ?SpfMacroAssessment $macroAssessment,
         array &$resolvedIps,
         array &$dependencies,
         array &$warnings,
@@ -161,18 +210,21 @@ final class SpfEvaluator
                 break;
 
             case 'include':
+                if ($this->macroBlocksEvaluation($term, $macroAssessment)) {
+                    break;
+                }
                 $target = $this->expandDomain($term->argument, $domain);
                 if (!$this->lookupCounter->increment('include', $target, 'TXT', $parentMechanism)) {
                     return;
                 }
-                $child = $this->fetchSpfRecord($target, $diagnostics);
+                $child = $this->fetchSpfRecord($target, $diagnostics, $errors, 'include');
                 $dependencies[] = ['mechanism' => 'include', 'domain' => $target, 'record' => $child];
-                if ($child === null) {
-                    $this->lookupCounter->recordVoid('include', $target, 'TXT', 'NXDOMAIN or empty');
-                    $warnings[] = ['code' => 'INCLUDE_NXDOMAIN', 'message' => "Include target {$target} has no SPF record."];
-                } else {
-                    $childTerms = (new \App\Domain\EmailSecurity\Checks\SPF\Parsing\SpfParser())->parse($child, $target);
-                    $this->walkTerms($childTerms, $target, $resolvedIps, $dependencies, $warnings, $errors, $diagnostics, $visitedDomains, $depth + 1, $redirectChain, 'include');
+                if ($child === null && !$this->hasTemperror) {
+                    $errors[] = ['code' => 'INCLUDE_NONE_PERMERROR', 'message' => "Include target {$target} has no SPF record."];
+                } elseif ($child !== null) {
+                    $childTerms = $this->parser->parse($child, $target);
+                    $childValidation = new SpfValidationResult(terms: $childTerms);
+                    $this->walkTerms($childTerms, $target, $childValidation, $macroAssessment, $resolvedIps, $dependencies, $warnings, $errors, $diagnostics, $visitedDomains, $depth + 1, $redirectChain, 'include');
                 }
                 break;
 
@@ -190,9 +242,9 @@ final class SpfEvaluator
                     return;
                 }
                 $mxResult = $this->resolver->mx($target);
-                $diagnostics[] = ['type' => 'MX', 'host' => $target, 'records' => $mxResult->records];
-                if ($mxResult->empty) {
-                    $this->lookupCounter->recordVoid('mx', $target, 'MX', 'empty');
+                $diagnostics[] = ['type' => 'MX', 'host' => $target, 'records' => $mxResult->records, 'outcome' => $mxResult->outcome];
+                if ($mxResult->isVoidEligible()) {
+                    $this->lookupCounter->recordVoid('mx', $target, 'MX', $mxResult->outcome);
                 }
                 foreach ($mxResult->records as $mxHost) {
                     $this->resolveAddresses($mxHost, $resolvedIps, $diagnostics, 'mx');
@@ -200,14 +252,19 @@ final class SpfEvaluator
                 break;
 
             case 'exists':
+                if ($this->macroBlocksEvaluation($term, $macroAssessment)) {
+                    break;
+                }
                 $target = $this->expandDomain($term->argument, $domain);
                 if (!$this->lookupCounter->increment('exists', $target, 'TXT', $parentMechanism)) {
                     return;
                 }
                 $exists = $this->resolver->txt($target);
-                $diagnostics[] = ['type' => 'TXT', 'host' => $target, 'records' => $exists->records];
-                if ($exists->empty || $exists->failed()) {
-                    $this->lookupCounter->recordVoid('exists', $target, 'TXT', 'empty or failed');
+                $diagnostics[] = ['type' => 'TXT', 'host' => $target, 'records' => $exists->records, 'outcome' => $exists->outcome];
+                if ($exists->isTemperror()) {
+                    $this->recordTemperror($errors, $target);
+                } elseif ($exists->isVoidEligible()) {
+                    $this->lookupCounter->recordVoid('exists', $target, 'TXT', $exists->outcome);
                 }
                 break;
 
@@ -234,6 +291,7 @@ final class SpfEvaluator
     private function processRedirect(
         SpfParsedTerm $term,
         string $domain,
+        ?SpfMacroAssessment $macroAssessment,
         array &$resolvedIps,
         array &$dependencies,
         array &$warnings,
@@ -243,6 +301,10 @@ final class SpfEvaluator
         int $depth,
         array $redirectChain,
     ): void {
+        if ($this->macroBlocksEvaluation($term, $macroAssessment)) {
+            return;
+        }
+
         $target = $this->expandDomain($term->argument, $domain);
         $redirectChain[] = $target;
         if (count($redirectChain) > self::MAX_REDIRECT_CHAIN) {
@@ -255,26 +317,35 @@ final class SpfEvaluator
             return;
         }
 
-        $child = $this->fetchSpfRecord($target, $diagnostics);
+        $child = $this->fetchSpfRecord($target, $diagnostics, $errors, 'redirect');
         $dependencies[] = ['mechanism' => 'redirect', 'domain' => $target, 'record' => $child];
-        if ($child === null) {
-            $this->lookupCounter->recordVoid('redirect', $target, 'TXT', 'NXDOMAIN or empty');
-            $warnings[] = ['code' => 'INCLUDE_NXDOMAIN', 'message' => "Redirect target {$target} has no SPF record."];
-        } else {
-            $childTerms = (new \App\Domain\EmailSecurity\Checks\SPF\Parsing\SpfParser())->parse($child, $target);
-            $this->walkTerms($childTerms, $target, $resolvedIps, $dependencies, $warnings, $errors, $diagnostics, $visitedDomains, $depth + 1, $redirectChain, 'redirect');
+        if ($child === null && !$this->hasTemperror) {
+            $errors[] = ['code' => 'REDIRECT_NONE_PERMERROR', 'message' => "Redirect target {$target} has no SPF record."];
+        } elseif ($child !== null) {
+            $childTerms = $this->parser->parse($child, $target);
+            $childValidation = new SpfValidationResult(terms: $childTerms);
+            $this->walkTerms($childTerms, $target, $childValidation, $macroAssessment, $resolvedIps, $dependencies, $warnings, $errors, $diagnostics, $visitedDomains, $depth + 1, $redirectChain, 'redirect');
         }
     }
 
     /**
      * @param list<array<string, mixed>> $diagnostics
+     * @param list<array{code: string, message: string}> $errors
      */
-    private function fetchSpfRecord(string $domain, array &$diagnostics): ?string
+    private function fetchSpfRecord(string $domain, array &$diagnostics, array &$errors, string $context): ?string
     {
         $result = $this->resolver->txt($domain);
-        $diagnostics[] = ['type' => 'TXT', 'host' => $domain, 'records' => $result->records, 'error' => $result->error];
+        $diagnostics[] = ['type' => 'TXT', 'host' => $domain, 'records' => $result->records, 'error' => $result->error, 'outcome' => $result->outcome, 'context' => $context];
 
-        if ($result->failed()) {
+        if ($result->isTemperror()) {
+            $this->recordTemperror($errors, $domain);
+
+            return null;
+        }
+
+        if ($result->isVoidEligible()) {
+            $this->lookupCounter->recordVoid($context, $domain, 'TXT', $result->outcome);
+
             return null;
         }
 
@@ -296,11 +367,34 @@ final class SpfEvaluator
     {
         $a = $this->resolver->a($host);
         $aaaa = $this->resolver->aaaa($host);
-        $diagnostics[] = ['type' => 'A', 'host' => $host, 'records' => $a->records, 'parent' => $parent];
-        $diagnostics[] = ['type' => 'AAAA', 'host' => $host, 'records' => $aaaa->records, 'parent' => $parent];
+        $diagnostics[] = ['type' => 'A', 'host' => $host, 'records' => $a->records, 'parent' => $parent, 'outcome' => $a->outcome];
+        $diagnostics[] = ['type' => 'AAAA', 'host' => $host, 'records' => $aaaa->records, 'parent' => $parent, 'outcome' => $aaaa->outcome];
         foreach (array_merge($a->records, $aaaa->records) as $ip) {
             $resolvedIps[] = $ip;
         }
+    }
+
+    /**
+     * @param list<array{code: string, message: string}> $errors
+     */
+    private function recordTemperror(array &$errors, string $domain): void
+    {
+        $this->hasTemperror = true;
+        $errors[] = ['code' => 'DNS_TEMPERROR', 'message' => "Temporary DNS failure while resolving {$domain}."];
+    }
+
+    private function macroBlocksEvaluation(SpfParsedTerm $term, ?SpfMacroAssessment $macroAssessment): bool
+    {
+        if ($macroAssessment === null || !$macroAssessment->hasUnsupportedMacro) {
+            return false;
+        }
+
+        $value = (string) $term->argument;
+        if ($value === '') {
+            return false;
+        }
+
+        return (bool) preg_match('/%\{[^}]+\}|%[a-zA-Z%_-]/', $value);
     }
 
     private function expandDomain(?string $value, string $baseDomain): string

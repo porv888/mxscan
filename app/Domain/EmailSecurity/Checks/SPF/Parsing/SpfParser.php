@@ -62,6 +62,19 @@ final class SpfParser
             );
         }
 
+        if (preg_match('/^(?<name>[a-z0-9_-]+)=(?<arg>.*)$/i', $body, $modifierMatches)
+            && !in_array(strtolower($modifierMatches['name']), ['redirect', 'exp'], true)) {
+            return new SpfParsedTerm(
+                position: $position,
+                raw: $token,
+                qualifier: $qualifier,
+                type: 'modifier',
+                name: strtolower($modifierMatches['name']),
+                argument: $modifierMatches['arg'] !== '' ? $modifierMatches['arg'] : null,
+                sourceDomain: $sourceDomain,
+            );
+        }
+
         if (preg_match('/^(?<name>all|include|a|mx|ip4|ip6|ptr|exists)(?::(?<arg>.*))?$/', $body, $matches)) {
             $name = $matches['name'];
             $argument = $matches['arg'] ?? null;

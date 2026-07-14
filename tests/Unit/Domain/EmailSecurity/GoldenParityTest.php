@@ -7,6 +7,8 @@ use App\Domain\EmailSecurity\DTO\CheckContextDTO;
 use App\Domain\EmailSecurity\DTO\ScanOptionsDTO;
 use App\Domain\EmailSecurity\Reporting\ScanResultNormalizer;
 use App\Domain\EmailSecurity\Scoring\LegacyDnsScoreCalculator;
+use App\Domain\EmailSecurity\Scoring\Rules\SpfScoreRule;
+use App\Domain\EmailSecurity\Scoring\ScoreInvariantGuard;
 use App\Domain\EmailSecurity\Support\ScanPayloadBuilder;
 use App\Domain\EmailSecurity\Support\ScanResultAssembler;
 use App\Domain\EmailSecurity\Support\ScoringInputFactory;
@@ -27,6 +29,13 @@ use Tests\TestCase;
 class GoldenParityTest extends TestCase
 {
     use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        config(['email-security.spf_engine' => 'legacy']);
+        $this->app->forgetInstance(\App\Domain\EmailSecurity\Checks\CheckRegistry::class);
+    }
 
     protected function tearDown(): void
     {
@@ -79,7 +88,12 @@ class GoldenParityTest extends TestCase
         $dns = FixtureLoader::dnsCollection();
         $normalized = $assembler->assembleNormalized($context, $dns, (new BundledDnsChecksAdapter())->adapt($dns), []);
 
-        $calculator = new LegacyDnsScoreCalculator(new ScoreBreakdownService());
+        $scoreBreakdownService = new ScoreBreakdownService();
+        $calculator = new LegacyDnsScoreCalculator(
+            $scoreBreakdownService,
+            new SpfScoreRule(),
+            new ScoreInvariantGuard($scoreBreakdownService),
+        );
         $score = $calculator->calculate((new ScoringInputFactory())->from($normalized));
 
         $this->assertSame(75, $score->total);

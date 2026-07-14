@@ -8,6 +8,7 @@ final class SpfLookupCounter
 
     private int $lookupCount = 0;
     private int $voidLookupCount = 0;
+    private bool $attemptedOverLimit = false;
 
     /** @var list<array<string, mixed>> */
     private array $lookupPaths = [];
@@ -25,6 +26,8 @@ final class SpfLookupCounter
     public function increment(string $mechanism, string $host, string $type, ?string $parent = null): bool
     {
         if (!$this->canIncrement()) {
+            $this->attemptedOverLimit = true;
+
             return false;
         }
 
@@ -67,9 +70,19 @@ final class SpfLookupCounter
         return max(0, self::LIMIT - $this->lookupCount);
     }
 
+    public function atLimit(): bool
+    {
+        return $this->lookupCount === self::LIMIT;
+    }
+
     public function exceeded(): bool
     {
-        return $this->lookupCount >= self::LIMIT;
+        return $this->lookupCount > self::LIMIT;
+    }
+
+    public function attemptedOverLimit(): bool
+    {
+        return $this->attemptedOverLimit || $this->lookupCount > self::LIMIT;
     }
 
     /**

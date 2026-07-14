@@ -18,6 +18,7 @@ final class SpfEvaluationResult
         public readonly array $errors = [],
         public readonly array $diagnostics = [],
         public readonly bool $lookupLimitExceeded = false,
+        public readonly bool $hasTemperror = false,
     ) {
     }
 }

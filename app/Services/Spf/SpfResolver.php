@@ -28,6 +28,7 @@ class SpfResolver
     public const WARNING_LOOKUP_LIMIT = 'LOOKUP_LIMIT';
     public const WARNING_NO_SPF = 'NO_SPF';
     public const WARNING_MULTIPLE_SPF = 'MULTIPLE_SPF';
+    public const WARNING_UNSUPPORTED_MACRO = 'UNSUPPORTED_MACRO';
 
     public function __construct(DnsClient $dnsClient = null)
     {

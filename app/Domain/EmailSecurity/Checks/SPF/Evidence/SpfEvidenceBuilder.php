@@ -5,36 +5,53 @@ namespace App\Domain\EmailSecurity\Checks\SPF\Evidence;
 use App\Domain\EmailSecurity\Checks\SPF\Discovery\SpfDiscoveryResult;
 use App\Domain\EmailSecurity\Checks\SPF\Evaluation\SpfEvaluationResult;
 use App\Domain\EmailSecurity\Checks\SPF\Evaluation\SpfLookupCounter;
+use App\Domain\EmailSecurity\Checks\SPF\Macros\SpfMacroAssessment;
+use App\Domain\EmailSecurity\Checks\SPF\Parsing\SpfParser;
 use App\Domain\EmailSecurity\Checks\SPF\SpfNativeResult;
-use App\Domain\EmailSecurity\Checks\SPF\SpfStates;
+use App\Domain\EmailSecurity\Checks\SPF\SpfTerminalPolicyResolver;
 use App\Domain\EmailSecurity\Checks\SPF\Validation\SpfValidationResult;
 
 final class SpfEvidenceBuilder
 {
+    public function __construct(
+        private SpfStatusDeriver $statusDeriver,
+        private SpfTerminalPolicyResolver $terminalPolicyResolver,
+        private SpfParser $parser,
+    ) {
+    }
+
     public function build(
         SpfDiscoveryResult $discovery,
         SpfValidationResult $validation,
         SpfEvaluationResult $evaluation,
         SpfLookupCounter $lookupCounter,
+        ?SpfMacroAssessment $macroAssessment = null,
     ): SpfNativeResult {
         $rawRecord = $discovery->record;
         $normalized = $rawRecord !== null ? (preg_replace('/\s+/', ' ', trim($rawRecord)) ?: null) : null;
         $parsedTerms = array_map(fn ($term) => $term->toArray(), $validation->terms);
         $lookupCount = $lookupCounter->count();
-        $state = $this->deriveState($discovery, $validation, $evaluation, $lookupCount);
-        $summary = $this->deriveSummary($state, $discovery, $validation, $lookupCount);
-        $flattened = $this->buildFlattened($rawRecord, $evaluation->resolvedIps, $validation->terminalPolicy);
+        $derived = $this->statusDeriver->derive($discovery, $validation, $evaluation, $lookupCounter, $macroAssessment);
+        [$parsedTerminalPolicy, $hasTerminalAll] = $this->resolveTerminalPolicy($validation, $evaluation);
+        $flattened = $this->buildFlattened($rawRecord, $evaluation->resolvedIps, $parsedTerminalPolicy);
 
         $errors = array_merge($validation->errors, $evaluation->errors);
         $warnings = array_merge($validation->warnings, $evaluation->warnings);
+        $terminalPolicy = $this->terminalPolicyResolver->resolve(
+            $parsedTerminalPolicy,
+            $hasTerminalAll,
+        );
 
         return new SpfNativeResult(
-            state: $state,
-            summary: $summary,
+            state: $derived->state,
+            protocolStatus: $derived->protocolStatus,
+            riskStatus: $derived->riskStatus,
+            summary: $derived->summary,
             rawRecord: $rawRecord,
             normalizedRecord: $normalized,
             parsedTerms: $parsedTerms,
-            terminalPolicy: $validation->terminalPolicy,
+            parsedTerminalPolicy: $parsedTerminalPolicy,
+            terminalPolicy: $terminalPolicy,
             lookupCount: $lookupCount,
             lookupLimit: SpfLookupCounter::LIMIT,
             lookupsRemaining: $lookupCounter->remaining(),
@@ -56,46 +73,50 @@ final class SpfEvidenceBuilder
         );
     }
 
-    private function deriveState(
-        SpfDiscoveryResult $discovery,
-        SpfValidationResult $validation,
-        SpfEvaluationResult $evaluation,
-        int $lookupCount,
-    ): string {
-        if ($discovery->hasDnsFailure()) {
-            return SpfStates::UNKNOWN;
-        }
-        if ($discovery->isMissing()) {
-            return SpfStates::MISSING;
-        }
-        if ($discovery->multipleRecords || $validation->hasHardErrors() || $evaluation->lookupLimitExceeded) {
-            return SpfStates::FAIL;
-        }
-        if ($lookupCount >= 10 || $this->hasCode($validation->errors, 'PLUS_ALL') || $this->hasCode($evaluation->errors, 'VOID_LOOKUP_LIMIT')) {
-            return SpfStates::FAIL;
-        }
-        if ($lookupCount >= 7 || $this->hasCode($validation->warnings, 'DEPRECATED_PTR') || $this->hasCode($validation->warnings, 'MISSING_TERMINAL_ALL')) {
-            return SpfStates::WARNING;
+    /**
+     * @return array{0: ?array{qualifier: string, mechanism: string}, 1: bool}
+     */
+    private function resolveTerminalPolicy(SpfValidationResult $validation, SpfEvaluationResult $evaluation): array
+    {
+        if ($validation->hasTerminalAll) {
+            return [$validation->terminalPolicy, true];
         }
 
-        return SpfStates::PASS;
+        $redirectTerminal = $this->redirectTerminalPolicy($evaluation);
+        if ($redirectTerminal !== null) {
+            return [$redirectTerminal, true];
+        }
+
+        return [$validation->terminalPolicy, false];
     }
 
-    private function deriveSummary(string $state, SpfDiscoveryResult $discovery, SpfValidationResult $validation, int $lookupCount): string
+    /**
+     * @return ?array{qualifier: string, mechanism: string}
+     */
+    private function redirectTerminalPolicy(SpfEvaluationResult $evaluation): ?array
     {
-        return match ($state) {
-            SpfStates::MISSING => 'No SPF record found.',
-            SpfStates::UNKNOWN => 'SPF record discovery failed due to DNS resolver error.',
-            SpfStates::FAIL => $discovery->multipleRecords
-                ? 'Multiple SPF records were found.'
-                : ($lookupCount >= 10
-                    ? 'SPF exceeds the 10-lookup limit.'
-                    : ($this->hasCode($validation->errors, 'PLUS_ALL')
-                        ? 'SPF uses +all which allows any sender.'
-                        : 'SPF record failed validation.')),
-            SpfStates::WARNING => "SPF is valid but uses {$lookupCount} of 10 DNS lookups.",
-            default => 'SPF record is valid and within DNS lookup limits.',
-        };
+        foreach ($evaluation->dependencies as $dependency) {
+            if (($dependency['mechanism'] ?? '') !== 'redirect') {
+                continue;
+            }
+
+            $record = $dependency['record'] ?? null;
+            if (!is_string($record) || trim($record) === '') {
+                continue;
+            }
+
+            $domain = (string) ($dependency['domain'] ?? '');
+            foreach ($this->parser->parse($record, $domain) as $term) {
+                if ($term->name === 'all') {
+                    return [
+                        'qualifier' => $term->qualifier,
+                        'mechanism' => 'all',
+                    ];
+                }
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -129,19 +150,5 @@ final class SpfEvidenceBuilder
         sort($ipv6);
 
         return 'v=spf1 ' . implode(' ', array_merge($ipv4, $ipv6)) . ' ' . $all;
-    }
-
-    /**
-     * @param list<array{code: string}> $items
-     */
-    private function hasCode(array $items, string $code): bool
-    {
-        foreach ($items as $item) {
-            if (($item['code'] ?? '') === $code) {
-                return true;
-            }
-        }
-
-        return false;
     }
 }

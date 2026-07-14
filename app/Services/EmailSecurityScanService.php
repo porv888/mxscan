@@ -10,6 +10,8 @@ use App\Domain\EmailSecurity\Contracts\ScoreCalculatorInterface;
 use App\Domain\EmailSecurity\DTO\CheckContextDTO;
 use App\Domain\EmailSecurity\DTO\ScanExecutionResultDTO;
 use App\Domain\EmailSecurity\DTO\ScanOptionsDTO;
+use App\Domain\EmailSecurity\Checks\SPF\SpfNativeResult;
+use App\Domain\EmailSecurity\Support\ScanArtifactKeys;
 use App\Domain\EmailSecurity\Support\ScanPayloadBuilder;
 use App\Domain\EmailSecurity\Support\ScanResultAssembler;
 use App\Domain\EmailSecurity\Support\ScoringInputFactory;
@@ -71,11 +73,32 @@ final class EmailSecurityScanService
 
         $normalized = $this->resultAssembler->assembleNormalized($context, $dns, $bundledResults, $nativeResults);
         $scanResult = $this->resultAssembler->toScanResultDTO($normalized);
-        $scoringInput = $this->scoringInputFactory->from($normalized);
+        $nativeSpf = $nativeCollection->artifacts[ScanArtifactKeys::NATIVE_SPF_RESULT] ?? null;
+        if (!$nativeSpf instanceof SpfNativeResult) {
+            $nativeSpf = null;
+        }
+        $scoringInput = $this->scoringInputFactory->from($normalized, $nativeSpf);
         $scoreResult = $this->scoreCalculator->calculate($scoringInput);
         $recommendationList = $this->recommendationEngine->build($domain, $scanResult);
 
         $resultJson = $scanResult->toArray();
+        if ($scoreResult->total !== null) {
+            if (isset($resultJson['dns'])) {
+                $resultJson['dns']['score'] = $scoreResult->total;
+                $resultJson['dns']['score_breakdown'] = $scoreResult->breakdown;
+            } elseif ($scoreResult->breakdown !== []) {
+                $spf = is_array($resultJson['spf'] ?? null) ? $resultJson['spf'] : [];
+                $resultJson['dns'] = [
+                    'score' => $scoreResult->total,
+                    'score_breakdown' => $scoreResult->breakdown,
+                    'records' => [
+                        'SPF' => isset($spf['record']) && is_string($spf['record']) && $spf['record'] !== ''
+                            ? ['status' => 'found', 'data' => $spf['record']]
+                            : ['status' => 'missing'],
+                    ],
+                ];
+            }
+        }
         $onProgress && $onProgress('complete', ScanPayloadBuilder::buildBroadcastReport($resultJson) + ['domain' => $domain->domain]);
 
         return new ScanExecutionResultDTO(

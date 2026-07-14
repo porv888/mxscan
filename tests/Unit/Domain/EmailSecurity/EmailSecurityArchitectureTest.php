@@ -5,6 +5,8 @@ namespace Tests\Unit\Domain\EmailSecurity;
 use App\Domain\EmailSecurity\DTO\NormalizedScanResultDTO;
 use App\Domain\EmailSecurity\DTO\ScoringInputDTO;
 use App\Domain\EmailSecurity\Scoring\LegacyDnsScoreCalculator;
+use App\Domain\EmailSecurity\Scoring\Rules\SpfScoreRule;
+use App\Domain\EmailSecurity\Scoring\ScoreInvariantGuard;
 use App\Domain\EmailSecurity\Support\ScanPayloadBuilder;
 use App\Domain\EmailSecurity\Support\ScanResultAssembler;
 use App\Domain\EmailSecurity\Support\ScoringInputFactory;
@@ -32,7 +34,12 @@ class EmailSecurityArchitectureTest extends TestCase
 
     public function test_legacy_score_calculator_preserves_scanner_total_with_scoring_input_dto(): void
     {
-        $calculator = new LegacyDnsScoreCalculator(new ScoreBreakdownService());
+        $scoreBreakdownService = new ScoreBreakdownService();
+        $calculator = new LegacyDnsScoreCalculator(
+            $scoreBreakdownService,
+            new SpfScoreRule(),
+            new ScoreInvariantGuard($scoreBreakdownService),
+        );
         $dnsPayload = FixtureLoader::input('dns-bundled-full');
         $normalized = new NormalizedScanResultDTO(
             domain: 'example.test',

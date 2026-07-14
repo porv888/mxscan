@@ -11,8 +11,10 @@ use App\Domain\EmailSecurity\Checks\SPF\Discovery\SpfRecordDiscovery;
 use App\Domain\EmailSecurity\Checks\SPF\Evaluation\SpfDnsDependencyResolver;
 use App\Domain\EmailSecurity\Checks\SPF\Evaluation\SpfEvaluator;
 use App\Domain\EmailSecurity\Checks\SPF\Evidence\SpfEvidenceBuilder;
+use App\Domain\EmailSecurity\Checks\SPF\Evidence\SpfStatusDeriver;
+use App\Domain\EmailSecurity\Checks\SPF\Macros\SpfMacroAnalyzer;
 use App\Domain\EmailSecurity\Checks\SPF\Parsing\SpfParser;
-use App\Domain\EmailSecurity\Checks\SPF\SpfCheck;
+use App\Domain\EmailSecurity\Checks\SPF\SpfTerminalPolicyResolver;
 use App\Domain\EmailSecurity\Checks\SPF\Validation\SpfValidator;
 use App\Domain\EmailSecurity\Contracts\DnsCollectorInterface;
 use App\Domain\EmailSecurity\Contracts\RecommendationEngineInterface;
@@ -25,7 +27,10 @@ use App\Domain\EmailSecurity\Recommendations\RecommendationEngine;
 use App\Domain\EmailSecurity\Reporting\ReportingService;
 use App\Domain\EmailSecurity\Reporting\ScanReportFactory;
 use App\Domain\EmailSecurity\Reporting\ScanResultNormalizer;
+use App\Domain\EmailSecurity\Scoring\Rules\SpfScoreRule;
+use App\Domain\EmailSecurity\Scoring\ScoreInvariantGuard;
 use App\Domain\EmailSecurity\Scoring\LegacyDnsScoreCalculator;
+use App\Domain\EmailSecurity\Checks\SPF\SpfCheck;
 use App\Domain\EmailSecurity\Support\ScanPersister;
 use App\Domain\EmailSecurity\Support\ScanResultAssembler;
 use App\Domain\EmailSecurity\Support\ScoringInputFactory;
@@ -67,10 +72,15 @@ class EmailSecurityServiceProvider extends ServiceProvider
         $this->app->singleton(SpfRecordDiscovery::class);
         $this->app->singleton(SpfParser::class);
         $this->app->singleton(SpfValidator::class);
+        $this->app->singleton(SpfMacroAnalyzer::class);
+        $this->app->singleton(SpfStatusDeriver::class);
+        $this->app->singleton(SpfTerminalPolicyResolver::class);
         $this->app->singleton(SpfEvaluator::class);
         $this->app->singleton(SpfEvidenceBuilder::class);
         $this->app->singleton(SpfLegacyPayloadAdapter::class);
         $this->app->singleton(SpfCheck::class);
+        $this->app->singleton(SpfScoreRule::class);
+        $this->app->singleton(ScoreInvariantGuard::class);
     }
 
     private function resolveSpfCheck($app): SpfCheck|SpfAnalysisCheck

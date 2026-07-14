@@ -2,6 +2,8 @@
 
 namespace App\Domain\EmailSecurity\DTO;
 
+use App\Domain\EmailSecurity\Checks\SPF\SpfNativeResult;
+
 final class ScoringInputDTO
 {
     /**
@@ -13,6 +15,7 @@ final class ScoringInputDTO
         public readonly array $scoreBreakdown,
         public readonly string $scoreModelVersion = 'legacy-v1',
         public readonly array $compatibilityMeta = [],
+        public readonly ?SpfNativeResult $nativeSpfResult = null,
     ) {
     }
 }

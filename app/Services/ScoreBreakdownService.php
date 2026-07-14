@@ -2,6 +2,8 @@
 
 namespace App\Services;
 
+use App\Domain\EmailSecurity\DTO\ScoreComponentDTO;
+
 class ScoreBreakdownService
 {
     /**
@@ -42,6 +44,45 @@ class ScoreBreakdownService
             (int) config('dns-scoring.cap', 100),
             array_sum(array_column($breakdown, 'earned'))
         );
+    }
+
+    /**
+     * @param list<array<string, mixed>> $breakdown
+     * @return list<array<string, mixed>>
+     */
+    public function replaceComponent(array $breakdown, ScoreComponentDTO $component): array
+    {
+        $row = $component->toBreakdownRow();
+        $replaced = false;
+
+        foreach ($breakdown as $index => $existing) {
+            if (($existing['key'] ?? '') === $component->key) {
+                $breakdown[$index] = $row;
+                $replaced = true;
+                break;
+            }
+        }
+
+        if (!$replaced) {
+            $breakdown[] = $row;
+        }
+
+        return $breakdown;
+    }
+
+    /**
+     * @param list<array<string, mixed>> $breakdown
+     * @return ?array<string, mixed>
+     */
+    public function findRow(array $breakdown, string $key): ?array
+    {
+        foreach ($breakdown as $row) {
+            if (($row['key'] ?? '') === $key) {
+                return $row;
+            }
+        }
+
+        return null;
     }
 
     private function scoreMx(?array $data): array

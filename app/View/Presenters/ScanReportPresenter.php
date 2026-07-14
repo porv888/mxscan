@@ -258,12 +258,13 @@ class ScanReportPresenter
     {
         return match ($key) {
             'spf' => match ($card['state'] ?? '') {
-                ScanReportStatusMapper::MISSING => 'No authorized senders published.',
-                ScanReportStatusMapper::FAIL => $card['subtext'] ?? 'SPF validation failed.',
+                ScanReportStatusMapper::MISSING => 'No SPF configuration published.',
+                ScanReportStatusMapper::FAIL => $card['subtext'] ?? 'SPF configuration invalid.',
                 ScanReportStatusMapper::WARNING => $card['subtext'] ?? 'SPF lookup count is elevated.',
-                default => ($card['subtext'] ?? 'SPF record found.') !== 'Lookup count not applicable'
-                    ? ($card['subtext'] ?? 'SPF record found.')
-                    : 'Authorized senders are published.',
+                ScanReportStatusMapper::UNKNOWN => $card['subtext'] ?? 'SPF configuration could not be fully evaluated.',
+                default => ($card['subtext'] ?? 'SPF configuration found.') !== 'Lookup count not applicable'
+                    ? ($card['subtext'] ?? 'SPF configuration found.')
+                    : 'SPF configuration is published.',
             },
             'dkim' => ($card['state'] ?? '') === ScanReportStatusMapper::PASS
                 ? (($card['count'] ?? 0) . ' selector' . (($card['count'] ?? 0) === 1 ? '' : 's') . ' discovered.')
