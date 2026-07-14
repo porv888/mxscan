@@ -2,6 +2,8 @@
 
 namespace App\Console\Commands;
 
+use App\Services\Entitlement\EntitlementFeature;
+use App\Services\Entitlement\EntitlementService;
 use Illuminate\Console\Command;
 use App\Models\Schedule;
 use App\Services\ScanRunner;
@@ -23,7 +25,7 @@ class RunScheduledScans extends Command
     /**
      * Execute the console command.
      */
-    public function handle()
+    public function handle(EntitlementService $entitlements)
     {
         $dryRun = $this->option('dry-run');
         
@@ -48,6 +50,12 @@ class RunScheduledScans extends Command
             
             if (!$domain || $domain->status !== 'active') {
                 $this->warn("Skipping inactive domain: {$domain?->domain}");
+                $this->bumpNextRun($schedule);
+                continue;
+            }
+
+            if (!$user || !$entitlements->canOnDomain($user, $domain, EntitlementFeature::SCHEDULED_SCANS)) {
+                $this->warn("Skipping {$domain->domain}: not entitled for scheduled scans");
                 $this->bumpNextRun($schedule);
                 continue;
             }

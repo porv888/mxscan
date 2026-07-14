@@ -6,6 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Models\Domain;
 use App\Models\BlacklistResult;
 use App\Services\BlacklistChecker;
+use App\Services\Entitlement\EntitlementFeature;
+use App\Services\Entitlement\EntitlementService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Carbon\Carbon;
@@ -114,9 +116,17 @@ class BlacklistApiController extends Controller
     /**
      * Trigger a new blacklist check.
      */
-    public function check(Request $request, Domain $domain): JsonResponse
+    public function check(Request $request, Domain $domain, EntitlementService $entitlements): JsonResponse
     {
         $this->authorize('update', $domain);
+
+        if (!$entitlements->canOnDomain($request->user(), $domain, EntitlementFeature::PARTIAL_SCAN)) {
+            return response()->json([
+                'status' => 'error',
+                'message' => $entitlements->denyMessage(EntitlementFeature::PARTIAL_SCAN),
+                'upgrade_url' => $entitlements->upgradeUrl(),
+            ], 402);
+        }
 
         try {
             $scan = \App\Models\Scan::create([

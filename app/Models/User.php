@@ -149,12 +149,7 @@ class User extends Authenticatable implements MustVerifyEmail
      */
     public function domainLimit(): int
     {
-        $plan = $this->currentPlan();
-        if ($plan && !is_null($plan->domain_limit)) {
-            return (int) $plan->domain_limit;
-        }
-        // fallback to config-driven limits based on tier
-        return (int) (config('plans.limits.' . $this->currentTier()) ?? 1);
+        return app(\App\Services\Entitlement\EntitlementService::class)->domainLimit($this);
     }
 
     /**
@@ -191,7 +186,12 @@ class User extends Authenticatable implements MustVerifyEmail
      */
     public function domainsUsed(): int
     {
-        return $this->domains()->count();
+        return app(\App\Services\Entitlement\EntitlementService::class)->domainsUsed($this);
+    }
+
+    public function canAddDomain(): bool
+    {
+        return app(\App\Services\Entitlement\EntitlementService::class)->canAddDomain($this);
     }
 
     /**
@@ -223,8 +223,8 @@ class User extends Authenticatable implements MustVerifyEmail
      */
     public function canUseMonitoring(): bool
     {
-        $planKey = $this->currentPlanKey();
-        return in_array($planKey, ['premium', 'ultra']);
+        return app(\App\Services\Entitlement\EntitlementService::class)
+            ->can($this, \App\Services\Entitlement\EntitlementFeature::MONITORING);
     }
 
     /**
@@ -232,7 +232,8 @@ class User extends Authenticatable implements MustVerifyEmail
      */
     public function canUseApi(): bool
     {
-        return $this->isUltra();
+        return app(\App\Services\Entitlement\EntitlementService::class)
+            ->can($this, \App\Services\Entitlement\EntitlementFeature::API_ACCESS);
     }
 
     /**
@@ -276,8 +277,8 @@ class User extends Authenticatable implements MustVerifyEmail
      */
     public function canUseBlacklist(): bool
     {
-        $planKey = $this->currentPlanKey();
-        return in_array($planKey, ['premium', 'ultra']);
+        return app(\App\Services\Entitlement\EntitlementService::class)
+            ->can($this, \App\Services\Entitlement\EntitlementFeature::PARTIAL_SCAN);
     }
 
     /**
@@ -360,7 +361,8 @@ class User extends Authenticatable implements MustVerifyEmail
      */
     public function canUseDmarcFull(): bool
     {
-        return $this->canUseMonitoring();
+        return app(\App\Services\Entitlement\EntitlementService::class)
+            ->can($this, \App\Services\Entitlement\EntitlementFeature::DMARC_ACTIVITY);
     }
 
     /**

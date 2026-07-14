@@ -4,57 +4,52 @@ namespace App\Policies;
 
 use App\Models\Domain;
 use App\Models\User;
+use App\Services\Entitlement\EntitlementFeature;
+use App\Services\Entitlement\EntitlementService;
 use Illuminate\Auth\Access\HandlesAuthorization;
 
 class DomainPolicy
 {
     use HandlesAuthorization;
 
-    /**
-     * Determine whether the user can view the domain.
-     */
+    public function __construct(
+        protected EntitlementService $entitlements
+    ) {
+    }
+
     public function view(User $user, Domain $domain): bool
     {
         return $user->id === $domain->user_id;
     }
 
-    /**
-     * Determine whether the user can update the domain.
-     */
     public function update(User $user, Domain $domain): bool
     {
-        return $user->id === $domain->user_id;
+        return $user->id === $domain->user_id
+            && $this->entitlements->canOnDomain($user, $domain, EntitlementFeature::DOMAIN_MANAGE);
     }
 
-    /**
-     * Determine whether the user can delete the domain.
-     */
     public function delete(User $user, Domain $domain): bool
     {
         return $user->id === $domain->user_id;
     }
 
-    /**
-     * Determine whether the user can scan the domain.
-     */
     public function scan(User $user, Domain $domain): bool
     {
-        return $user->id === $domain->user_id;
+        return $user->id === $domain->user_id
+            && $this->entitlements->canOnDomain($user, $domain, EntitlementFeature::MANUAL_FULL_SCAN);
+    }
+
+    public function partialScan(User $user, Domain $domain): bool
+    {
+        return $user->id === $domain->user_id
+            && $this->entitlements->canOnDomain($user, $domain, EntitlementFeature::PARTIAL_SCAN);
     }
 
     /**
-     * Determine whether the user can run blacklist checks.
-     * This is plan-gated - only available for paid plans.
+     * Standalone blacklist-only scans (not the blacklist section of a full scan).
      */
     public function blacklist(User $user, Domain $domain): bool
     {
-        // First check if user owns the domain
-        if ($user->id !== $domain->user_id) {
-            return false;
-        }
-
-        // Check if user has a paid plan (not freemium)
-        $currentPlan = $user->currentPlan();
-        return $currentPlan && $currentPlan->name !== 'freemium';
+        return $this->partialScan($user, $domain);
     }
 }

@@ -27,7 +27,7 @@
                 <div><strong>Renews:</strong> {{ optional($appSubscription?->renews_at)?->toDayDateTimeString() ?? '—' }}</div>
             </div>
         @else
-            <div class="text-slate-700">You are on the <strong>Freemium</strong> plan ({{ $freemiumLimit ?? 3 }} domains).</div>
+            <div class="text-slate-700">You are on the <strong>Freemium</strong> plan ({{ $freemiumLimit ?? 1 }} {{ ($freemiumLimit ?? 1) === 1 ? 'domain' : 'domains' }}).</div>
         @endif
     </div>
 

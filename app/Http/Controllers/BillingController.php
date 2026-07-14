@@ -52,7 +52,7 @@ class BillingController extends Controller
 
         // Get domain limits from database
         $plans = \App\Models\Plan::all()->keyBy(fn($p) => strtolower($p->name));
-        $freemiumLimit = $plans['freemium']->domain_limit ?? 3;
+        $freemiumLimit = $plans['freemium']->domain_limit ?? 1;
         $premiumLimit = $plans['premium']->domain_limit ?? 9;
         $ultraLimit = $plans['ultra']->domain_limit ?? 19;
 

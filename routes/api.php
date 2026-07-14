@@ -18,7 +18,8 @@ Route::middleware('auth')->prefix('blacklist')->group(function () {
     Route::get('/statistics', [BlacklistApiController::class, 'statistics']);
     Route::get('/domains/{domain}/status', [BlacklistApiController::class, 'status']);
     Route::get('/domains/{domain}/history', [BlacklistApiController::class, 'history']);
-    Route::post('/domains/{domain}/check', [BlacklistApiController::class, 'check']);
+    Route::post('/domains/{domain}/check', [BlacklistApiController::class, 'check'])
+        ->middleware('entitlement:partial_scan');
 });
 
 // SPF API Routes

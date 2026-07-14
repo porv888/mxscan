@@ -12,7 +12,6 @@ use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Cache;
-use App\Services\ScannerService;
 use Symfony\Component\HttpFoundation\Response;
 
 class ScanController extends Controller
@@ -81,7 +80,7 @@ class ScanController extends Controller
      */
     public function runDns(Request $request, Domain $domain)
     {
-        $this->authorize('scan', $domain);
+        $this->authorize('partialScan', $domain);
         $this->throttle($domain);
 
         RunFullScan::dispatch($domain->id, ['dns' => true, 'spf' => false, 'blacklist' => false]);
@@ -94,20 +93,7 @@ class ScanController extends Controller
      */
     public function runBlacklist(Request $request, Domain $domain)
     {
-        $this->authorize('scan', $domain);
-
-        // Plan gate: check if user can run blacklist scans
-        if (!auth()->user()->can('blacklist', $domain)) {
-            if ($request->expectsJson()) {
-                return response()->json([
-                    'error' => 'Upgrade required to run blacklist checks.',
-                    'upgrade_url' => route('pricing')
-                ], Response::HTTP_PAYMENT_REQUIRED);
-            }
-            
-            return back()->with('error', 'Blacklist checks require a paid plan. <a href="' . route('pricing') . '" class="underline">Upgrade now</a>');
-        }
-
+        $this->authorize('partialScan', $domain);
         $this->throttle($domain);
         RunFullScan::dispatch($domain->id, ['dns' => false, 'spf' => false, 'blacklist' => true]);
 
@@ -119,7 +105,7 @@ class ScanController extends Controller
      */
     public function runSpf(Request $request, Domain $domain)
     {
-        $this->authorize('scan', $domain);
+        $this->authorize('partialScan', $domain);
         $this->throttle($domain);
 
         RunFullScan::dispatch($domain->id, ['dns' => false, 'spf' => true, 'blacklist' => false]);
@@ -150,8 +136,14 @@ class ScanController extends Controller
             'headers' => $request->headers->all()
         ]);
 
+        $mode = $request->string('mode', 'full')->toString();
+
         try {
-            $this->authorize('scan', $domain);
+            if (in_array($mode, ['dns', 'spf', 'blacklist'], true)) {
+                $this->authorize('partialScan', $domain);
+            } else {
+                $this->authorize('scan', $domain);
+            }
         } catch (\Illuminate\Auth\Access\AuthorizationException $e) {
             Log::warning('Unauthorized scan attempt', [
                 'user_id' => auth()->id(),
@@ -159,29 +151,21 @@ class ScanController extends Controller
                 'domain' => $domain->domain,
                 'ip' => $request->ip()
             ]);
-            
+
             if ($request->expectsJson()) {
                 return response()->json(['error' => 'You are not authorized to scan this domain.'], 403);
             }
-            
+
             return back()->with('error', 'You are not authorized to scan this domain.');
         }
 
-        // Get scan mode from request
-        $mode = $request->string('mode', 'full')->toString();
+        $options = match ($mode) {
+            'dns'       => ['dns' => true,  'spf' => false, 'blacklist' => false],
+            'spf'       => ['dns' => false, 'spf' => true,  'blacklist' => false],
+            'blacklist' => ['dns' => false, 'spf' => false, 'blacklist' => true],
+            default     => ['dns' => true,  'spf' => true,  'blacklist' => true],
+        };
 
-        // If gating features, check here (e.g., blacklist)
-        if ($mode === 'blacklist' && !auth()->user()->can('blacklist', $domain)) {
-            if ($request->expectsJson()) {
-                return response()->json([
-                    'error' => 'Blacklist checks require a paid plan.',
-                    'upgrade_url' => route('pricing')
-                ], 402); // Payment Required
-            }
-            
-            return back()->with('error', 'Blacklist checks require a paid plan. <a href="' . route('pricing') . '" class="underline">Upgrade now</a>');
-        }
-        
         try {
             $this->throttle($domain);
         } catch (\Symfony\Component\HttpKernel\Exception\TooManyRequestsHttpException $e) {
@@ -190,30 +174,14 @@ class ScanController extends Controller
                     'error' => 'Please wait ' . self::COOLDOWN . ' seconds before running another scan on ' . $domain->domain . '.'
                 ], 429);
             }
-            
+
             return back()->with('error', 'Please wait ' . self::COOLDOWN . ' seconds before running another scan on ' . $domain->domain . '.');
         }
 
-        // Map mode -> options
-        $options = match ($mode) {
-            'dns'       => ['dns' => true,  'spf' => false, 'blacklist' => false],
-            'spf'       => ['dns' => false, 'spf' => true,  'blacklist' => false],
-            'blacklist' => ['dns' => false, 'spf' => false, 'blacklist' => true],
-            default     => ['dns' => true,  'spf' => true,  'blacklist' => true], // full
-        };
-        
-        // Also check for full mode blacklist gating
-        if ($mode === 'full' && !auth()->user()->can('blacklist', $domain)) {
-            // For full scans, disable blacklist if user doesn't have permission
-            $options['blacklist'] = false;
-        }
-
         try {
-            // Run synchronously using ScanRunner service
             $scanRunner = app(ScanRunner::class);
             $scan = $scanRunner->runSync($domain, $options);
 
-            // Handle JSON requests
             if ($request->expectsJson()) {
                 return response()->json([
                     'success' => true,
@@ -223,23 +191,21 @@ class ScanController extends Controller
                 ]);
             }
 
-            // Redirect to the reports page (new unified location)
             return redirect()->route('reports.show', $scan)
                 ->with('toast', ['type' => 'success', 'text' => 'Scan completed successfully.']);
-                
         } catch (\Exception $e) {
             Log::error('Synchronous scan failed', [
                 'domain' => $domain->domain,
                 'mode' => $mode,
                 'error' => $e->getMessage()
             ]);
-            
+
             if ($request->expectsJson()) {
                 return response()->json([
                     'error' => 'Scan failed: ' . $e->getMessage()
                 ], 500);
             }
-            
+
             return back()->with('error', 'Scan failed: ' . $e->getMessage());
         }
     }

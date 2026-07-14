@@ -1,0 +1,5 @@
+{
+  "check": "spf",
+  "status": "error",
+  "message": "Controlled SPF checker failure"
+}

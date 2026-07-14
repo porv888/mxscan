@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers;
 
-use App\Services\ScannerService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 
@@ -23,8 +22,10 @@ class PublicScanController extends Controller
 
     /**
      * Run a lightweight public scan.
+     *
+     * @deprecated Phase 1: direct ScannerService usage. Migrate to EmailSecurityScanService in phase 2.
      */
-    public function scan(Request $request, ScannerService $scanner)
+    public function scan(Request $request, \App\Services\ScannerService $scanner)
     {
         $request->validate([
             'domain' => 'required|string|max:253|regex:/^[a-zA-Z0-9][a-zA-Z0-9\-\.]+\.[a-zA-Z]{2,}$/',

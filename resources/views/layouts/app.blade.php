@@ -68,9 +68,9 @@
                     <i data-lucide="globe" class="mr-3 h-5 w-5 {{ request()->routeIs('dashboard.domains*') ? 'text-blue-500' : 'text-gray-400' }}"></i>
                     Domains
                 </a>
-                <a href="{{ route('automations.index') }}" 
+                <a href="{{ ($entitlementAutomations ?? false) ? route('automations.index') : route('pricing') }}" 
                    class="group flex items-center px-2 py-2 text-sm font-medium rounded-md {{ request()->routeIs('automations*') ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900' }}">
-                    <i data-lucide="calendar" class="mr-3 h-5 w-5 {{ request()->routeIs('automations*') ? 'text-blue-500' : 'text-gray-400' }}"></i>
+                    <i data-lucide="{{ ($entitlementAutomations ?? false) ? 'calendar' : 'lock' }}" class="mr-3 h-5 w-5 {{ request()->routeIs('automations*') ? 'text-blue-500' : 'text-gray-400' }}"></i>
                     Automations
                 </a>
                 <a href="{{ route('reports.index') }}" 
@@ -78,26 +78,26 @@
                     <i data-lucide="search" class="mr-3 h-5 w-5 {{ request()->routeIs('reports*') ? 'text-blue-500' : 'text-gray-400' }}"></i>
                     Reports
                 </a>
-                @if($currentUser?->canUseMonitoring())
+                @if($entitlementMonitoring ?? false)
                     <a href="{{ route('monitoring.incidents') }}" 
                        class="group flex items-center px-2 py-2 text-sm font-medium rounded-md {{ request()->routeIs('monitoring.*') ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900' }}">
                         <i data-lucide="alert-triangle" class="mr-3 h-5 w-5 {{ request()->routeIs('monitoring.*') ? 'text-blue-500' : 'text-gray-400' }}"></i>
                         Monitoring
                     </a>
                 @endif
-                <a href="{{ route('delivery-monitoring.index') }}" 
+                <a href="{{ ($entitlementDelivery ?? false) ? route('delivery-monitoring.index') : route('pricing') }}" 
                    class="group flex items-center px-2 py-2 text-sm font-medium rounded-md {{ request()->routeIs('delivery-monitoring.*') ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900' }}">
-                    <i data-lucide="mail" class="mr-3 h-5 w-5 {{ request()->routeIs('delivery-monitoring.*') ? 'text-blue-500' : 'text-gray-400' }}"></i>
+                    <i data-lucide="{{ ($entitlementDelivery ?? false) ? 'mail' : 'lock' }}" class="mr-3 h-5 w-5 {{ request()->routeIs('delivery-monitoring.*') ? 'text-blue-500' : 'text-gray-400' }}"></i>
                     Delivery
                 </a>
-                <a href="{{ route('dmarc.index') }}" 
+                <a href="{{ ($entitlementDmarc ?? false) ? route('dmarc.index') : route('pricing') }}" 
                    class="group flex items-center px-2 py-2 text-sm font-medium rounded-md {{ request()->routeIs('dmarc.*') ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900' }}">
-                    <i data-lucide="file-bar-chart" class="mr-3 h-5 w-5 {{ request()->routeIs('dmarc.*') ? 'text-blue-500' : 'text-gray-400' }}"></i>
+                    <i data-lucide="{{ ($entitlementDmarc ?? false) ? 'file-bar-chart' : 'lock' }}" class="mr-3 h-5 w-5 {{ request()->routeIs('dmarc.*') ? 'text-blue-500' : 'text-gray-400' }}"></i>
                     DMARC Activity
                 </a>
-                <a href="{{ route('tools.index') }}" 
+                <a href="{{ ($entitlementTools ?? false) ? route('tools.index') : route('pricing') }}" 
                    class="group flex items-center px-2 py-2 text-sm font-medium rounded-md {{ request()->routeIs('tools.*') ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900' }}">
-                    <i data-lucide="wrench" class="mr-3 h-5 w-5 {{ request()->routeIs('tools.*') ? 'text-blue-500' : 'text-gray-400' }}"></i>
+                    <i data-lucide="{{ ($entitlementTools ?? false) ? 'wrench' : 'lock' }}" class="mr-3 h-5 w-5 {{ request()->routeIs('tools.*') ? 'text-blue-500' : 'text-gray-400' }}"></i>
                     Tools
                 </a>
                 <a href="{{ route('dashboard.profile') }}" 
@@ -134,9 +134,9 @@
                                 <i data-lucide="globe" class="mr-3 h-5 w-5 {{ request()->routeIs('dashboard.domains*') ? 'text-blue-500' : 'text-gray-400 group-hover:text-gray-500' }}"></i>
                                 Domains
                             </a>
-                            <a href="{{ route('automations.index') }}" 
+                            <a href="{{ ($entitlementAutomations ?? false) ? route('automations.index') : route('pricing') }}" 
                                class="group flex items-center px-2 py-2 text-sm font-medium rounded-md {{ request()->routeIs('automations*') ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900' }}">
-                                <i data-lucide="calendar" class="mr-3 h-5 w-5 {{ request()->routeIs('automations*') ? 'text-blue-500' : 'text-gray-400 group-hover:text-gray-500' }}"></i>
+                                <i data-lucide="{{ ($entitlementAutomations ?? false) ? 'calendar' : 'lock' }}" class="mr-3 h-5 w-5 {{ request()->routeIs('automations*') ? 'text-blue-500' : 'text-gray-400 group-hover:text-gray-500' }}"></i>
                                 Automations
                             </a>
                             <a href="{{ route('reports.index') }}" 
@@ -145,7 +145,7 @@
                                 Reports
                             </a>
                             
-                            @if($currentUser?->canUseMonitoring())
+                            @if($entitlementMonitoring ?? false)
                                 <a href="{{ route('monitoring.incidents') }}" 
                                    class="group flex items-center justify-between px-2 py-2 text-sm font-medium rounded-md {{ request()->routeIs('monitoring.incidents*') || request()->routeIs('monitoring.snapshots*') ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900' }}">
                                     <span class="flex items-center">
@@ -160,21 +160,21 @@
                                 </a>
                             @endif
                             
-                            <a href="{{ route('delivery-monitoring.index') }}" 
+                            <a href="{{ ($entitlementDelivery ?? false) ? route('delivery-monitoring.index') : route('pricing') }}" 
                                class="group flex items-center px-2 py-2 text-sm font-medium rounded-md {{ request()->routeIs('delivery-monitoring.*') ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900' }}">
-                                <i data-lucide="mail" class="mr-3 h-5 w-5 {{ request()->routeIs('delivery-monitoring.*') ? 'text-blue-500' : 'text-gray-400 group-hover:text-gray-500' }}"></i>
+                                <i data-lucide="{{ ($entitlementDelivery ?? false) ? 'mail' : 'lock' }}" class="mr-3 h-5 w-5 {{ request()->routeIs('delivery-monitoring.*') ? 'text-blue-500' : 'text-gray-400 group-hover:text-gray-500' }}"></i>
                                 Delivery
                             </a>
                             
-                            <a href="{{ route('dmarc.index') }}" 
+                            <a href="{{ ($entitlementDmarc ?? false) ? route('dmarc.index') : route('pricing') }}" 
                                class="group flex items-center px-2 py-2 text-sm font-medium rounded-md {{ request()->routeIs('dmarc.*') ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900' }}">
-                                <i data-lucide="file-bar-chart" class="mr-3 h-5 w-5 {{ request()->routeIs('dmarc.*') ? 'text-blue-500' : 'text-gray-400 group-hover:text-gray-500' }}"></i>
+                                <i data-lucide="{{ ($entitlementDmarc ?? false) ? 'file-bar-chart' : 'lock' }}" class="mr-3 h-5 w-5 {{ request()->routeIs('dmarc.*') ? 'text-blue-500' : 'text-gray-400 group-hover:text-gray-500' }}"></i>
                                 DMARC Activity
                             </a>
                             
-                            <a href="{{ route('tools.index') }}" 
+                            <a href="{{ ($entitlementTools ?? false) ? route('tools.index') : route('pricing') }}" 
                                class="group flex items-center px-2 py-2 text-sm font-medium rounded-md {{ request()->routeIs('tools.*') ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900' }}">
-                                <i data-lucide="wrench" class="mr-3 h-5 w-5 {{ request()->routeIs('tools.*') ? 'text-blue-500' : 'text-gray-400 group-hover:text-gray-500' }}"></i>
+                                <i data-lucide="{{ ($entitlementTools ?? false) ? 'wrench' : 'lock' }}" class="mr-3 h-5 w-5 {{ request()->routeIs('tools.*') ? 'text-blue-500' : 'text-gray-400 group-hover:text-gray-500' }}"></i>
                                 Tools
                             </a>
                             

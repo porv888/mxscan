@@ -15,6 +15,7 @@ class ReportController extends Controller
     public function __construct()
     {
         $this->middleware(['auth', 'verified']);
+        $this->middleware('entitlement:report_export')->only('export');
     }
 
     /**

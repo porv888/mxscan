@@ -1,409 +1,152 @@
-{{-- DNS Security Section - Auto-collapse when all green --}}
+{{-- DNS & technical details — summary grid + grouped detail panels --}}
 @php
-    $mxData = $records['MX'] ?? null;
-    $spfData = $records['SPF'] ?? null;
-    $dkimData = $records['DKIM'] ?? null;
-    $dmarcData = $records['DMARC'] ?? null;
-    $tlsrptData = $records['TLS-RPT'] ?? null;
-    $mtastsData = $records['MTA-STS'] ?? null;
-    
-    $allGreen = $mxData && $mxData['status'] === 'found' &&
-                $spfData && $spfData['status'] === 'found' &&
-                $dkimData && $dkimData['status'] === 'found' &&
-                $dmarcData && $dmarcData['status'] === 'found' &&
-                $tlsrptData && $tlsrptData['status'] === 'found' &&
-                $mtastsData && $mtastsData['status'] === 'found';
+    use App\View\Presenters\DnsSectionPresenter;
 
-    $recordHelp = [
-        'mx' => [
-            'title' => 'MX records',
-            'text' => 'MX records tell other mail servers where to deliver email for your domain.',
-            'impact' => 'Without MX records, people may not be able to send email to this domain.',
-            'fix' => 'Add the mail server records from your email provider.',
-        ],
-        'spf' => [
-            'title' => 'SPF record',
-            'text' => 'SPF tells inboxes which servers are allowed to send email for your domain.',
-            'impact' => 'Without SPF, attackers can spoof your domain more easily and your real emails may go to spam.',
-            'fix' => 'Add one SPF TXT record that includes your sending services.',
-        ],
-        'spf_lookup' => [
-            'title' => 'SPF lookup limit',
-            'text' => 'SPF has a 10 lookup limit.',
-            'impact' => 'If you go over it, some receivers may treat SPF as failed.',
-            'fix' => 'Remove unused senders or use the SPF optimizer.',
-        ],
-        'dkim' => [
-            'title' => 'DKIM',
-            'text' => 'DKIM adds a digital signature that proves your email was not changed in transit.',
-            'impact' => 'Without DKIM, inboxes have less trust in your email and DMARC protection is weaker.',
-            'fix' => 'Enable DKIM signing in your email provider.',
-        ],
-        'dmarc' => [
-            'title' => 'DMARC policy',
-            'text' => 'DMARC tells inboxes what to do when SPF or DKIM checks fail.',
-            'impact' => 'Without DMARC, spoofed emails using your domain are harder to stop and track.',
-            'fix' => 'Add a DMARC TXT record at _dmarc.',
-        ],
-        'dmarc_reports' => [
-            'title' => 'DMARC reports',
-            'text' => 'DMARC reports show who is sending email as your domain.',
-            'impact' => 'Without reports, you cannot see abuse, failed senders, or sending volume.',
-            'fix' => 'Add the MXScan RUA address to your DMARC record.',
-        ],
-        'tlsrpt' => [
-            'title' => 'TLS-RPT',
-            'text' => 'TLS-RPT sends reports when secure mail delivery has problems.',
-            'impact' => 'Without it, TLS delivery failures may happen without you knowing.',
-            'fix' => 'Add a TLS-RPT TXT record.',
-        ],
-        'mtasts' => [
-            'title' => 'MTA-STS',
-            'text' => 'MTA-STS tells other mail servers to use secure encrypted delivery to your domain.',
-            'impact' => 'Without it, some mail connections may be easier to downgrade or intercept.',
-            'fix' => 'Add the DNS record and publish an MTA-STS policy file.',
-        ],
-    ];
+    $presenter = new DnsSectionPresenter(
+        records: $records,
+        statusCards: $statusCards ?? [],
+        dmarcStatus: $dmarcStatus ?? null,
+        spfLookupCount: $spfLookupCount ?? null,
+        domain: $domain,
+        dmarcPolicy: $dmarcPolicy ?? null,
+        dmarcAligned: $dmarcAligned ?? null,
+        spfMax: $spfMax ?? 10,
+    );
+
+    $summaryTiles = $presenter->summaryTiles();
+    $detailGroups = $presenter->detailGroups();
+    $recordHelp = $presenter->recordHelp();
+    $sectionOpenDefault = $presenter->sectionOpenByDefault();
 @endphp
 
-<section id="dns-security" class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6" x-data="{ open: {{ $allGreen ? 'false' : 'true' }} }">
-    <header class="flex items-center justify-between mb-4">
-        <h3 class="text-sm font-semibold text-gray-900 dark:text-gray-100">DNS Security</h3>
-        <button @click="open=!open" class="text-sm text-blue-700 dark:text-blue-300 hover:underline flex items-center gap-1">
-            <span x-show="!open">Show Details</span>
-            <span x-show="open" x-cloak>Hide Details</span>
-            <svg class="w-4 h-4 transition-transform" :class="{ 'rotate-180': open }" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
-            </svg>
-        </button>
-    </header>
+<section id="dns-security"
+         class="rounded-xl border border-gray-200 bg-white p-6 dark:border-gray-700 dark:bg-gray-800"
+         x-data="{ sectionOpen: {{ $sectionOpenDefault ? 'true' : 'false' }} }">
+    <x-dns.section-header />
 
-    @if($allGreen)
-        <div x-show="!open" class="text-sm text-green-700 dark:text-green-300">✓ All configured. Great job!</div>
+    @if($presenter->allGreen())
+        <p x-show="!sectionOpen" x-cloak class="mt-3 text-sm text-green-700 dark:text-green-300">All DNS checks configured.</p>
     @endif
 
-    <div x-show="open" x-collapse class="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {{-- MX Records --}}
-        <div class="min-w-0 md:col-span-2">
-            <div class="flex items-center justify-between mb-2">
-                <h3 class="flex items-center gap-1 text-sm font-semibold text-gray-900 dark:text-gray-100">
-                    MX Records
-                    <x-help-tooltip :title="$recordHelp['mx']['title']" :text="$recordHelp['mx']['text']" :impact="$recordHelp['mx']['impact']" :fix="$recordHelp['mx']['fix']" />
-                </h3>
-                @if($mxData && $mxData['status'] === 'found')
-                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
-                    <svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                        <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path>
-                    </svg>
-                    Configured
-                </span>
-                @endif
-            </div>
-            @if($mxData && $mxData['status'] === 'found')
-            <div class="min-w-0 overflow-hidden bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-3">
-                @if(is_array($mxData['data']))
-                    @foreach($mxData['data'] as $mx)
-                    <div class="flex flex-col gap-1 text-sm mb-1 last:mb-0 sm:flex-row sm:items-center sm:justify-between">
-                        <span class="min-w-0 text-gray-900 dark:text-gray-100">Priority {{ $mx['pri'] ?? 'N/A' }}: <code class="break-all text-xs bg-white dark:bg-gray-800 px-1 py-0.5 rounded">{{ $mx['target'] ?? 'Unknown' }}</code></span>
-                        <span class="text-xs text-gray-500 dark:text-gray-400">TTL: {{ $mx['ttl'] ?? 'N/A' }}s</span>
-                    </div>
-                    @endforeach
-                @else
-                    <span class="text-sm text-gray-900 dark:text-gray-100">{{ $mxData['data'] }}</span>
-                @endif
-            </div>
-            @else
-            <div class="min-w-0 overflow-hidden bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3">
-                <div class="flex items-center text-sm text-red-800 dark:text-red-200">
-                    <svg class="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"></path>
-                    </svg>
-                    No MX records found
-                </div>
-                <p class="mt-2 text-xs text-red-700 dark:text-red-300">This can stop people from sending email to this domain.</p>
-            </div>
-            @endif
+    <div id="dns-section-body" x-show="sectionOpen" x-collapse class="mt-5 space-y-6">
+        {{-- Level 2: Summary grid --}}
+        <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            @foreach($summaryTiles as $tile)
+                <x-dns.summary-tile
+                    :label="$tile['label']"
+                    :badge-variant="$tile['badgeVariant']"
+                    :badge-label="$tile['badgeLabel']"
+                    :summary="$tile['summary']"
+                    :severity="$tile['severity']"
+                    :accent="$tile['accent']"
+                    :primary-action="$tile['primaryAction'] ?? null"
+                    :detail-id="$tile['detailId']"
+                />
+            @endforeach
         </div>
 
-        {{-- SPF Record --}}
-        <div class="min-w-0">
-            <div class="flex items-center justify-between mb-2">
-                <h3 class="flex items-center gap-1 text-sm font-semibold text-gray-900 dark:text-gray-100">
-                    SPF Record
-                    <x-help-tooltip :title="$recordHelp['spf']['title']" :text="$recordHelp['spf']['text']" :impact="$recordHelp['spf']['impact']" :fix="$recordHelp['spf']['fix']" />
-                </h3>
-                @if($spfData && $spfData['status'] === 'found')
-                <div class="flex items-center gap-2">
-                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
-                        <svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                            <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path>
-                        </svg>
-                        Found
-                    </span>
-                    @if($spfLookupCount)
-                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium {{ $spfLookupCount >= 10 ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200' : ($spfLookupCount >= 7 ? 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200' : 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200') }}">
-                        {{ $spfLookupCount }}/10 lookups
-                    </span>
-                    @if($spfLookupCount >= 7)
-                    <x-help-tooltip :title="$recordHelp['spf_lookup']['title']" :text="$recordHelp['spf_lookup']['text']" :impact="$recordHelp['spf_lookup']['impact']" :fix="$recordHelp['spf_lookup']['fix']" />
-                    @endif
-                    @endif
-                </div>
-                @endif
-            </div>
-            @if($spfData && $spfData['status'] === 'found')
-            <div class="min-w-0 overflow-hidden bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-3">
-                <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                    <code class="block max-w-full text-xs text-gray-900 dark:text-gray-100 break-all flex-1">{{ $spfData['data'] }}</code>
-                    <div class="flex gap-1 ml-3 flex-shrink-0">
-                        <button onclick="copyToClipboard('{{ addslashes($spfData['data']) }}', this)" class="px-2 py-1 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded hover:bg-gray-50 dark:bg-gray-700 dark:text-gray-200 dark:border-gray-600 dark:hover:bg-gray-600">
-                            Copy
-                        </button>
-                        @if($spfLookupCount >= 7)
-                        <a href="{{ route('spf.show', $domain) }}" class="px-2 py-1 text-xs font-medium text-blue-700 bg-blue-50 rounded hover:bg-blue-100 dark:bg-blue-900 dark:text-blue-200 dark:hover:bg-blue-800">
-                            Optimize
-                        </a>
-                        @endif
-                    </div>
-                </div>
-            </div>
-            @else
-            <div class="min-w-0 overflow-hidden bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3">
-                <div class="flex items-center text-sm text-red-800 dark:text-red-200">
-                    <svg class="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"></path>
-                    </svg>
-                    No SPF record found
-                </div>
-                <p class="mt-2 text-xs text-red-700 dark:text-red-300">This can make real emails look suspicious and easier to spoof.</p>
-            </div>
-            @endif
-        </div>
-
-        {{-- DKIM --}}
-        <div class="min-w-0">
-            <div class="flex items-center justify-between mb-2">
-                <h3 class="flex items-center gap-1 text-sm font-semibold text-gray-900 dark:text-gray-100">
-                    DKIM
-                    <x-help-tooltip :title="$recordHelp['dkim']['title']" :text="$recordHelp['dkim']['text']" :impact="$recordHelp['dkim']['impact']" :fix="$recordHelp['dkim']['fix']" />
-                </h3>
-                @if($dkimData && $dkimData['status'] === 'found')
-                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
-                    <svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                        <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path>
-                    </svg>
-                    {{ ($statusCards['dkim']['status'] ?? (count($dkimData['data']) . ' DKIM selector' . (count($dkimData['data']) > 1 ? 's' : '') . ' discovered')) }}
-                </span>
-                @endif
-            </div>
-            @if($dkimData && $dkimData['status'] === 'found')
-            <div class="min-w-0 overflow-hidden bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-3 space-y-2">
-                <p class="text-xs text-green-800 dark:text-green-200">{{ $statusCards['dkim']['explanation'] ?? 'This confirms published DNS keys only. Live signing and alignment require DMARC report or email-header evidence.' }}</p>
-                @foreach($dkimData['data'] as $dkim)
+        {{-- Level 3: Grouped detail panels --}}
+        <div class="space-y-5">
+            @foreach($detailGroups as $group)
                 <div>
-                    <div class="flex items-center gap-2 mb-1">
-                        <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">{{ $dkim['selector'] }}</span>
-                        <span class="text-xs text-gray-500 dark:text-gray-400">{{ $dkim['selector'] }}._domainkey.{{ $domain->domain ?? $domain }}</span>
+                    <h4 class="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">{{ $group['label'] }}</h4>
+                    <div class="space-y-2">
+                        @foreach($group['items'] as $detail)
+                            @php
+                                $help = $recordHelp[$detail['helpKey']] ?? null;
+                            @endphp
+                            <x-dns.detail-card
+                                :id="$detail['id']"
+                                :label="$detail['label']"
+                                :badge-variant="$detail['badgeVariant']"
+                                :badge-label="$detail['badgeLabel']"
+                                :explanation="$detail['explanation']"
+                                :severity="$detail['severity']"
+                                :primary-action="$detail['primaryAction'] ?? null"
+                                :open="$detail['open'] ?? false"
+                                :help="$help"
+                            >
+                                @switch($detail['type'])
+                                    @case('code')
+                                        @if(!empty($detail['value']))
+                                            <x-dns.code-value :value="$detail['value']" :copy-label="$detail['copyLabel'] ?? 'Copy record'" />
+                                        @endif
+
+                                        @if(!empty($detail['chips']))
+                                            <div class="mt-3 flex flex-wrap gap-2">
+                                                @foreach($detail['chips'] as $chip)
+                                                    <span class="inline-flex rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-700 dark:bg-gray-700 dark:text-gray-300">{{ $chip }}</span>
+                                                @endforeach
+                                            </div>
+                                        @endif
+
+                                        @if(isset($detail['lookupCount']))
+                                            <p class="mt-3 text-xs text-gray-600 dark:text-gray-400">
+                                                Lookup count: {{ $detail['lookupCount'] }}/{{ $detail['lookupMax'] ?? 10 }}
+                                                @if($detail['lookupCount'] >= 7)
+                                                    <x-help-tooltip
+                                                        :title="$recordHelp['spf_lookup']['title']"
+                                                        :text="$recordHelp['spf_lookup']['text']"
+                                                        :impact="$recordHelp['spf_lookup']['impact']"
+                                                        :fix="$recordHelp['spf_lookup']['fix']"
+                                                    />
+                                                @endif
+                                            </p>
+                                            @if(!empty($detail['showOptimize']))
+                                                <a href="{{ $presenter->spfOptimizeUrl() }}" class="mt-2 inline-flex text-xs font-medium text-blue-700 hover:underline dark:text-blue-300">Optimize SPF lookups</a>
+                                            @endif
+                                        @endif
+                                        @break
+
+                                    @case('dkim')
+                                        <p class="text-xs leading-5 text-gray-600 dark:text-gray-400">{{ $detail['dnsOnlyNote'] }}</p>
+                                        @if(!empty($detail['selectors']))
+                                            <ul class="mt-3 space-y-3">
+                                                @foreach($detail['selectors'] as $selector)
+                                                    <li class="rounded-lg border border-gray-200 p-3 dark:border-gray-700">
+                                                        <div class="mb-2 flex flex-wrap items-center gap-2">
+                                                            <span class="inline-flex rounded bg-blue-100 px-1.5 py-0.5 text-xs font-medium text-blue-800 dark:bg-blue-900 dark:text-blue-200">{{ $selector['selector'] }}</span>
+                                                            <span class="text-xs text-gray-500 dark:text-gray-400">{{ $selector['host'] }}</span>
+                                                        </div>
+                                                        <div x-data="{ expanded: false }">
+                                                            <code class="block break-all font-mono text-xs text-gray-900 dark:text-gray-100" x-show="!expanded">{{ $selector['preview'] }}</code>
+                                                            @if(strlen($selector['record']) > 80)
+                                                                <code class="block break-all font-mono text-xs text-gray-900 dark:text-gray-100" x-show="expanded" x-cloak>{{ $selector['record'] }}</code>
+                                                                <button type="button" class="mt-1 text-xs font-medium text-blue-700 hover:underline dark:text-blue-300" @click="expanded = !expanded" x-text="expanded ? 'Show less' : 'Show full value'"></button>
+                                                            @endif
+                                                            <button type="button"
+                                                                    onclick="copyToClipboard('{{ e(addslashes($selector['record'])) }}', this)"
+                                                                    class="mx-btn mx-btn-ghost mx-btn-sm mt-2"
+                                                                    aria-label="Copy DKIM record for {{ $selector['selector'] }}">
+                                                                Copy
+                                                            </button>
+                                                        </div>
+                                                    </li>
+                                                @endforeach
+                                            </ul>
+                                        @else
+                                            <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">Checked {{ $detail['checkedCount'] ?? 0 }} common selectors.</p>
+                                        @endif
+                                        @break
+
+                                    @case('mx')
+                                        @if(!empty($detail['rows']))
+                                            <x-dns.record-kv-list :entries="$detail['rows']" />
+                                        @endif
+                                        @break
+
+                                    @case('dmarc_reports')
+                                        <a href="{{ $detail['visibilityUrl'] }}" class="text-xs font-medium text-blue-700 hover:underline dark:text-blue-300">Open DMARC visibility</a>
+                                        @if(!empty($detail['footer']))
+                                            <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">{{ $detail['footer'] }}</p>
+                                        @endif
+                                        @break
+                                @endswitch
+                            </x-dns.detail-card>
+                        @endforeach
                     </div>
-                    <code class="block max-w-full text-xs text-gray-900 dark:text-gray-100 break-all">{{ \Illuminate\Support\Str::limit($dkim['record'], 120) }}</code>
                 </div>
-                @endforeach
-            </div>
-            @else
-            <div class="min-w-0 overflow-hidden bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3">
-                <div class="flex items-center text-sm text-amber-800 dark:text-amber-200">
-                    <svg class="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                        <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>
-                    </svg>
-                    No DKIM selectors discovered (checked {{ count(config('dkim.selectors', [])) }} common selectors)
-                </div>
-                <p class="text-xs text-amber-600 dark:text-amber-400 mt-1 ml-6">Publish DKIM DNS selectors with your email provider. This confirms DNS keys only — not live signing or alignment.</p>
-                <p class="text-xs text-amber-700 dark:text-amber-300 mt-2 ml-6">Missing DKIM DNS configuration weakens DMARC authentication.</p>
-            </div>
-            @endif
-        </div>
-
-        {{-- DMARC Policy --}}
-        <div class="min-w-0">
-            <div class="flex items-center justify-between mb-2">
-                <h3 class="flex items-center gap-1 text-sm font-semibold text-gray-900 dark:text-gray-100">
-                    DMARC Policy
-                    <x-help-tooltip :title="$recordHelp['dmarc']['title']" :text="$recordHelp['dmarc']['text']" :impact="$recordHelp['dmarc']['impact']" :fix="$recordHelp['dmarc']['fix']" />
-                </h3>
-                @if($dmarcData && $dmarcData['status'] === 'found')
-                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
-                    <svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                        <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path>
-                    </svg>
-                    Configured
-                </span>
-                @endif
-            </div>
-            @if($dmarcData && $dmarcData['status'] === 'found')
-            <div class="min-w-0 overflow-hidden bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-3">
-                <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                    <code class="block max-w-full text-xs text-gray-900 dark:text-gray-100 break-all flex-1">{{ $dmarcData['data'] }}</code>
-                    <button onclick="copyToClipboard('{{ addslashes($dmarcData['data']) }}', this)" class="px-2 py-1 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded hover:bg-gray-50 dark:bg-gray-700 dark:text-gray-200 dark:border-gray-600 dark:hover:bg-gray-600 ml-3 flex-shrink-0">
-                        Copy
-                    </button>
-                </div>
-            </div>
-            @else
-            <div class="min-w-0 overflow-hidden bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3">
-                <div class="flex items-center text-sm text-red-800 dark:text-red-200">
-                    <svg class="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"></path>
-                    </svg>
-                    No DMARC policy found
-                </div>
-                <p class="mt-2 text-xs text-red-700 dark:text-red-300">This makes spoofed emails harder to stop and track.</p>
-            </div>
-            @endif
-        </div>
-
-        {{-- DMARC Visibility Block (using unified status) --}}
-        @if(isset($dmarcStatus))
-        @php
-            $badgeClasses = match($dmarcStatus['badge_color']) {
-                'green' => 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
-                'blue' => 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
-                'amber' => 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200',
-                'gray' => 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200',
-                default => 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200',
-            };
-            $borderClasses = match($dmarcStatus['badge_color']) {
-                'green' => 'border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900/20',
-                'blue' => 'border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20',
-                'amber' => 'border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20',
-                'gray' => 'border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50',
-                default => 'border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50',
-            };
-        @endphp
-        <div class="min-w-0">
-            <div class="flex items-center justify-between mb-2">
-                <h3 class="flex items-center gap-1 text-sm font-semibold text-gray-900 dark:text-gray-100">
-                    DMARC Reports (Visibility)
-                    <x-help-tooltip :title="$recordHelp['dmarc_reports']['title']" :text="$recordHelp['dmarc_reports']['text']" :impact="$recordHelp['dmarc_reports']['impact']" :fix="$recordHelp['dmarc_reports']['fix']" />
-                </h3>
-                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium {{ $badgeClasses }}">
-                    @if($dmarcStatus['status'] === 'active')
-                        <span class="w-1.5 h-1.5 rounded-full bg-green-500 mr-1 animate-pulse"></span>
-                    @endif
-                    {{ ($dmarcStatus['has_rua'] ?? false) ? ($dmarcStatus['rua_link_label'] ?? $dmarcStatus['label']) : $dmarcStatus['label'] }}
-                </span>
-            </div>
-            <div class="min-w-0 overflow-hidden border rounded-lg p-3 {{ $borderClasses }}">
-                <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                    @if($dmarcStatus['status'] === 'active' || $dmarcStatus['status'] === 'enabled_mxscan_waiting')
-                        @if($domain->dmarc_last_report_at)
-                            <span class="text-xs text-gray-600 dark:text-gray-400">Last report: {{ $domain->dmarc_last_report_at->diffForHumans() }}</span>
-                        @else
-                            <span class="text-xs text-gray-600 dark:text-gray-400">Waiting for first report...</span>
-                        @endif
-                        <a href="{{ route('dmarc.show', $domain) }}" class="text-xs font-medium text-blue-600 dark:text-blue-400 hover:underline">
-                            Open DMARC Activity →
-                        </a>
-                    @elseif(($dmarcStatus['rua_link_state'] ?? '') === \App\Services\Dmarc\DmarcStatusService::RUA_LINK_DETECTED_UNLINKED)
-                        <span class="text-xs text-gray-600 dark:text-gray-400">{{ $dmarcStatus['rua_link_label'] }}</span>
-                        <a href="{{ route('dmarc.show', $domain) }}" class="text-xs font-medium text-blue-600 dark:text-blue-400 hover:underline">
-                            {{ $dmarcStatus['rua_link_cta'] ?? 'Relink' }} →
-                        </a>
-                    @elseif(($dmarcStatus['rua_link_state'] ?? '') === \App\Services\Dmarc\DmarcStatusService::RUA_LINK_NOT_CONNECTED && ($dmarcStatus['has_rua'] ?? false))
-                        <span class="text-xs text-gray-600 dark:text-gray-400">{{ $dmarcStatus['rua_link_label'] }}</span>
-                        <a href="{{ route('dmarc.show', $domain) }}" class="text-xs font-medium text-blue-600 dark:text-blue-400 hover:underline">
-                            {{ $dmarcStatus['rua_link_cta'] ?? 'Connect' }} →
-                        </a>
-                    @else
-                        <span class="text-xs text-gray-600 dark:text-gray-400">Add MXScan RUA to receive reports</span>
-                        <a href="{{ route('dmarc.show', $domain) }}" class="text-xs font-medium text-blue-600 dark:text-blue-400 hover:underline">
-                            Setup →
-                        </a>
-                    @endif
-                </div>
-            </div>
-        </div>
-        @endif
-
-        {{-- TLS-RPT --}}
-        <div class="min-w-0">
-            <div class="flex items-center justify-between mb-2">
-                <h3 class="flex items-center gap-1 text-sm font-semibold text-gray-900 dark:text-gray-100">
-                    TLS-RPT
-                    <x-help-tooltip :title="$recordHelp['tlsrpt']['title']" :text="$recordHelp['tlsrpt']['text']" :impact="$recordHelp['tlsrpt']['impact']" :fix="$recordHelp['tlsrpt']['fix']" />
-                </h3>
-                @if($tlsrptData && $tlsrptData['status'] === 'found')
-                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
-                    <svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                        <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path>
-                    </svg>
-                    Configured
-                </span>
-                @endif
-            </div>
-            @if($tlsrptData && $tlsrptData['status'] === 'found')
-            <div class="min-w-0 overflow-hidden bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-3">
-                <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                    <code class="block max-w-full text-xs text-gray-900 dark:text-gray-100 break-all flex-1">{{ $tlsrptData['data'] }}</code>
-                    <button onclick="copyToClipboard('{{ addslashes($tlsrptData['data']) }}', this)" class="px-2 py-1 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded hover:bg-gray-50 dark:bg-gray-700 dark:text-gray-200 dark:border-gray-600 dark:hover:bg-gray-600 ml-3 flex-shrink-0">
-                        Copy
-                    </button>
-                </div>
-            </div>
-            @else
-            <div class="min-w-0 overflow-hidden bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3">
-                <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                    <div class="flex items-center text-sm text-red-800 dark:text-red-200">
-                        <svg class="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"></path>
-                        </svg>
-                        No TLS-RPT record found
-                    </div>
-                    <a href="#fix-pack" class="text-xs font-medium text-blue-600 dark:text-blue-400 hover:underline">Add Now</a>
-                </div>
-                <p class="mt-2 text-xs text-red-700 dark:text-red-300">This means mail delivery security problems may go unnoticed.</p>
-            </div>
-            @endif
-        </div>
-
-        {{-- MTA-STS --}}
-        <div class="min-w-0">
-            <div class="flex items-center justify-between mb-2">
-                <h3 class="flex items-center gap-1 text-sm font-semibold text-gray-900 dark:text-gray-100">
-                    MTA-STS
-                    <x-help-tooltip :title="$recordHelp['mtasts']['title']" :text="$recordHelp['mtasts']['text']" :impact="$recordHelp['mtasts']['impact']" :fix="$recordHelp['mtasts']['fix']" />
-                </h3>
-                @if($mtastsData && $mtastsData['status'] === 'found')
-                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
-                    <svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                        <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path>
-                    </svg>
-                    Configured
-                </span>
-                @endif
-            </div>
-            @if($mtastsData && $mtastsData['status'] === 'found')
-            <div class="min-w-0 overflow-hidden bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-3">
-                <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                    <code class="block max-w-full text-xs text-gray-900 dark:text-gray-100 break-all flex-1">{{ $mtastsData['data'] }}</code>
-                    <button onclick="copyToClipboard('{{ addslashes($mtastsData['data']) }}', this)" class="px-2 py-1 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded hover:bg-gray-50 dark:bg-gray-700 dark:text-gray-200 dark:border-gray-600 dark:hover:bg-gray-600 ml-3 flex-shrink-0">
-                        Copy
-                    </button>
-                </div>
-            </div>
-            @else
-            <div class="min-w-0 overflow-hidden bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3">
-                <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                    <div class="flex items-center text-sm text-red-800 dark:text-red-200">
-                        <svg class="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"></path>
-                        </svg>
-                        No MTA-STS policy found
-                    </div>
-                    <a href="#fix-pack" class="text-xs font-medium text-blue-600 dark:text-blue-400 hover:underline">Add Now</a>
-                </div>
-                <p class="mt-2 text-xs text-red-700 dark:text-red-300">This can make secure mail delivery less protected.</p>
-            </div>
-            @endif
+            @endforeach
         </div>
     </div>
 </section>

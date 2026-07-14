@@ -1,0 +1,119 @@
+{
+  "result_json": {
+    "dns": {
+      "score": 75,
+      "records": {
+        "MX": {
+          "status": "found",
+          "data": [
+            {
+              "pri": 10,
+              "target": "mail.example.test",
+              "ttl": 3600
+            }
+          ]
+        },
+        "SPF": {
+          "status": "found",
+          "data": "v=spf1 a mx -all"
+        },
+        "DKIM": {
+          "status": "found",
+          "data": [
+            {
+              "selector": "s1",
+              "record": "v=DKIM1; p=abc"
+            }
+          ]
+        },
+        "DMARC": {
+          "status": "found",
+          "data": "v=DMARC1; p=quarantine; rua=mailto:dmarc@example.test"
+        },
+        "TLS-RPT": {
+          "status": "found",
+          "data": "v=TLSRPTv1; rua=mailto:tlsrpt@example.test"
+        },
+        "MTA-STS": {
+          "status": "missing"
+        },
+        "BIMI": {
+          "status": "missing",
+          "data": null
+        }
+      },
+      "score_breakdown": [
+        {
+          "key": "mx",
+          "label": "MX",
+          "earned": 15,
+          "possible": 15,
+          "status": "ok"
+        },
+        {
+          "key": "spf",
+          "label": "SPF",
+          "earned": 20,
+          "possible": 20,
+          "status": "ok"
+        },
+        {
+          "key": "dkim",
+          "label": "DKIM",
+          "earned": 20,
+          "possible": 20,
+          "status": "ok"
+        },
+        {
+          "key": "dmarc",
+          "label": "DMARC",
+          "earned": 20,
+          "possible": 30,
+          "status": "partial"
+        },
+        {
+          "key": "tlsrpt",
+          "label": "TLS-RPT",
+          "earned": 5,
+          "possible": 5,
+          "status": "ok"
+        },
+        {
+          "key": "mtasts",
+          "label": "MTA-STS",
+          "earned": 0,
+          "possible": 10,
+          "status": "missing"
+        }
+      ],
+      "recommendations": []
+    },
+    "spf": {
+      "record": "v=spf1 a mx -all",
+      "lookups": 2,
+      "flattened": "v=spf1 ip4:203.0.113.10 -all",
+      "status": "safe",
+      "valid": true,
+      "error": null,
+      "warnings": []
+    },
+    "blacklist": {
+      "total_checks": 5,
+      "listed_count": 0,
+      "is_clean": true,
+      "providers_checked": 5
+    }
+  },
+  "score": 75,
+  "facts_json": {
+    "spf_record": "v=spf1 a mx -all",
+    "spf_lookups": 2,
+    "blacklist_status": "clean",
+    "blacklist_count": 0
+  },
+  "recommendation_keys": [
+    "dmarc_alignment",
+    "mtasts",
+    "bimi"
+  ]
+}

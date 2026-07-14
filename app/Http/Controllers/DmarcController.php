@@ -26,6 +26,7 @@ class DmarcController extends Controller
         $this->analytics = $analytics;
         $this->processor = $processor;
         $this->statusService = $statusService;
+        $this->middleware('entitlement:dmarc_activity');
     }
 
     /**

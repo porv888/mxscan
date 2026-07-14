@@ -130,12 +130,15 @@ class ScanReportStatusUiTest extends TestCase
                 'BIMI' => ['status' => 'missing'],
             ],
             'spfLookupCount' => 1,
+            'spfMax' => 10,
             'domain' => $this->sampleDomain(),
             'dmarcStatus' => null,
             'statusCards' => ['dkim' => $dkim],
+            'dmarcPolicy' => 'reject',
+            'dmarcAligned' => true,
         ])->render();
 
-        $this->assertStringContainsString('1 DKIM selector discovered', $html);
+        $this->assertStringContainsString('1 selector discovered', $html);
         $this->assertStringContainsString('published DNS keys only', $html);
         $this->assertStringNotContainsString('signing verified', strtolower($html));
     }

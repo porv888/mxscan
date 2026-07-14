@@ -8,18 +8,21 @@ use App\Models\Scan;
 use App\Models\User;
 use App\Support\DomainNormalizer;
 use Illuminate\Support\Facades\Bus;
+use Tests\Concerns\CreatesPlanUsers;
 use Tests\Concerns\UsesSqliteDmarcSchema;
 use Tests\TestCase;
 
 class DomainOnboardingTest extends TestCase
 {
     use UsesSqliteDmarcSchema;
+    use CreatesPlanUsers;
 
     protected function setUp(): void
     {
         parent::setUp();
         $this->setUpSqliteDmarcSchema();
         $this->setUpSqliteMonitoringExtras();
+        $this->setUpPlanTables();
         Bus::fake();
     }
 
@@ -37,13 +40,7 @@ class DomainOnboardingTest extends TestCase
         $this->assertSame('prod', $domain->environment);
 
         $schedule = $domain->schedules()->first() ?? \App\Models\Schedule::where('domain_id', $domain->id)->first();
-        $this->assertNotNull($schedule);
-        $this->assertSame('paused', $schedule->status);
-        $services = $schedule->settings['services'] ?? [];
-        $this->assertContains('dns', $services);
-        $this->assertContains('spf', $services);
-        $this->assertContains('blacklist', $services);
-        $this->assertNotContains('delivery', $services);
+        $this->assertNull($schedule);
 
         $scan = Scan::where('domain_id', $domain->id)->first();
         $this->assertNotNull($scan);
@@ -58,9 +55,9 @@ class DomainOnboardingTest extends TestCase
         });
     }
 
-    public function test_advanced_options_are_respected(): void
+    public function test_advanced_options_are_respected_for_paid_users(): void
     {
-        $user = User::factory()->create();
+        $user = $this->createPremiumUser();
 
         $this->actingAs($user)->post(route('dashboard.domains.store'), [
             'domain' => 'advanced-test.example.com',

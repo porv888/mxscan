@@ -11,6 +11,8 @@ use App\Rules\WithinDomainLimit;
 use App\Support\DomainNormalizer;
 use App\Services\Dmarc\DmarcAnalyticsService;
 use App\Services\Dmarc\DmarcStatusService;
+use App\Services\Entitlement\EntitlementFeature;
+use App\Services\Entitlement\EntitlementService;
 use App\Services\Expiry\ExpiryCoordinator;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -19,12 +21,18 @@ use Illuminate\Validation\Rule;
 
 class DomainController extends Controller
 {
+    public function __construct(
+        protected EntitlementService $entitlements
+    ) {
+    }
+
     /**
      * Display a listing of the user's domains.
      */
     public function index()
     {
-        $domains = Domain::where('user_id', Auth::id())
+        $user = Auth::user();
+        $domains = Domain::where('user_id', $user->id)
             ->with('activeSchedule')
             ->orderBy('created_at', 'desc')
             ->get();
@@ -40,9 +48,14 @@ class DomainController extends Controller
                 'summary' => $summary,
                 'status' => $status,
             ];
+            $domain->is_plan_locked = $this->entitlements->isDomainLocked($user, $domain);
         }
 
-        return view('domains.index', compact('domains', 'dmarcSummaries'));
+        return view('domains.index', [
+            'domains' => $domains,
+            'dmarcSummaries' => $dmarcSummaries,
+            'isPaid' => $this->entitlements->isPaid($user),
+        ]);
     }
 
     /**
@@ -50,7 +63,15 @@ class DomainController extends Controller
      */
     public function create()
     {
-        return view('domains.create');
+        $user = Auth::user();
+        if (!$this->entitlements->canAddDomain($user)) {
+            return redirect()->route('pricing')
+                ->with('error', 'Your plan supports ' . $user->domainLimit() . ' domain. Upgrade to add more.');
+        }
+
+        return view('domains.create', [
+            'isPaid' => $this->entitlements->isPaid($user),
+        ]);
     }
 
     /**
@@ -93,7 +114,14 @@ class DomainController extends Controller
 
         $providerGuess = $this->guessProvider($validated['domain']);
         $user = $request->user();
+
+        if (!$this->entitlements->canAddDomain($user)) {
+            return redirect()->route('pricing')
+                ->with('error', 'Your plan supports ' . $user->domainLimit() . ' domain. Upgrade to add more.');
+        }
+
         $environment = $validated['environment'] ?? 'prod';
+        $isPaid = $this->entitlements->isPaid($user);
 
         try {
             $domain = Domain::create([
@@ -104,50 +132,52 @@ class DomainController extends Controller
                 'status' => 'active',
             ]);
 
-            $selected = collect($validated['services'] ?? []);
-            $enabledServices = $selected->values()->unique()->intersect([
-                'dns', 'blacklist', 'spf', 'delivery', 'domain_expiry', 'ssl_expiry',
-            ])->values()->all();
+            if ($isPaid) {
+                $selected = collect($validated['services'] ?? []);
+                $enabledServices = $selected->values()->unique()->intersect([
+                    'dns', 'blacklist', 'spf', 'delivery', 'domain_expiry', 'ssl_expiry',
+                ])->values()->all();
 
-            if (empty($enabledServices)) {
-                $enabledServices = ['dns', 'spf', 'blacklist', 'domain_expiry', 'ssl_expiry'];
-            }
+                if (empty($enabledServices)) {
+                    $enabledServices = ['dns', 'spf', 'blacklist', 'domain_expiry', 'ssl_expiry'];
+                }
 
-            $cadRaw = $validated['schedule'] ?? 'off';
-            [$cadence, $at] = str_contains($cadRaw, '@') ? explode('@', $cadRaw, 2) : [$cadRaw, null];
-            $cadence = in_array($cadence, ['off', 'daily', 'weekly'], true) ? $cadence : 'off';
-            $runAt = $at && preg_match('/^\d{2}:\d{2}$/', $at) ? $at . ':00' : null;
+                $cadRaw = $validated['schedule'] ?? 'off';
+                [$cadence, $at] = str_contains($cadRaw, '@') ? explode('@', $cadRaw, 2) : [$cadRaw, null];
+                $cadence = in_array($cadence, ['off', 'daily', 'weekly'], true) ? $cadence : 'off';
+                $runAt = $at && preg_match('/^\d{2}:\d{2}$/', $at) ? $at . ':00' : null;
 
-            Schedule::create([
-                'domain_id' => $domain->id,
-                'user_id' => $user->id,
-                'scan_type' => 'both',
-                'frequency' => $cadence === 'off' ? 'daily' : $cadence,
-                'cron_expression' => null,
-                'status' => $cadence === 'off' ? 'paused' : 'active',
-                'next_run_at' => null,
-                'last_run_at' => null,
-                'settings' => [
-                    'services' => $enabledServices,
-                    'run_at' => $runAt,
-                ],
-            ]);
-
-            if (in_array('delivery', $enabledServices, true)) {
-                $token = Str::uuid()->toString();
-                $local = 'monitor+' . $token;
-                $addr = $local . '@mxscan.me';
-
-                DeliveryMonitor::create([
-                    'user_id' => $user->id,
+                Schedule::create([
                     'domain_id' => $domain->id,
-                    'label' => $domain->domain . ' monitor',
-                    'inbox_address' => $addr,
-                    'token' => $token,
-                    'status' => 'active',
-                    'last_check_at' => null,
-                    'last_incident_notified_at' => null,
+                    'user_id' => $user->id,
+                    'scan_type' => 'both',
+                    'frequency' => $cadence === 'off' ? 'daily' : $cadence,
+                    'cron_expression' => null,
+                    'status' => $cadence === 'off' ? 'paused' : 'active',
+                    'next_run_at' => null,
+                    'last_run_at' => null,
+                    'settings' => [
+                        'services' => $enabledServices,
+                        'run_at' => $runAt,
+                    ],
                 ]);
+
+                if (in_array('delivery', $enabledServices, true)) {
+                    $token = Str::uuid()->toString();
+                    $local = 'monitor+' . $token;
+                    $addr = $local . '@mxscan.me';
+
+                    DeliveryMonitor::create([
+                        'user_id' => $user->id,
+                        'domain_id' => $domain->id,
+                        'label' => $domain->domain . ' monitor',
+                        'inbox_address' => $addr,
+                        'token' => $token,
+                        'status' => 'active',
+                        'last_check_at' => null,
+                        'last_incident_notified_at' => null,
+                    ]);
+                }
             }
 
             $scan = Scan::create([
@@ -159,17 +189,12 @@ class DomainController extends Controller
             ]);
 
             $scanOptions = [
-                'dns' => in_array('dns', $enabledServices, true),
-                'spf' => in_array('spf', $enabledServices, true),
-                'blacklist' => in_array('blacklist', $enabledServices, true),
-                'monitoring' => true,
+                'dns' => true,
+                'spf' => true,
+                'blacklist' => true,
+                'monitoring' => $isPaid,
                 'scan_id' => $scan->id,
             ];
-            if (!$scanOptions['dns'] && !$scanOptions['spf'] && !$scanOptions['blacklist']) {
-                $scanOptions['dns'] = true;
-                $scanOptions['spf'] = true;
-                $scanOptions['blacklist'] = true;
-            }
 
             RunFullScan::dispatch($domain->id, $scanOptions);
 
@@ -194,10 +219,7 @@ class DomainController extends Controller
      */
     public function edit(Domain $domain)
     {
-        // Ensure user can only edit their own domains
-        if ($domain->user_id !== Auth::id()) {
-            abort(403, 'Unauthorized access to domain.');
-        }
+        $this->authorize('update', $domain);
 
         return view('domains.edit', compact('domain'));
     }
@@ -207,10 +229,7 @@ class DomainController extends Controller
      */
     public function update(Request $request, Domain $domain)
     {
-        // Ensure user can only update their own domains
-        if ($domain->user_id !== Auth::id()) {
-            abort(403, 'Unauthorized access to domain.');
-        }
+        $this->authorize('update', $domain);
 
         $validated = $request->validate([
             'domain' => [
@@ -274,7 +293,12 @@ class DomainController extends Controller
      */
     public function schedule(Request $request, Domain $domain)
     {
-        // Ensure user can only schedule scans for their own domains
+        $user = $request->user();
+        if (!$this->entitlements->can($user, EntitlementFeature::SCHEDULED_SCANS)
+            || !$this->entitlements->canOnDomain($user, $domain, EntitlementFeature::SCHEDULED_SCANS)) {
+            return $this->entitlements->deny($request, EntitlementFeature::SCHEDULED_SCANS);
+        }
+
         if ($domain->user_id !== Auth::id()) {
             abort(403, 'Unauthorized access to domain.');
         }
@@ -328,12 +352,9 @@ class DomainController extends Controller
     /**
      * Refresh expiry dates for a domain.
      */
-    public function refreshExpiry(Domain $domain, ExpiryCoordinator $coordinator)
+    public function refreshExpiry(Domain $domain, ExpiryCoordinator $coordinator, Request $request)
     {
-        // Ensure user can only refresh their own domains
-        if ($domain->user_id !== Auth::id()) {
-            abort(403, 'Unauthorized access to domain.');
-        }
+        $this->authorize('update', $domain);
 
         try {
             // Run fast-path detection

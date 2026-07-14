@@ -4,19 +4,29 @@ namespace App\Http\Controllers;
 
 use App\Models\Domain;
 use App\Models\DeliveryMonitor;
+use App\Services\Entitlement\EntitlementFeature;
+use App\Services\Entitlement\EntitlementService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 
 class DomainSettingsController extends Controller
 {
+    public function __construct(
+        protected EntitlementService $entitlements
+    ) {
+    }
+
     /**
      * Update enabled services for a domain.
      */
     public function updateServices(Request $request, Domain $domain)
     {
-        // Ensure user owns this domain
         if ($domain->user_id !== $request->user()->id) {
             abort(403, 'Unauthorized access to domain.');
+        }
+
+        if (!$this->entitlements->canOnDomain($request->user(), $domain, EntitlementFeature::SCHEDULED_SCANS)) {
+            return $this->entitlements->deny($request, EntitlementFeature::SCHEDULED_SCANS);
         }
 
         $data = $request->validate([
@@ -74,9 +84,12 @@ class DomainSettingsController extends Controller
      */
     public function updateCadence(Request $request, Domain $domain)
     {
-        // Ensure user owns this domain
         if ($domain->user_id !== $request->user()->id) {
             abort(403, 'Unauthorized access to domain.');
+        }
+
+        if (!$this->entitlements->canOnDomain($request->user(), $domain, EntitlementFeature::SCHEDULED_SCANS)) {
+            return $this->entitlements->deny($request, EntitlementFeature::SCHEDULED_SCANS);
         }
 
         $data = $request->validate([

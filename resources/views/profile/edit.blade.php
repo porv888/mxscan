@@ -227,6 +227,7 @@
             $plan = auth()->user()->currentPlan();
             $used = auth()->user()->domainsUsed();
             $limit = auth()->user()->domainLimit();
+            $domainWord = $limit === 1 ? 'domain' : 'domains';
             $pct = min(100, intval($used / max(1,$limit) * 100));
         @endphp
 
@@ -246,7 +247,7 @@
                     <div class="mt-4">
                         <div class="flex items-center justify-between text-sm text-gray-600">
                             <div>Domains used</div>
-                            <div>{{ $used }} / {{ $limit }}</div>
+                            <div>{{ $used }} of {{ $limit }} {{ $domainWord }}</div>
                         </div>
                         <div class="w-full bg-gray-200 rounded h-2 mt-1">
                             <div class="h-2 rounded {{ $pct>=100 ? 'bg-red-500' : 'bg-blue-600' }}" style="width: {{ $pct }}%"></div>

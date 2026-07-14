@@ -46,8 +46,14 @@
                 <p id="domain-help" class="mt-1 text-sm text-gray-500">
                     Example: example.com — protocol and paths are removed automatically.
                 </p>
+                @unless($isPaid ?? false)
+                <p class="mt-2 text-sm text-blue-700 bg-blue-50 border border-blue-100 rounded-md px-3 py-2">
+                    Free plan includes one domain and manual full security scans.
+                </p>
+                @endunless
             </div>
 
+            @if($isPaid ?? false)
             <div class="border border-gray-200 rounded-lg">
                 <button type="button"
                         id="advanced-options-toggle"
@@ -162,6 +168,7 @@
                     </div>
                 </div>
             </div>
+            @endif
 
             <input type="hidden" name="schedule" id="hidden_schedule" value="off">
 
@@ -198,6 +205,7 @@
         e.target.value = normalizeDomainInput(e.target.value);
     });
 
+    @if($isPaid ?? false)
     const scheduleRadios = document.querySelectorAll('input[name="schedule_type"]');
     const timePicker = document.getElementById('time-picker');
     scheduleRadios.forEach(radio => {
@@ -242,5 +250,10 @@
         updateHiddenFields();
     });
     updateHiddenFields();
+    @else
+    document.getElementById('add-domain-form').addEventListener('submit', function() {
+        document.getElementById('domain').value = normalizeDomainInput(document.getElementById('domain').value);
+    });
+    @endif
 </script>
 @endsection

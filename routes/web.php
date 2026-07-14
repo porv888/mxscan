@@ -74,19 +74,23 @@ Route::middleware(['auth', 'verified'])->group(function () {
     ]);
 
     // Automation Routes (replaces Schedules)
-    Route::get('/automations', [App\Http\Controllers\AutomationController::class, 'index'])->name('automations.index');
-    Route::get('/automations/create', [App\Http\Controllers\AutomationController::class, 'create'])->name('automations.create');
-    Route::post('/automations', [App\Http\Controllers\AutomationController::class, 'store'])->name('automations.store');
-    Route::get('/automations/{schedule}/edit', [App\Http\Controllers\AutomationController::class, 'edit'])->name('automations.edit');
-    Route::put('/automations/{schedule}', [App\Http\Controllers\AutomationController::class, 'update'])->name('automations.update');
-    Route::post('/automations/{schedule}/run-now', [App\Http\Controllers\AutomationController::class, 'runNow'])->name('automations.run-now');
-    Route::post('/automations/{schedule}/pause', [App\Http\Controllers\AutomationController::class, 'pause'])->name('automations.pause');
-    Route::post('/automations/{schedule}/resume', [App\Http\Controllers\AutomationController::class, 'resume'])->name('automations.resume');
-    Route::delete('/automations/{schedule}', [App\Http\Controllers\AutomationController::class, 'destroy'])->name('automations.destroy');
+    Route::middleware('entitlement:automations')->group(function () {
+        Route::get('/automations', [App\Http\Controllers\AutomationController::class, 'index'])->name('automations.index');
+        Route::get('/automations/create', [App\Http\Controllers\AutomationController::class, 'create'])->name('automations.create');
+        Route::post('/automations', [App\Http\Controllers\AutomationController::class, 'store'])->name('automations.store');
+        Route::get('/automations/{schedule}/edit', [App\Http\Controllers\AutomationController::class, 'edit'])->name('automations.edit');
+        Route::put('/automations/{schedule}', [App\Http\Controllers\AutomationController::class, 'update'])->name('automations.update');
+        Route::post('/automations/{schedule}/run-now', [App\Http\Controllers\AutomationController::class, 'runNow'])->name('automations.run-now');
+        Route::post('/automations/{schedule}/pause', [App\Http\Controllers\AutomationController::class, 'pause'])->name('automations.pause');
+        Route::post('/automations/{schedule}/resume', [App\Http\Controllers\AutomationController::class, 'resume'])->name('automations.resume');
+        Route::delete('/automations/{schedule}', [App\Http\Controllers\AutomationController::class, 'destroy'])->name('automations.destroy');
+    });
 
     // Report Routes (replaces Scans)
     Route::get('/reports', [App\Http\Controllers\ReportController::class, 'index'])->name('reports.index');
-    Route::get('/reports/export', [App\Http\Controllers\ReportController::class, 'export'])->name('reports.export');
+    Route::get('/reports/export', [App\Http\Controllers\ReportController::class, 'export'])
+        ->middleware('entitlement:report_export')
+        ->name('reports.export');
     Route::get('/reports/{scan}', [App\Http\Controllers\ReportController::class, 'show'])->name('reports.show');
 
     // Legacy Scan Routes (index redirects to reports, others kept for active use)
@@ -97,21 +101,31 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/dashboard/scans/{scan}/result', [App\Http\Controllers\ScanController::class, 'result'])->name('scans.result');
     
     // Blacklist Scan Routes
-    Route::post('/dashboard/domains/{domain}/blacklist', [App\Http\Controllers\BlacklistScanController::class, 'run'])->name('blacklist.check');
+    Route::post('/dashboard/domains/{domain}/blacklist', [App\Http\Controllers\BlacklistScanController::class, 'run'])
+        ->middleware('entitlement:partial_scan')
+        ->name('blacklist.check');
     Route::get('/dashboard/domains/{domain}/blacklist/status', [App\Http\Controllers\BlacklistScanController::class, 'status'])->name('blacklist.status');
     
     // Domain Schedule Routes
-    Route::post('/dashboard/domains/{domain}/schedule', [App\Http\Controllers\DomainController::class, 'schedule'])->name('domains.schedule');
+    Route::post('/dashboard/domains/{domain}/schedule', [App\Http\Controllers\DomainController::class, 'schedule'])
+        ->middleware('entitlement:scheduled_scans')
+        ->name('domains.schedule');
     
     // Domain Settings Routes (for updating services and cadence)
-    Route::post('/domains/{domain}/settings/services', [App\Http\Controllers\DomainSettingsController::class, 'updateServices'])->name('domains.settings.services');
-    Route::post('/domains/{domain}/settings/cadence', [App\Http\Controllers\DomainSettingsController::class, 'updateCadence'])->name('domains.settings.cadence');
+    Route::post('/domains/{domain}/settings/services', [App\Http\Controllers\DomainSettingsController::class, 'updateServices'])
+        ->middleware('entitlement:scheduled_scans')
+        ->name('domains.settings.services');
+    Route::post('/domains/{domain}/settings/cadence', [App\Http\Controllers\DomainSettingsController::class, 'updateCadence'])
+        ->middleware('entitlement:scheduled_scans')
+        ->name('domains.settings.cadence');
     
     // New Unified Scan Routes (must come before domains/{domain} prefix group to avoid conflicts)
     Route::post('/domains/{domain}/scan', [App\Http\Controllers\ScanController::class, 'run'])->name('domains.scan');
-    Route::post('/domains/{domain}/scan/dns', [App\Http\Controllers\ScanController::class, 'runDns'])->name('domains.scan.dns');
-    Route::post('/domains/{domain}/scan/blacklist', [App\Http\Controllers\ScanController::class, 'runBlacklist'])->name('domains.scan.blacklist');
-    Route::post('/domains/{domain}/scan/spf', [App\Http\Controllers\ScanController::class, 'runSpf'])->name('domains.scan.spf');
+    Route::middleware('entitlement:partial_scan')->group(function () {
+        Route::post('/domains/{domain}/scan/dns', [App\Http\Controllers\ScanController::class, 'runDns'])->name('domains.scan.dns');
+        Route::post('/domains/{domain}/scan/blacklist', [App\Http\Controllers\ScanController::class, 'runBlacklist'])->name('domains.scan.blacklist');
+        Route::post('/domains/{domain}/scan/spf', [App\Http\Controllers\ScanController::class, 'runSpf'])->name('domains.scan.spf');
+    });
     
     // NEW: Synchronous scan endpoint
     Route::post('/domains/{domain}/scan-now', [App\Http\Controllers\ScanController::class, 'runSync'])->name('domains.scan.now');
@@ -124,18 +138,26 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/', [App\Http\Controllers\DomainHubController::class, 'overview'])->name('domains.hub');
         Route::get('/history', [App\Http\Controllers\DomainHubController::class, 'history'])->name('domains.hub.history');
         Route::get('/schedules', [App\Http\Controllers\DomainHubController::class, 'schedules'])->name('domains.hub.schedules');
-        Route::get('/tools', [App\Http\Controllers\DomainHubController::class, 'tools'])->name('domains.hub.tools');
+        Route::get('/tools', [App\Http\Controllers\DomainHubController::class, 'tools'])
+            ->middleware('entitlement:standalone_tools')
+            ->name('domains.hub.tools');
         Route::get('/settings', [App\Http\Controllers\DomainHubController::class, 'settings'])->name('domains.hub.settings');
         
         // Actions (scan moved to unified scan system)
-        Route::post('/blacklist', [App\Http\Controllers\DomainActionsController::class, 'runBlacklist'])->name('domains.hub.blacklist');
-        Route::get('/fix-pack', [App\Http\Controllers\DomainActionsController::class, 'downloadFixPack'])->name('domains.hub.fixpack');
+        Route::post('/blacklist', [App\Http\Controllers\DomainActionsController::class, 'runBlacklist'])
+            ->middleware('entitlement:partial_scan')
+            ->name('domains.hub.blacklist');
+        Route::get('/fix-pack', [App\Http\Controllers\DomainActionsController::class, 'downloadFixPack'])
+            ->middleware('entitlement:standalone_tools')
+            ->name('domains.hub.fixpack');
     });
     
     // SPF Optimizer Routes
-    Route::get('/domains/{domain}/spf', [App\Http\Controllers\SpfController::class, 'show'])->name('spf.show');
-    Route::post('/domains/{domain}/spf/run', [App\Http\Controllers\SpfController::class, 'run'])->name('spf.run');
-    Route::get('/domains/{domain}/spf/history', [App\Http\Controllers\SpfController::class, 'history'])->name('spf.history');
+    Route::middleware('entitlement:domain_spf_analyzer')->group(function () {
+        Route::get('/domains/{domain}/spf', [App\Http\Controllers\SpfController::class, 'show'])->name('spf.show');
+        Route::post('/domains/{domain}/spf/run', [App\Http\Controllers\SpfController::class, 'run'])->name('spf.run');
+        Route::get('/domains/{domain}/spf/history', [App\Http\Controllers\SpfController::class, 'history'])->name('spf.history');
+    });
     
     // RBL Delisting Routes
     Route::get('/domains/{domain}/rbl/{provider}/info', [App\Http\Controllers\RblController::class, 'info'])->name('rbl.info');
@@ -144,15 +166,17 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('/domains/{domain}/rbl/recheck', [App\Http\Controllers\RblController::class, 'recheck'])->name('rbl.recheck');
     
     // Tools
-    Route::get('/tools', [App\Http\Controllers\ToolsController::class, 'index'])->name('tools.index');
-    Route::get('/tools/smtp-test', [App\Http\Controllers\ToolsController::class, 'smtpTestForm'])->name('tools.smtp');
-    Route::post('/tools/smtp-test', [App\Http\Controllers\ToolsController::class, 'smtpTest'])->name('tools.smtp.run');
-    Route::get('/tools/bimi-check', [App\Http\Controllers\ToolsController::class, 'bimiCheckForm'])->name('tools.bimi');
-    Route::post('/tools/bimi-check', [App\Http\Controllers\ToolsController::class, 'bimiCheck'])->name('tools.bimi.run');
-    Route::get('/tools/spf-wizard', [App\Http\Controllers\ToolsController::class, 'spfWizardForm'])->name('tools.spf');
-    Route::post('/tools/spf-wizard', [App\Http\Controllers\ToolsController::class, 'spfWizard'])->name('tools.spf.run');
-    Route::get('/tools/dkim-lookup', [App\Http\Controllers\ToolsController::class, 'dkimLookupForm'])->name('tools.dkim');
-    Route::post('/tools/dkim-lookup', [App\Http\Controllers\ToolsController::class, 'dkimLookup'])->name('tools.dkim.run');
+    Route::middleware('entitlement:standalone_tools')->group(function () {
+        Route::get('/tools', [App\Http\Controllers\ToolsController::class, 'index'])->name('tools.index');
+        Route::get('/tools/smtp-test', [App\Http\Controllers\ToolsController::class, 'smtpTestForm'])->name('tools.smtp');
+        Route::post('/tools/smtp-test', [App\Http\Controllers\ToolsController::class, 'smtpTest'])->name('tools.smtp.run');
+        Route::get('/tools/bimi-check', [App\Http\Controllers\ToolsController::class, 'bimiCheckForm'])->name('tools.bimi');
+        Route::post('/tools/bimi-check', [App\Http\Controllers\ToolsController::class, 'bimiCheck'])->name('tools.bimi.run');
+        Route::get('/tools/spf-wizard', [App\Http\Controllers\ToolsController::class, 'spfWizardForm'])->name('tools.spf');
+        Route::post('/tools/spf-wizard', [App\Http\Controllers\ToolsController::class, 'spfWizard'])->name('tools.spf.run');
+        Route::get('/tools/dkim-lookup', [App\Http\Controllers\ToolsController::class, 'dkimLookupForm'])->name('tools.dkim');
+        Route::post('/tools/dkim-lookup', [App\Http\Controllers\ToolsController::class, 'dkimLookup'])->name('tools.dkim.run');
+    });
     
     // Legacy Schedule Routes (redirect to automations)
     Route::get('/dashboard/schedules', fn() => redirect()->route('automations.index'))->name('schedules.index');
@@ -187,7 +211,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::put('/settings/notifications', [App\Http\Controllers\NotificationPrefsController::class, 'update'])->name('settings.notifications.update');
     
     // User Monitoring Routes (Premium/Ultra only)
-    Route::prefix('monitoring')->name('monitoring.')->group(function () {
+    Route::middleware('entitlement:monitoring')->prefix('monitoring')->name('monitoring.')->group(function () {
         Route::get('/incidents', [App\Http\Controllers\MonitoringController::class, 'incidents'])->name('incidents');
         Route::get('/incidents/{incident}', [App\Http\Controllers\MonitoringController::class, 'showIncident'])->name('incidents.show');
         Route::get('/snapshots', [App\Http\Controllers\MonitoringController::class, 'snapshots'])->name('snapshots');
@@ -195,31 +219,35 @@ Route::middleware(['auth', 'verified'])->group(function () {
     });
     
     // Delivery Monitoring Routes (new simplified routes)
-    Route::get('/delivery', [App\Http\Controllers\DeliveryMonitorController::class, 'index'])->name('delivery');
-    Route::prefix('delivery-monitoring')->name('delivery-monitoring.')->group(function () {
-        Route::get('/', [App\Http\Controllers\DeliveryMonitorController::class, 'index'])->name('index');
-        Route::get('/create', [App\Http\Controllers\DeliveryMonitorController::class, 'create'])->name('create');
-        Route::post('/', [App\Http\Controllers\DeliveryMonitorController::class, 'store'])->name('store');
-        Route::get('/{monitor}', [App\Http\Controllers\DeliveryMonitorController::class, 'show'])->name('show');
-        Route::post('/{monitor}/pause', [App\Http\Controllers\DeliveryMonitorController::class, 'pause'])->name('pause');
-        Route::post('/{monitor}/resume', [App\Http\Controllers\DeliveryMonitorController::class, 'resume'])->name('resume');
-        Route::delete('/{monitor}', [App\Http\Controllers\DeliveryMonitorController::class, 'destroy'])->name('destroy');
+    Route::middleware('entitlement:delivery_monitoring')->group(function () {
+        Route::get('/delivery', [App\Http\Controllers\DeliveryMonitorController::class, 'index'])->name('delivery');
+        Route::prefix('delivery-monitoring')->name('delivery-monitoring.')->group(function () {
+            Route::get('/', [App\Http\Controllers\DeliveryMonitorController::class, 'index'])->name('index');
+            Route::get('/create', [App\Http\Controllers\DeliveryMonitorController::class, 'create'])->name('create');
+            Route::post('/', [App\Http\Controllers\DeliveryMonitorController::class, 'store'])->name('store');
+            Route::get('/{monitor}', [App\Http\Controllers\DeliveryMonitorController::class, 'show'])->name('show');
+            Route::post('/{monitor}/pause', [App\Http\Controllers\DeliveryMonitorController::class, 'pause'])->name('pause');
+            Route::post('/{monitor}/resume', [App\Http\Controllers\DeliveryMonitorController::class, 'resume'])->name('resume');
+            Route::delete('/{monitor}', [App\Http\Controllers\DeliveryMonitorController::class, 'destroy'])->name('destroy');
+        });
     });
     
     // API endpoint for delivery check details
     Route::get('/api/delivery-checks/{check}', [App\Http\Controllers\DeliveryMonitorController::class, 'getCheckDetails']);
 
     // DMARC Visibility Routes
-    Route::get('/dmarc', [App\Http\Controllers\DmarcController::class, 'index'])->name('dmarc.index');
-    Route::prefix('domains/{domain}/dmarc')->name('dmarc.')->group(function () {
-        Route::get('/', [App\Http\Controllers\DmarcController::class, 'show'])->name('show');
-        Route::post('/check-dns', [App\Http\Controllers\DmarcController::class, 'checkDns'])->name('check-dns');
-        Route::post('/upload', [App\Http\Controllers\DmarcController::class, 'upload'])->name('upload');
-        Route::put('/alerts', [App\Http\Controllers\DmarcController::class, 'updateAlertSettings'])->name('alerts.update');
-        Route::post('/events/{event}/acknowledge', [App\Http\Controllers\DmarcController::class, 'acknowledgeEvent'])->name('events.acknowledge');
-        Route::get('/chart-data', [App\Http\Controllers\DmarcController::class, 'chartData'])->name('chart-data');
-        Route::get('/senders-data', [App\Http\Controllers\DmarcController::class, 'sendersData'])->name('senders-data');
-        Route::get('/senders/{sender}', [App\Http\Controllers\DmarcController::class, 'getSender'])->name('senders.show');
+    Route::middleware('entitlement:dmarc_activity')->group(function () {
+        Route::get('/dmarc', [App\Http\Controllers\DmarcController::class, 'index'])->name('dmarc.index');
+        Route::prefix('domains/{domain}/dmarc')->name('dmarc.')->group(function () {
+            Route::get('/', [App\Http\Controllers\DmarcController::class, 'show'])->name('show');
+            Route::post('/check-dns', [App\Http\Controllers\DmarcController::class, 'checkDns'])->name('check-dns');
+            Route::post('/upload', [App\Http\Controllers\DmarcController::class, 'upload'])->name('upload');
+            Route::put('/alerts', [App\Http\Controllers\DmarcController::class, 'updateAlertSettings'])->name('alerts.update');
+            Route::post('/events/{event}/acknowledge', [App\Http\Controllers\DmarcController::class, 'acknowledgeEvent'])->name('events.acknowledge');
+            Route::get('/chart-data', [App\Http\Controllers\DmarcController::class, 'chartData'])->name('chart-data');
+            Route::get('/senders-data', [App\Http\Controllers\DmarcController::class, 'sendersData'])->name('senders-data');
+            Route::get('/senders/{sender}', [App\Http\Controllers\DmarcController::class, 'getSender'])->name('senders.show');
+        });
     });
 
     // Profile routes (new simplified route)

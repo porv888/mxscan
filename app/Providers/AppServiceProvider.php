@@ -7,6 +7,8 @@ use Illuminate\Support\Facades\View;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Auth\Notifications\VerifyEmail;
 use App\Notifications\VerifyEmailBranded;
+use App\Services\Entitlement\EntitlementFeature;
+use App\Services\Entitlement\EntitlementService;
 use Laravel\Cashier\Cashier;
 use App\Models\CashierSubscription;
 use App\Models\Incident;
@@ -19,7 +21,7 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        $this->app->singleton(EntitlementService::class);
     }
 
     /**
@@ -41,13 +43,33 @@ class AppServiceProvider extends ServiceProvider
         // Share incident count with layout for sidebar badge
         View::composer('layouts.app', function ($view) {
             $sidebarIncidentCount = 0;
+            $entitlementFlags = [
+                'entitlementAutomations' => false,
+                'entitlementDelivery' => false,
+                'entitlementDmarc' => false,
+                'entitlementTools' => false,
+                'entitlementMonitoring' => false,
+            ];
+
             if (Auth::check()) {
-                $domainIds = Auth::user()->domains()->pluck('id');
+                $user = Auth::user();
+                $entitlements = app(EntitlementService::class);
+                $domainIds = $user->domains()->pluck('id');
                 $sidebarIncidentCount = Incident::whereIn('domain_id', $domainIds)
                     ->unresolved()
                     ->count();
+
+                $entitlementFlags = [
+                    'entitlementAutomations' => $entitlements->can($user, EntitlementFeature::AUTOMATIONS),
+                    'entitlementDelivery' => $entitlements->can($user, EntitlementFeature::DELIVERY_MONITORING),
+                    'entitlementDmarc' => $entitlements->can($user, EntitlementFeature::DMARC_ACTIVITY),
+                    'entitlementTools' => $entitlements->can($user, EntitlementFeature::STANDALONE_TOOLS),
+                    'entitlementMonitoring' => $entitlements->can($user, EntitlementFeature::MONITORING),
+                ];
             }
+
             $view->with('sidebarIncidentCount', $sidebarIncidentCount);
+            $view->with($entitlementFlags);
         });
     }
 }

@@ -1,0 +1,9 @@
+{
+  "record": "v=spf1 a mx -all",
+  "lookups": 2,
+  "flattened": "v=spf1 ip4:203.0.113.10 -all",
+  "status": "safe",
+  "valid": true,
+  "error": null,
+  "warnings": []
+}

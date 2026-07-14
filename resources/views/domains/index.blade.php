@@ -7,13 +7,14 @@
     @php 
         $used = auth()->user()->domainsUsed(); 
         $limit = auth()->user()->domainLimit(); 
+        $domainWord = $limit === 1 ? 'domain' : 'domains';
     @endphp
 
     <!-- Header -->
     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div class="flex-1 min-w-0">
             <h1 class="text-2xl font-bold text-gray-900">Domains</h1>
-            <p class="text-sm text-gray-600 mt-1 font-medium">Plan limits: {{ $used }}/{{ $limit }} domains</p>
+            <p class="text-sm text-gray-600 mt-1 font-medium">{{ $used }} of {{ $limit }} {{ $domainWord }} used</p>
             <div class="mt-2 h-2 w-full max-w-xs bg-gray-200 rounded-full overflow-hidden">
                 @php
                     $pct = $limit > 0 ? min(100, ($used / $limit) * 100) : 0;
@@ -28,11 +29,17 @@
                     Upgrade plan
                 </a>
             @endif
-            <a href="{{ route('dashboard.domains.create') }}" 
-               class="mx-btn mx-btn-primary w-full sm:w-auto {{ $used >= $limit ? 'opacity-60 pointer-events-none cursor-not-allowed' : '' }}">
-                <i data-lucide="plus" class="w-4 h-4"></i>
-                <span>Add Domain</span>
-            </a>
+            @if($used >= $limit)
+                <a href="{{ route('pricing') }}" class="mx-btn mx-btn-primary w-full sm:w-auto">
+                    <i data-lucide="arrow-up-circle" class="w-4 h-4"></i>
+                    <span>Upgrade to add more domains</span>
+                </a>
+            @else
+                <a href="{{ route('dashboard.domains.create') }}" class="mx-btn mx-btn-primary w-full sm:w-auto">
+                    <i data-lucide="plus" class="w-4 h-4"></i>
+                    <span>Add Domain</span>
+                </a>
+            @endif
         </div>
     </div>
 
@@ -118,10 +125,20 @@
                 @endphp
 
                 <div class="relative z-0 min-w-0 bg-white rounded-xl border transition-all duration-200 hover:shadow-md
+                    {{ !empty($domain->is_plan_locked) ? 'border-slate-300 opacity-95' : '' }}
                     {{ $worstSeverity === 'critical' ? 'border-red-200 hover:border-red-300' : 
                        ($worstSeverity === 'warning' ? 'border-amber-200 hover:border-amber-300' : 
                        'border-gray-200 hover:border-gray-300') }}">
                     
+                    @if(!empty($domain->is_plan_locked))
+                    <div class="rounded-t-xl px-4 py-2 bg-slate-100 border-b border-slate-200 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                        <div class="flex items-center gap-2">
+                            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-slate-200 text-slate-700">Plan locked</span>
+                            <span class="text-xs text-slate-600">Your Free plan supports one active domain.</span>
+                        </div>
+                        <a href="{{ route('pricing') }}" class="text-xs font-medium text-blue-600 hover:text-blue-700">Upgrade to reactivate</a>
+                    </div>
+                    @endif
                     <!-- Worst Issue Banner (Main Visual Anchor) -->
                     @if($worstIssue)
                     <div class="rounded-t-xl px-4 py-2.5 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between
@@ -141,7 +158,7 @@
                             <a href="{{ $worstActionUrl }}" class="mx-btn mx-btn-sm {{ $worstSeverity === 'critical' ? 'mx-btn-danger' : 'mx-btn-primary' }}">
                                 {{ $worstAction }}
                             </a>
-                        @elseif($worstAction === 'Scan')
+                        @elseif($worstAction === 'Scan' && empty($domain->is_plan_locked))
                             <form action="{{ route('domains.scan.now', $domain) }}" method="POST" class="inline">
                                 @csrf
                                 <input type="hidden" name="mode" value="full">
@@ -194,11 +211,11 @@
                                     </p>
                                     @elseif($dmarcStatus && ($dmarcStatus['status'] ?? '') === \App\Services\Dmarc\DmarcStatusService::STATUS_ENABLED_MXSCAN_WAITING)
                                     <p class="text-xs text-blue-600 mt-1">DMARC configured — awaiting reports</p>
-                                    @elseif($dmarcStatus && ($dmarcStatus['rua_link_state'] ?? '') === \App\Services\Dmarc\DmarcStatusService::RUA_LINK_DETECTED_UNLINKED)
+                                    @elseif($isPaid && $dmarcStatus && ($dmarcStatus['rua_link_state'] ?? '') === \App\Services\Dmarc\DmarcStatusService::RUA_LINK_DETECTED_UNLINKED)
                                     <a href="{{ route('dmarc.show', $domain) }}" class="text-xs text-amber-600 hover:text-amber-700 mt-1 inline-block">{{ $dmarcStatus['rua_link_label'] }}</a>
-                                    @elseif($dmarcStatus && ($dmarcStatus['has_rua'] ?? false) && ($dmarcStatus['rua_link_state'] ?? '') === \App\Services\Dmarc\DmarcStatusService::RUA_LINK_NOT_CONNECTED)
+                                    @elseif($isPaid && $dmarcStatus && ($dmarcStatus['has_rua'] ?? false) && ($dmarcStatus['rua_link_state'] ?? '') === \App\Services\Dmarc\DmarcStatusService::RUA_LINK_NOT_CONNECTED)
                                     <a href="{{ route('dmarc.show', $domain) }}" class="text-xs text-amber-600 hover:text-amber-700 mt-1 inline-block">{{ $dmarcStatus['rua_link_label'] }}</a>
-                                    @else
+                                    @elseif($isPaid)
                                     <a href="{{ route('dmarc.show', $domain) }}" class="text-xs text-gray-500 hover:text-blue-600 mt-1 inline-block">DMARC reporting not configured</a>
                                     @endif
                                 </div>
@@ -217,16 +234,20 @@
                                      x-transition:leave-start="transform opacity-100 scale-100"
                                      x-transition:leave-end="transform opacity-0 scale-95"
                                      class="absolute right-0 bottom-full mb-1 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50">
+                                    @if(empty($domain->is_plan_locked))
                                     <a href="{{ route('dashboard.domains.edit', $domain) }}" 
                                        class="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50">
                                         <i data-lucide="settings" class="w-4 h-4"></i>
                                         Settings
                                     </a>
+                                    @endif
+                                    @if($isPaid)
                                     <a href="{{ route('spf.show', $domain) }}" 
                                        class="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50">
                                         <i data-lucide="shield" class="w-4 h-4"></i>
                                         SPF Analysis
                                     </a>
+                                    @endif
                                     @if($domain->scans()->exists())
                                         <a href="{{ route('reports.index', ['domain_id' => $domain->id]) }}" 
                                            class="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50">
@@ -260,6 +281,7 @@
                             </div>
                         @else
                             <div class="flex-1 min-w-0">
+                                @if(empty($domain->is_plan_locked))
                                 <form action="{{ route('domains.scan.now', $domain) }}" method="POST">
                                     @csrf
                                     <input type="hidden" name="mode" value="full">
@@ -268,9 +290,16 @@
                                         Run first scan
                                     </button>
                                 </form>
+                                @else
+                                <a href="{{ route('pricing') }}" class="mx-btn mx-btn-secondary mx-btn-block">
+                                    <i data-lucide="lock" class="w-4 h-4"></i>
+                                    Upgrade to scan
+                                </a>
+                                @endif
                             </div>
                         @endif
 
+                        @if(empty($domain->is_plan_locked))
                         <div class="flex flex-shrink-0 items-stretch gap-2">
                         <form action="{{ route('domains.scan.now', $domain) }}" method="POST">
                             @csrf
@@ -281,6 +310,7 @@
                             </button>
                         </form>
 
+                        @if($isPaid)
                         <!-- Scan Options Dropdown -->
                         <div class="relative" x-data="{ open: false }" :class="open && 'z-30'">
                             <button @click="open = !open" type="button" aria-haspopup="true" :aria-expanded="open.toString()"
@@ -328,8 +358,10 @@
                                 @endif
                             </div>
                         </div>
+                        @endif
 
                         </div>
+                        @endif
                     </div>
                 </div>
             @endforeach
