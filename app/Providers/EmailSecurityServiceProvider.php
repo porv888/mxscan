@@ -6,6 +6,14 @@ use App\Domain\EmailSecurity\Checks\BlacklistCheck;
 use App\Domain\EmailSecurity\Checks\BundledDnsChecksAdapter;
 use App\Domain\EmailSecurity\Checks\CheckRegistry;
 use App\Domain\EmailSecurity\Checks\SpfAnalysisCheck;
+use App\Domain\EmailSecurity\Checks\SPF\Compatibility\SpfLegacyPayloadAdapter;
+use App\Domain\EmailSecurity\Checks\SPF\Discovery\SpfRecordDiscovery;
+use App\Domain\EmailSecurity\Checks\SPF\Evaluation\SpfDnsDependencyResolver;
+use App\Domain\EmailSecurity\Checks\SPF\Evaluation\SpfEvaluator;
+use App\Domain\EmailSecurity\Checks\SPF\Evidence\SpfEvidenceBuilder;
+use App\Domain\EmailSecurity\Checks\SPF\Parsing\SpfParser;
+use App\Domain\EmailSecurity\Checks\SPF\SpfCheck;
+use App\Domain\EmailSecurity\Checks\SPF\Validation\SpfValidator;
 use App\Domain\EmailSecurity\Contracts\DnsCollectorInterface;
 use App\Domain\EmailSecurity\Contracts\RecommendationEngineInterface;
 use App\Domain\EmailSecurity\Contracts\ScanPersisterInterface;
@@ -35,9 +43,11 @@ class EmailSecurityServiceProvider extends ServiceProvider
         $this->app->singleton(ScoringInputFactory::class);
         $this->app->singleton(ScanResultNormalizer::class);
 
+        $this->registerNativeSpfServices();
+
         $this->app->singleton(CheckRegistry::class, function ($app) {
             return new CheckRegistry([
-                $app->make(SpfAnalysisCheck::class),
+                $this->resolveSpfCheck($app),
                 $app->make(BlacklistCheck::class),
             ]);
         });
@@ -49,5 +59,25 @@ class EmailSecurityServiceProvider extends ServiceProvider
         $this->app->bind(ScanPersisterInterface::class, ScanPersister::class);
         $this->app->bind(ScanReportFactoryInterface::class, ScanReportFactory::class);
         $this->app->bind(EmailSecurityScanService::class);
+    }
+
+    private function registerNativeSpfServices(): void
+    {
+        $this->app->singleton(SpfDnsDependencyResolver::class);
+        $this->app->singleton(SpfRecordDiscovery::class);
+        $this->app->singleton(SpfParser::class);
+        $this->app->singleton(SpfValidator::class);
+        $this->app->singleton(SpfEvaluator::class);
+        $this->app->singleton(SpfEvidenceBuilder::class);
+        $this->app->singleton(SpfLegacyPayloadAdapter::class);
+        $this->app->singleton(SpfCheck::class);
+    }
+
+    private function resolveSpfCheck($app): SpfCheck|SpfAnalysisCheck
+    {
+        return match (config('email-security.spf_engine', 'legacy')) {
+            'native' => $app->make(SpfCheck::class),
+            default => $app->make(SpfAnalysisCheck::class),
+        };
     }
 }

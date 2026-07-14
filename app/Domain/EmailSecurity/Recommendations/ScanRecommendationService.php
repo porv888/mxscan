@@ -2,6 +2,7 @@
 
 namespace App\Domain\EmailSecurity\Recommendations;
 
+use App\Domain\EmailSecurity\Checks\SPF\Recommendations\SpfRecommendationEvaluator;
 use App\Domain\EmailSecurity\Reporting\ScanReportStatusMapper;
 use App\Models\Domain;
 
@@ -11,7 +12,8 @@ use App\Models\Domain;
 class ScanRecommendationService
 {
     public function __construct(
-        protected ScanReportStatusMapper $mapper = new ScanReportStatusMapper()
+        protected ScanReportStatusMapper $mapper = new ScanReportStatusMapper(),
+        protected SpfRecommendationEvaluator $spfRecommendationEvaluator = new SpfRecommendationEvaluator(),
     ) {
     }
 
@@ -97,47 +99,21 @@ class ScanRecommendationService
         $spfRecord = $records['SPF'] ?? null;
         $spfCard = $this->mapper->mapSpf($spfRecord, $spfInfo);
 
-        if ($spfCard['state'] === ScanReportStatusMapper::MISSING) {
+        foreach ($this->spfRecommendationEvaluator->evaluate($spfRecord, $spfCard, $spfInfo) as $spfItem) {
+            $priority = match ($spfItem['legacy_key']) {
+                'spf_missing', 'spf_invalid' => 4,
+                default => 5,
+            };
             $items[] = $this->item(
-                'spf_missing',
-                4,
-                'high',
-                'Add SPF Record',
-                'Publish an SPF TXT record so receivers can validate which servers may send mail for your domain.',
-                'Add SPF',
-                $domain->domain,
-                'v=spf1 a mx -all',
-                ScanReportStatusMapper::MISSING
-            );
-        } elseif ($spfCard['state'] === ScanReportStatusMapper::FAIL && ($spfInfo['valid'] ?? true) === false) {
-            $items[] = $this->item(
-                'spf_invalid',
-                4,
-                'high',
-                'Fix Invalid SPF Record',
-                $spfCard['subtext'],
-                'Fix SPF',
-                $domain->domain,
-                is_string($spfInfo['record'] ?? null) ? $spfInfo['record'] : null,
-                ScanReportStatusMapper::FAIL
-            );
-        } elseif (
-            $spfCard['state'] === ScanReportStatusMapper::FAIL
-            || $spfCard['state'] === ScanReportStatusMapper::WARNING
-        ) {
-            $lookups = (int) ($spfInfo['lookups'] ?? 0);
-            $items[] = $this->item(
-                'spf_lookups',
-                5,
-                $lookups >= 10 ? 'critical' : 'medium',
-                'Flatten SPF Record',
-                "Your SPF record uses {$lookups}/10 DNS lookups." . ($lookups >= 10
-                    ? ' This exceeds the RFC limit and can cause delivery failures.'
-                    : ' Flatten it to improve reliability.'),
-                'Flatten SPF',
-                $domain->domain,
-                $spfInfo['flattened'] ?? null,
-                $spfCard['state']
+                $spfItem['legacy_key'],
+                $priority,
+                $spfItem['severity'],
+                $spfItem['title'],
+                $spfItem['body'],
+                $spfItem['legacy_key'] === 'spf_missing' ? 'Add SPF' : ($spfItem['legacy_key'] === 'spf_invalid' ? 'Fix SPF' : 'Flatten SPF'),
+                $spfItem['legacy_key'] === 'spf_lookups' ? $domain->domain : $domain->domain,
+                $spfItem['suggested'],
+                $spfItem['card_state'],
             );
         }
 

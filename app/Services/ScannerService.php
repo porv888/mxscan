@@ -28,10 +28,21 @@ class ScannerService
 
             // Check SPF record (from TXT records)
             $txtRecords = $this->safeDnsGetRecord($domain, DNS_TXT, 'SPF TXT');
+            $rootTxtRecords = [];
+            foreach ($txtRecords ?: [] as $record) {
+                if (!isset($record['txt'])) {
+                    continue;
+                }
+                $rootTxtRecords[] = [
+                    'host' => $record['host'] ?? $domain,
+                    'txt' => $record['txt'],
+                    'ttl' => $record['ttl'] ?? null,
+                ];
+            }
             $spfRecord = collect($txtRecords ?: [])->first(function ($record) {
-                return isset($record['txt']) && str_contains($record['txt'], 'v=spf1');
+                return isset($record['txt']) && $this->txtContainsSpfVersion($record['txt']);
             });
-            
+
             $records['SPF'] = $spfRecord ? ['status' => 'found', 'data' => $spfRecord['txt']] : ['status' => 'missing'];
             
             if ($spfRecord) {
@@ -194,7 +205,18 @@ class ScannerService
             'records' => $records,
             'recommendations' => $recommendations,
             'score_breakdown' => $scoreBreakdown ?? [],
+            'root_txt_records' => $rootTxtRecords ?? [],
         ];
+    }
+
+    /**
+     * @param string|list<string> $txt
+     */
+    private function txtContainsSpfVersion(string|array $txt): bool
+    {
+        $value = is_array($txt) ? implode('', $txt) : $txt;
+
+        return stripos($value, 'v=spf1') !== false;
     }
 
     /**
