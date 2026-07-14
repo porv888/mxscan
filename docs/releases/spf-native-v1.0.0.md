@@ -5,7 +5,7 @@
 | Field | Value |
 |-------|-------|
 | **Release identifier** | `spf-native-v1.0.0-rc1` |
-| **RC commit hash** | _Set at tag time — see `git rev-parse spf-native-v1.0.0-rc1`_ |
+| **RC commit hash** | `1209851f37aeaeed56395d0ca0108950520a083a` |
 | **Pre-native production release** | `53feca8923fec5abe1f15c8ce39bcb979424d7e6` |
 | **Rollback release** | `53feca8923fec5abe1f15c8ce39bcb979424d7e6` |
 | **Migrations required** | None |
