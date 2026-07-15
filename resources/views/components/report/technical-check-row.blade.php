@@ -11,29 +11,26 @@
 ])
 
 <details id="{{ $id }}" {{ $open ? 'open' : '' }} class="mx-tech-check-row group" data-tech-check>
-    <summary class="mx-tech-check-summary [&::-webkit-details-marker]:hidden"
+    <summary class="mx-tech-check-summary"
              aria-controls="{{ $id }}-panel">
         <span class="mx-tech-check-icon" aria-hidden="true">
             <i data-lucide="{{ $icon }}" class="h-4 w-4"></i>
         </span>
 
-        <div class="mx-tech-check-name-block">
-            <div class="min-w-0">
-                <span class="block text-sm font-semibold leading-[1.35] text-gray-900">{{ $label }}</span>
-                <span class="mt-1 block text-[13px] leading-[1.5] text-gray-500">{{ $result }}</span>
-            </div>
-            <div class="mx-tech-check-status-col">
-                <x-report.status-pill :variant="$badgeVariant" :label="$badgeLabel" />
-            </div>
+        <div class="mx-tech-check-main">
+            <span class="mx-tech-check-title">{{ $label }}</span>
+            <span class="mx-tech-check-desc">{{ $result }}</span>
         </div>
 
-        @if($metadata)
-            <div class="mx-tech-check-meta-col hidden md:block">{{ $metadata }}</div>
-        @else
-            <div class="mx-tech-check-meta-col hidden md:block" aria-hidden="true"></div>
-        @endif
+        <div class="mx-tech-check-status-slot">
+            <x-report.status-pill :variant="$badgeVariant" :label="$badgeLabel" />
+        </div>
 
-        <div class="mx-tech-check-action-col hidden md:block">
+        <div class="mx-tech-check-meta-slot">
+            {{ $metadata }}
+        </div>
+
+        <div class="mx-tech-check-action-slot">
             @if($action)
                 <a href="{{ $action['href'] ?? '#' }}"
                    class="text-sm font-medium text-blue-700 hover:text-blue-800 hover:underline"
@@ -43,14 +40,14 @@
             @endif
         </div>
 
-        <div class="mx-tech-check-chevron-col hidden md:flex">
-            <svg class="mx-tech-check-chevron" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+        <div class="mx-tech-check-chevron-slot" aria-hidden="true">
+            <svg class="mx-tech-check-chevron" width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
             </svg>
         </div>
 
-        <div class="mx-tech-check-action-row md:hidden">
-            <div class="flex items-center gap-3">
+        <div class="mx-tech-check-mobile-bar">
+            <div class="flex min-w-0 flex-1 items-center gap-3">
                 @if($metadata)
                     <span class="text-xs text-gray-500">{{ $metadata }}</span>
                 @endif
@@ -62,7 +59,7 @@
                     </a>
                 @endif
             </div>
-            <svg class="mx-tech-check-chevron" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <svg class="mx-tech-check-chevron" width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
             </svg>
         </div>
