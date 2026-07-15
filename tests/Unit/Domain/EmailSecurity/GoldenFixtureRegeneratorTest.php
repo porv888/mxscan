@@ -34,7 +34,6 @@ class GoldenFixtureRegeneratorTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        config(['email-security.spf_engine' => 'legacy']);
         $this->app->forgetInstance(\App\Domain\EmailSecurity\Checks\CheckRegistry::class);
     }
 
@@ -154,15 +153,7 @@ class GoldenFixtureRegeneratorTest extends TestCase
         FixtureLoader::bindMxFixtures($dnsPayload, $domainName);
         CertificateTestProbeFactory::bindFakeProbes();
 
-        $spfResolver = Mockery::mock(SpfResolver::class);
-        $spfResolver->shouldReceive('resolve')->andReturn(new SpfResultDTO(
-            currentRecord: $spfPayload['record'],
-            lookupsUsed: $spfPayload['lookups'],
-            flattenedSpf: $spfPayload['flattened'],
-            warnings: [],
-            resolvedIps: [],
-        ));
-        $this->app->instance(SpfResolver::class, $spfResolver);
+        FixtureLoader::bindNativeSpfDns($domainName, $spfPayload['record']);
 
         $this->bindFakeBlacklistDns();
 
@@ -199,15 +190,7 @@ class GoldenFixtureRegeneratorTest extends TestCase
         FixtureLoader::bindBimiFixtures();
         FixtureLoader::bindMxFixtures($dnsPayload, 'scenario.test');
 
-        $spfResolver = Mockery::mock(SpfResolver::class);
-        $spfResolver->shouldReceive('resolve')->andReturn(new SpfResultDTO(
-            currentRecord: $spfPayload['record'],
-            lookupsUsed: $spfPayload['lookups'],
-            flattenedSpf: $spfPayload['flattened'],
-            warnings: [],
-            resolvedIps: [],
-        ));
-        $this->app->instance(SpfResolver::class, $spfResolver);
+        FixtureLoader::bindNativeSpfDns('scenario.test', $spfPayload['record']);
 
         $this->bindFakeBlacklistDns();
 
@@ -232,7 +215,6 @@ class GoldenFixtureRegeneratorTest extends TestCase
 
     private function resetPipelineContainer(): void
     {
-        $this->app->forgetInstance(\App\Domain\EmailSecurity\Checks\SpfAnalysisCheck::class);
         $this->app->forgetInstance(\App\Domain\EmailSecurity\Checks\Blacklist\BlacklistCheck::class);
         $this->app->forgetInstance(\App\Domain\EmailSecurity\Checks\CheckRegistry::class);
         $this->app->forgetInstance(\App\Domain\EmailSecurity\Checks\Mx\MxCheck::class);

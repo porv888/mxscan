@@ -32,7 +32,6 @@ class NativeSpfRolloutMatrixTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        config(['email-security.spf_engine' => 'native']);
         $this->resetNativeSpfContainer();
         $this->breakdown = new ScoreBreakdownService();
     }
@@ -153,67 +152,6 @@ class NativeSpfRolloutMatrixTest extends TestCase
                 $this->assertStringNotContainsString($phrase, $contents, "{$path} contains forbidden phrase");
             }
         }
-    }
-
-    public function test_rollback_to_legacy_preserves_historical_native_scan(): void
-    {
-        $dns = new FakeDnsClient();
-        $dns->setTxt('rollback-native.test', new DnsResult(['v=spf1 -all'], true));
-        $this->app->instance(DnsClient::class, $dns);
-        $this->resetNativeSpfContainer();
-
-        $domain = Domain::factory()->create(['domain' => 'rollback-native.test']);
-        $nativeScan = Scan::factory()->create(['domain_id' => $domain->id, 'user_id' => $domain->user_id]);
-        $nativeExecution = app(EmailSecurityScanService::class)->execute(
-            $domain,
-            $nativeScan,
-            ScanOptionsDTO::fromArray(['dns' => false, 'spf' => true, 'blacklist' => false]),
-            microtime(true),
-        );
-
-        app(ScanPersisterInterface::class)->saveFinished(
-            $nativeScan,
-            $domain,
-            $nativeExecution,
-            ScanOptionsDTO::fromArray(['dns' => false, 'spf' => true, 'blacklist' => false]),
-            ScanPayloadBuilder::buildFactsForSyncRunner($nativeExecution->resultJson, $nativeExecution->spfRawResult),
-        );
-
-        $historical = Scan::query()->findOrFail($nativeScan->id);
-        $this->assertSame('spf-native-v1', $historical->result_json['spf']['analysis']['version'] ?? null);
-
-        config(['email-security.spf_engine' => 'legacy']);
-        $this->resetNativeSpfContainer();
-        $this->app->forgetInstance(\App\Domain\EmailSecurity\Checks\SpfAnalysisCheck::class);
-
-        $legacyResolver = Mockery::mock(SpfResolver::class);
-        $legacyResolver->shouldReceive('resolve')->once()->andReturn(
-            new \App\Services\Spf\DTOs\SpfResultDTO(
-                currentRecord: 'v=spf1 -all',
-                lookupsUsed: 0,
-                flattenedSpf: 'v=spf1 -all',
-                warnings: [],
-                resolvedIps: [],
-            )
-        );
-        $this->app->instance(SpfResolver::class, $legacyResolver);
-
-        $legacyDomain = Domain::factory()->create(['domain' => 'rollback-legacy.test']);
-        $legacyScan = Scan::factory()->create(['domain_id' => $legacyDomain->id, 'user_id' => $legacyDomain->user_id]);
-        app(EmailSecurityScanService::class)->execute(
-            $legacyDomain,
-            $legacyScan,
-            ScanOptionsDTO::fromArray(['dns' => false, 'spf' => true, 'blacklist' => false]),
-            microtime(true),
-        );
-
-        $user = User::factory()->create();
-        $this->actingAs($user);
-        $report = app(ScanReportFactoryInterface::class)->build($historical, $domain);
-        $this->assertIsArray($report->toArray()['statusCards']['spf'] ?? null);
-
-        config(['email-security.spf_engine' => 'native']);
-        $this->resetNativeSpfContainer();
     }
 
     /**

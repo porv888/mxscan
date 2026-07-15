@@ -108,6 +108,9 @@ git push origin master
 cd /home/mxscan/public_html/app.mxscan.me
 git pull origin master
 
+# 2b. Preflight (fails if legacy SPF fallback is still present)
+php artisan deploy:preflight
+
 # 3. Run migrations if schema changed
 php artisan migrate --force
 
@@ -121,6 +124,9 @@ php artisan view:cache
 ### Post-deploy checks
 
 ```bash
+# Verify native SPF pipeline is mandatory (no legacy fallback)
+php artisan deploy:preflight
+
 # Verify site responds
 curl -sI https://app.mxscan.me/
 

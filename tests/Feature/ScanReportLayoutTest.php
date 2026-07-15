@@ -10,11 +10,19 @@ use App\Services\ScanReport\ScanReportStatusMapper;
 use App\View\Presenters\ScanReportPresenter;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\Support\EmailSecurity\DmarcFixtureBuilder;
+use Tests\Support\EmailSecurity\ResetsScanPipelineContainer;
 use Tests\TestCase;
 
 class ScanReportLayoutTest extends TestCase
 {
     use RefreshDatabase;
+    use ResetsScanPipelineContainer;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->resetScanPipelineContainer();
+    }
     protected function sampleDomain(): Domain
     {
         $domain = new Domain(['domain' => 'mxscan.me']);

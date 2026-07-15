@@ -25,7 +25,6 @@ class BimiPublicScanPrivacyTest extends TestCase
 
     public function test_public_scan_shows_bimi_metadata_without_sensitive_fields(): void
     {
-        config(['email-security.spf_engine' => 'legacy']);
         $this->app->forgetInstance(\App\Domain\EmailSecurity\Checks\CheckRegistry::class);
 
         $domainName = 'public-bimi.test';

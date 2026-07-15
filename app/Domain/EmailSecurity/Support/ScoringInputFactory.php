@@ -27,7 +27,7 @@ final class ScoringInputFactory
         ?BimiNativeResult $nativeBimi = null,
     ): ScoringInputDTO {
         $legacy = $normalized->legacyDnsMetadata;
-        $useNativeSpf = config('email-security.spf_engine', 'legacy') === 'native' && $nativeSpf !== null;
+        $useNativeSpf = $nativeSpf !== null;
         $useNativeDmarc = $nativeDmarc !== null;
         $useNativeDkim = $nativeDkim !== null;
         $useNativeMtaSts = $nativeMtaSts !== null;

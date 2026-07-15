@@ -16,13 +16,13 @@ use App\Models\Scan;
 use App\Models\User;
 
 use App\Services\EmailSecurityScanService;
+use App\Services\Dns\DnsResult;
 use App\Services\ScanTrendService;
-use App\Services\Spf\DTOs\SpfResultDTO;
-use App\Services\Spf\SpfResolver;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Mockery;
 use Tests\Support\EmailSecurity\BindsFakeBlacklistDns;
 use Tests\Support\EmailSecurity\CertificateTestProbeFactory;
+use Tests\Support\EmailSecurity\FakeDnsClient;
 use Tests\Support\EmailSecurity\FixtureLoader;
 use Tests\Support\EmailSecurity\JsonParityNormalizer;
 use Tests\TestCase;
@@ -35,7 +35,6 @@ class GoldenParityScenariosTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        config(['email-security.spf_engine' => 'legacy']);
         $this->app->forgetInstance(\App\Domain\EmailSecurity\Checks\CheckRegistry::class);
         $this->bindFakeBlacklistDns();
     }
@@ -70,7 +69,8 @@ class GoldenParityScenariosTest extends TestCase
             flattenedSpf: $spfPayload['flattened'],
         );
 
-        $this->assertSame($spfPayload, $execution->resultJson['spf']);
+        $this->assertSame($spfPayload['record'], $execution->resultJson['spf']['record'] ?? null);
+        $this->assertSame('spf-native-v1', $execution->resultJson['spf']['analysis']['version'] ?? null);
         $facts = ScanPayloadBuilder::buildFactsForSyncRunner($execution->resultJson, $execution->spfRawResult);
         $this->assertSame($spfPayload['record'], $facts['spf_record']);
         $this->assertSame($spfPayload['lookups'], $facts['spf_lookups']);
@@ -205,7 +205,6 @@ class GoldenParityScenariosTest extends TestCase
         ?string $flattenedSpf = null,
         ?string $dmarcToken = null,
     ): \App\Domain\EmailSecurity\DTO\ScanExecutionResultDTO {
-        $this->app->forgetInstance(\App\Domain\EmailSecurity\Checks\SpfAnalysisCheck::class);
         $this->app->forgetInstance(\App\Domain\EmailSecurity\Checks\Blacklist\BlacklistCheck::class);
         $this->app->forgetInstance(CheckRegistry::class);
         $this->app->forgetInstance(\App\Domain\EmailSecurity\Checks\Mx\MxCheck::class);
@@ -220,15 +219,17 @@ class GoldenParityScenariosTest extends TestCase
         FixtureLoader::bindMxFixtures(FixtureLoader::input('dns-bundled-full'), $domainName);
         CertificateTestProbeFactory::bindFakeProbes();
 
-        $spfResolver = Mockery::mock(SpfResolver::class);
-        $spfResolver->shouldReceive('resolve')->andReturn(new SpfResultDTO(
-            currentRecord: $spfRecord,
-            lookupsUsed: $spfLookups,
-            flattenedSpf: $flattenedSpf,
-            warnings: [],
-            resolvedIps: [],
-        ));
-        $this->app->instance(SpfResolver::class, $spfResolver);
+        if ($spfRecord !== null) {
+            FixtureLoader::bindNativeSpfDns($domainName, $spfRecord);
+        } else {
+            $dnsPayload = FixtureLoader::input('dns-bundled-full');
+            $dnsPayload['records']['SPF'] = ['status' => 'missing'];
+            $dnsPayload['root_txt_records'] = [];
+            FixtureLoader::bindDnsCollector($dnsPayload);
+            $dns = new FakeDnsClient();
+            $dns->setTxt($domainName, new DnsResult([], true));
+            app()->instance(\App\Services\Dns\DnsClient::class, $dns);
+        }
 
         $user ??= User::factory()->create();
         $domainAttributes = [

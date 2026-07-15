@@ -84,7 +84,6 @@ class TlsRptNativePipelineTest extends TestCase
      */
     private function runPipeline(string $domainName, ?string $record, array $options = [])
     {
-        config(['email-security.spf_engine' => 'legacy']);
         $this->app->forgetInstance(\App\Domain\EmailSecurity\Checks\CheckRegistry::class);
 
         $useResolverOnly = (bool) ($options['use_resolver_only'] ?? false);

@@ -36,7 +36,6 @@ class GoldenParityTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        config(['email-security.spf_engine' => 'legacy']);
         $this->app->forgetInstance(\App\Domain\EmailSecurity\Checks\CheckRegistry::class);
         $this->app->forgetInstance(\App\Domain\EmailSecurity\Checks\Mx\MxCheck::class);
         $this->app->forgetInstance(\App\Domain\EmailSecurity\Checks\Mx\MxAnalysisService::class);
@@ -199,15 +198,7 @@ class GoldenParityTest extends TestCase
         FixtureLoader::bindMxFixtures($dnsPayload);
         CertificateTestProbeFactory::bindFakeProbes();
 
-        $spfResolver = Mockery::mock(SpfResolver::class);
-        $spfResolver->shouldReceive('resolve')->andReturn(new SpfResultDTO(
-            currentRecord: $spfPayload['record'],
-            lookupsUsed: $spfPayload['lookups'],
-            flattenedSpf: $spfPayload['flattened'],
-            warnings: [],
-            resolvedIps: [],
-        ));
-        $this->app->instance(SpfResolver::class, $spfResolver);
+        FixtureLoader::bindNativeSpfDns('example.test', $spfPayload['record']);
 
         $domain = Domain::factory()->create([
             'domain' => 'example.test',

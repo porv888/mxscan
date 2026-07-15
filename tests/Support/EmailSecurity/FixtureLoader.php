@@ -7,6 +7,8 @@ use App\Domain\EmailSecurity\Checks\DKIM\Evaluation\DkimDnsQueryResult;
 use App\Domain\EmailSecurity\Checks\Mx\Contracts\MxDnsResolverInterface;
 use App\Domain\EmailSecurity\Contracts\DnsCollectorInterface;
 use App\Domain\EmailSecurity\DTO\DnsCollectionResultDTO;
+use App\Services\Dns\DnsClient;
+use App\Services\Dns\DnsResult;
 
 final class FixtureLoader
 {
@@ -267,5 +269,13 @@ final class FixtureLoader
         }
 
         app()->instance(MxDnsResolverInterface::class, $resolver);
+    }
+
+    public static function bindNativeSpfDns(string $domain, ?string $record = null): void
+    {
+        $record ??= 'v=spf1 a mx -all';
+        $dns = new FakeDnsClient();
+        $dns->setTxt($domain, new DnsResult([$record], true));
+        app()->instance(DnsClient::class, $dns);
     }
 }

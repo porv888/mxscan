@@ -18,7 +18,6 @@ class CertificateNativePipelineTest extends TestCase
 
     public function test_certificate_analysis_persisted_in_result_json(): void
     {
-        config(['email-security.spf_engine' => 'legacy']);
         $this->app->forgetInstance(\App\Domain\EmailSecurity\Checks\CheckRegistry::class);
         CertificateTestProbeFactory::bindFakeProbes();
         FixtureLoader::bindDnsCollector(FixtureLoader::input('dns-bundled-full'));

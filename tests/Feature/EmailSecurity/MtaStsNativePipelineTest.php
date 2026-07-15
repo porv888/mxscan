@@ -48,7 +48,6 @@ class MtaStsNativePipelineTest extends TestCase
 
     private function runPipeline(string $domainName, ?string $indicator, ?string $policyBody = null)
     {
-        config(['email-security.spf_engine' => 'legacy']);
         $this->app->forgetInstance(\App\Domain\EmailSecurity\Checks\CheckRegistry::class);
 
         $dnsResolver = new FakeMtaStsDnsResolver();

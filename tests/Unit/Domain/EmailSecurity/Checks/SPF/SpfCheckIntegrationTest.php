@@ -21,7 +21,6 @@ class SpfCheckIntegrationTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        config(['email-security.spf_engine' => 'native']);
         $this->app->forgetInstance(\App\Domain\EmailSecurity\Checks\CheckRegistry::class);
     }
 

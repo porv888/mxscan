@@ -28,10 +28,10 @@ $app->make(Kernel::class)->bootstrap();
 $soakStart = microtime(true);
 $soakStartedAt = now()->toIso8601String();
 
-if (config('email-security.spf_engine') !== 'native') {
-    fwrite(STDERR, "ABORT: dev spf_engine is not native\n");
-    exit(1);
-}
+        if (is_file(app_path('Domain/EmailSecurity/Checks/SpfAnalysisCheck.php'))) {
+            fwrite(STDERR, "ABORT: legacy SpfAnalysisCheck still present\n");
+            exit(1);
+        }
 
 $breakdown = new ScoreBreakdownService();
 $reportPath = storage_path('app/native-spf-soak-report.json');
@@ -55,7 +55,7 @@ $approvedDomains = [
 $results = [
     'soak_started_at' => $soakStartedAt,
     'log_marker' => $logMarker,
-    'spf_engine' => config('email-security.spf_engine'),
+    'spf_pipeline' => 'native-mandatory',
     'queue_default_initial' => config('queue.default'),
     'approved_domains' => array_column($approvedDomains, 'host'),
     'scans' => [],
@@ -244,7 +244,7 @@ $controller = app(App\Http\Controllers\ScanController::class);
 $runner = app(ScanRunner::class);
 
 echo "Starting native SPF soak ({$logMarker}) with " . count($scanPlan) . " planned scans\n";
-echo 'spf_engine=' . config('email-security.spf_engine') . PHP_EOL;
+echo "spf_pipeline=native-mandatory\n";
 
 foreach ($scanPlan as $index => $item) {
     if ($results['stopped_early']) {
@@ -294,8 +294,8 @@ foreach ($scanPlan as $index => $item) {
             $scan = $runner->runSync($domain, ['dns' => true, 'spf' => true, 'blacklist' => false, 'monitoring' => false]);
         } elseif ($path === 'queued_job_spf') {
             config(['queue.default' => 'database']);
-            if (config('email-security.spf_engine') !== 'native') {
-                stopSoak($results, 'queue worker would not resolve native spf_engine');
+            if (is_file(app_path('Domain/EmailSecurity/Checks/SpfAnalysisCheck.php'))) {
+                stopSoak($results, 'legacy SpfAnalysisCheck still present');
                 break;
             }
             $scanRecord = Scan::query()->create([

@@ -69,10 +69,12 @@
                 },
                 {
                     "key": "spf",
-                    "label": "SPF",
+                    "label": "SPF Record",
                     "earned": 20,
                     "possible": 20,
-                    "status": "ok"
+                    "status": "ok",
+                    "hint": null,
+                    "model_version": "spf-v2"
                 },
                 {
                     "key": "dmarc",
@@ -134,11 +136,31 @@
         "spf": {
             "record": "v=spf1 a mx -all",
             "lookups": 2,
-            "flattened": "v=spf1 ip4:203.0.113.10 -all",
+            "flattened": "v=spf1 -all",
             "status": "safe",
             "valid": true,
             "error": null,
-            "warnings": []
+            "warnings": [],
+            "protocol_status": "valid",
+            "risk_status": "healthy",
+            "ui_state": "pass",
+            "summary": "SPF configuration valid.",
+            "analysis": {
+                "version": "spf-native-v1",
+                "protocol_status": "valid",
+                "risk_status": "healthy",
+                "state": "pass",
+                "summary": "SPF configuration valid.",
+                "terminal_policy": "hard_fail",
+                "lookup_count": 2,
+                "lookup_limit": 10,
+                "lookups_remaining": 8,
+                "void_lookup_count": 1,
+                "evaluation_completeness": "complete",
+                "errors": [],
+                "warnings": [],
+                "dependencies": []
+            }
         },
         "dmarc": {
             "record": "v=DMARC1; p=quarantine; rua=mailto:dmarc@example.test",
@@ -1396,6 +1418,9 @@
     "facts_json": {
         "spf_record": "v=spf1 a mx -all",
         "spf_lookups": 2,
+        "spf_protocol_status": "valid",
+        "spf_risk_status": "healthy",
+        "spf_terminal_policy": "hard_fail",
         "blacklist_analysis_status": "complete",
         "blacklist_reputation_status": "clean",
         "blacklist_targets_total": 1,

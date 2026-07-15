@@ -20,10 +20,8 @@ use Tests\TestCase;
 
 class LegacyDnsScoreCalculatorNativeTest extends TestCase
 {
-    public function test_legacy_branch_preserves_scanner_total(): void
+    public function test_dns_payload_without_native_spf_preserves_scanner_total(): void
     {
-        config(['email-security.spf_engine' => 'legacy']);
-
         $dnsPayload = FixtureLoader::input('dns-bundled-full');
         $calculator = $this->calculator();
         $input = $this->input($dnsPayload);
@@ -35,7 +33,6 @@ class LegacyDnsScoreCalculatorNativeTest extends TestCase
 
     public function test_native_branch_replaces_spf_earned_and_recomputes_total(): void
     {
-        config(['email-security.spf_engine' => 'native']);
 
         $dnsPayload = FixtureLoader::input('dns-bundled-full');
         $native = SpfNativeResultFactory::make(
@@ -63,7 +60,6 @@ class LegacyDnsScoreCalculatorNativeTest extends TestCase
 
     public function test_native_branch_scores_missing_spf_as_zero(): void
     {
-        config(['email-security.spf_engine' => 'native']);
 
         $dnsPayload = FixtureLoader::input('dns-bundled-full');
         $native = SpfNativeResultFactory::make(

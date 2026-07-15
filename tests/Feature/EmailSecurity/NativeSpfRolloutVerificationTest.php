@@ -24,7 +24,6 @@ class NativeSpfRolloutVerificationTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        config(['email-security.spf_engine' => 'native']);
         $this->app->forgetInstance(\App\Domain\EmailSecurity\Checks\CheckRegistry::class);
     }
 
@@ -32,7 +31,7 @@ class NativeSpfRolloutVerificationTest extends TestCase
     {
         $dnsPayload = FixtureLoader::input('dns-bundled-full');
         FixtureLoader::bindDnsCollector($dnsPayload);
-        $this->app->instance(DnsClient::class, new FakeDnsClient());
+        FixtureLoader::bindNativeSpfDns('rollout-native.test', $dnsPayload['records']['SPF']['data'] ?? 'v=spf1 a mx -all');
 
         $domain = Domain::factory()->create(['domain' => 'rollout-native.test']);
         $scan = Scan::factory()->create(['domain_id' => $domain->id, 'user_id' => $domain->user_id]);

@@ -6,16 +6,19 @@ use App\Models\Domain;
 use App\Models\Scan;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\Concerns\CreatesPlanUsers;
+use Tests\Support\EmailSecurity\ResetsScanPipelineContainer;
 use Tests\TestCase;
 
 class ScanReportFlowTest extends TestCase
 {
     use CreatesPlanUsers;
     use RefreshDatabase;
+    use ResetsScanPipelineContainer;
 
     protected function setUp(): void
     {
         parent::setUp();
+        $this->resetScanPipelineContainer();
         $this->setUpPlanTables();
     }
 

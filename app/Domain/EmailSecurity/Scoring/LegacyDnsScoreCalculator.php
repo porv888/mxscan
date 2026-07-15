@@ -93,8 +93,7 @@ final class LegacyDnsScoreCalculator implements ScoreCalculatorInterface
 
     private function usesNativeSpfScoring(ScoringInputDTO $input): bool
     {
-        return config('email-security.spf_engine', 'legacy') === 'native'
-            && $input->nativeSpfResult !== null;
+        return $input->nativeSpfResult !== null;
     }
 
     /**

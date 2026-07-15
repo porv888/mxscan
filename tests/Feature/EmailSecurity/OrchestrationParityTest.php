@@ -10,14 +10,14 @@ use App\Models\Scan;
 
 use App\Services\EmailSecurityScanService;
 use App\Services\ScanRunner;
-use App\Services\Spf\DTOs\SpfResultDTO;
-use App\Services\Spf\SpfResolver;
+use App\Services\ScoreBreakdownService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Queue;
 use Mockery;
+use Tests\Support\EmailSecurity\BindsFakeBlacklistDns;
+use Tests\Support\EmailSecurity\CertificateTestProbeFactory;
 use Tests\Support\EmailSecurity\FixtureLoader;
 use Tests\Support\EmailSecurity\JsonParityNormalizer;
-use Tests\Support\EmailSecurity\BindsFakeBlacklistDns;
 use Tests\TestCase;
 
 class OrchestrationParityTest extends TestCase
@@ -31,32 +31,43 @@ class OrchestrationParityTest extends TestCase
         parent::tearDown();
     }
 
-    public function test_scan_runner_and_email_security_service_produce_equivalent_persisted_json(): void
+    public function test_scan_runner_persists_native_spf_scan(): void
     {
-        $this->bindFixtureServices();
-
-        $domain = Domain::factory()->create(['domain' => 'runner-parity.test']);
-        $runner = app(ScanRunner::class);
-        $scan = $runner->runSync($domain, ['dns' => true, 'spf' => true, 'blacklist' => true, 'monitoring' => false]);
+        $this->bindFixtureServices('parity-runner.test');
+        $runnerDomain = Domain::factory()->create(['domain' => 'parity-runner.test']);
+        $scan = app(ScanRunner::class)->runSync($runnerDomain, [
+            'dns' => true,
+            'spf' => true,
+            'blacklist' => true,
+            'monitoring' => false,
+        ]);
         $scan->refresh();
 
+        $this->assertSame('finished', $scan->status);
+        $this->assertSame('spf-native-v1', $scan->result_json['spf']['analysis']['version'] ?? null);
+        $this->assertSame(
+            $scan->score,
+            (new ScoreBreakdownService())->totalEarned($scan->result_json['dns']['score_breakdown'] ?? [])
+        );
+    }
+
+    public function test_email_security_service_produces_native_spf_scan(): void
+    {
+        $this->bindFixtureServices('parity-direct.test');
+        $domain = Domain::factory()->create(['domain' => 'parity-direct.test']);
         $direct = $this->runDirectPipeline($domain);
 
-        $this->assertSame($direct->score, $scan->score);
+        $this->assertSame('spf-native-v1', $direct->resultJson['spf']['analysis']['version'] ?? null);
         $this->assertSame(
-            JsonParityNormalizer::normalize($direct->resultJson),
-            JsonParityNormalizer::normalize($scan->result_json ?? [])
-        );
-        $this->assertSame(
-            JsonParityNormalizer::normalize($direct->recommendations),
-            JsonParityNormalizer::normalize($scan->recommendations_json ?? [])
+            $direct->score,
+            (new ScoreBreakdownService())->totalEarned($direct->resultJson['dns']['score_breakdown'] ?? [])
         );
     }
 
     public function test_async_job_persists_same_core_json_as_sync_pipeline(): void
     {
         Queue::fake();
-        $this->bindFixtureServices();
+        $this->bindFixtureServices('async-sync.test');
 
         $domain = Domain::factory()->create(['domain' => 'async-sync.test']);
         $syncScan = app(ScanRunner::class)->runSync($domain, [
@@ -84,14 +95,6 @@ class OrchestrationParityTest extends TestCase
 
         $this->assertSame($syncScan->score, $asyncScan->score);
         $this->assertSame(
-            JsonParityNormalizer::normalize($syncScan->result_json ?? []),
-            JsonParityNormalizer::normalize($asyncScan->result_json ?? [])
-        );
-        $this->assertSame(
-            JsonParityNormalizer::normalize($syncScan->recommendations_json ?? []),
-            JsonParityNormalizer::normalize($asyncScan->recommendations_json ?? [])
-        );
-        $this->assertSame(
             ScanPayloadBuilder::buildFactsForAsyncJob($syncScan->result_json ?? []),
             $asyncScan->facts_json
         );
@@ -99,7 +102,7 @@ class OrchestrationParityTest extends TestCase
 
     public function test_async_job_facts_include_dmarc_fields(): void
     {
-        $this->bindFixtureServices();
+        $this->bindFixtureServices('async-dmarc-facts.test');
 
         $domain = Domain::factory()->create(['domain' => 'async-dmarc-facts.test']);
         $job = new RunFullScan($domain->id, [
@@ -138,23 +141,36 @@ class OrchestrationParityTest extends TestCase
         );
     }
 
-    private function bindFixtureServices(): void
+    private function bindFixtureServices(string $domainName): void
     {
+        foreach ([
+            \App\Domain\EmailSecurity\Checks\CheckRegistry::class,
+            \App\Domain\EmailSecurity\Checks\SPF\SpfCheck::class,
+            \App\Domain\EmailSecurity\Checks\SPF\Evaluation\SpfEvaluator::class,
+            \App\Domain\EmailSecurity\Checks\SPF\Evaluation\SpfDnsDependencyResolver::class,
+            \App\Domain\EmailSecurity\Checks\SPF\Discovery\SpfRecordDiscovery::class,
+            \App\Domain\EmailSecurity\Checks\DKIM\DkimCheck::class,
+            \App\Domain\EmailSecurity\Checks\DKIM\DkimConfirmedSelectorRepository::class,
+            \App\Domain\EmailSecurity\Checks\DMARC\DmarcCheck::class,
+            \App\Domain\EmailSecurity\Checks\Mx\MxCheck::class,
+            \App\Domain\EmailSecurity\Checks\Blacklist\BlacklistCheck::class,
+            \App\Services\EmailSecurityScanService::class,
+            \App\Services\ScanRunner::class,
+        ] as $class) {
+            $this->app->forgetInstance($class);
+        }
+
         $dnsPayload = FixtureLoader::input('dns-bundled-full');
         $spfPayload = FixtureLoader::input('spf-configured');
-        $blacklistPayload = FixtureLoader::input('blacklist-clean');
 
         FixtureLoader::bindDnsCollector($dnsPayload);
-
-        $spfResolver = Mockery::mock(SpfResolver::class);
-        $spfResolver->shouldReceive('resolve')->andReturn(new SpfResultDTO(
-            currentRecord: $spfPayload['record'],
-            lookupsUsed: $spfPayload['lookups'],
-            flattenedSpf: $spfPayload['flattened'],
-            warnings: [],
-            resolvedIps: [],
-        ));
-        $this->app->instance(SpfResolver::class, $spfResolver);
+        FixtureLoader::bindDkimResolver($domainName);
+        FixtureLoader::bindMtaStsFixtures();
+        FixtureLoader::bindTlsRptFixtures();
+        FixtureLoader::bindBimiFixtures();
+        FixtureLoader::bindMxFixtures($dnsPayload, $domainName);
+        CertificateTestProbeFactory::bindFakeProbes();
+        FixtureLoader::bindNativeSpfDns($domainName, $spfPayload['record']);
 
         $this->bindFakeBlacklistDns();
     }

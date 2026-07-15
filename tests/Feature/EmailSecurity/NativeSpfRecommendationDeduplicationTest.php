@@ -19,7 +19,6 @@ class NativeSpfRecommendationDeduplicationTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        config(['email-security.spf_engine' => 'native']);
     }
 
     public function test_salesforce_partial_analysis_yields_unique_semantic_keys_in_engine_and_report(): void

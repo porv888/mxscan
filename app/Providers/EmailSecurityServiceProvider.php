@@ -5,7 +5,6 @@ namespace App\Providers;
 use App\Domain\EmailSecurity\Checks\Blacklist\BlacklistCheck;
 use App\Domain\EmailSecurity\Checks\BundledDnsChecksAdapter;
 use App\Domain\EmailSecurity\Checks\CheckRegistry;
-use App\Domain\EmailSecurity\Checks\SpfAnalysisCheck;
 use App\Domain\EmailSecurity\Checks\SPF\Compatibility\SpfLegacyPayloadAdapter;
 use App\Domain\EmailSecurity\Checks\SPF\Discovery\SpfRecordDiscovery;
 use App\Domain\EmailSecurity\Checks\SPF\Evaluation\SpfDnsDependencyResolver;
@@ -202,7 +201,6 @@ class EmailSecurityServiceProvider extends ServiceProvider
     {
         $this->app->singleton(RecommendationCollectionGuard::class);
         $this->app->singleton(ScanResultAssembler::class);
-        $this->app->singleton(SpfAnalysisCheck::class);
         $this->app->singleton(BundledDnsChecksAdapter::class);
         $this->app->singleton(ScoringInputFactory::class);
         $this->app->singleton(ScanResultNormalizer::class);
@@ -227,7 +225,7 @@ class EmailSecurityServiceProvider extends ServiceProvider
 
         $this->app->singleton(CheckRegistry::class, function ($app) {
             return new CheckRegistry([
-                $this->resolveSpfCheck($app),
+                $app->make(SpfCheck::class),
                 $app->make(DmarcCheck::class),
                 $app->make(DkimCheck::class),
                 $app->make(MxCheck::class),
@@ -492,11 +490,4 @@ class EmailSecurityServiceProvider extends ServiceProvider
         });
     }
 
-    private function resolveSpfCheck($app): SpfCheck|SpfAnalysisCheck
-    {
-        return match (config('email-security.spf_engine', 'legacy')) {
-            'native' => $app->make(SpfCheck::class),
-            default => $app->make(SpfAnalysisCheck::class),
-        };
-    }
 }

@@ -46,7 +46,6 @@ class MxNativePipelineTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        config(['email-security.spf_engine' => 'legacy']);
         $this->app->forgetInstance(\App\Domain\EmailSecurity\Checks\CheckRegistry::class);
         $this->scoreBreakdown = new ScoreBreakdownService();
     }

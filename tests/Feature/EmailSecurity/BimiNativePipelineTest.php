@@ -100,7 +100,6 @@ class BimiNativePipelineTest extends TestCase
      */
     private function runPipeline(string $domainName, ?string $record, array $options = [], ?string $httpBody = null)
     {
-        config(['email-security.spf_engine' => 'legacy']);
         $this->app->forgetInstance(\App\Domain\EmailSecurity\Checks\CheckRegistry::class);
 
         $dnsResolver = new FakeBimiDnsResolver();

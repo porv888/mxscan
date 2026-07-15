@@ -5,7 +5,7 @@ namespace Tests\Unit\Domain\EmailSecurity;
 use App\Domain\EmailSecurity\Checks\Blacklist\BlacklistCheck;
 use App\Domain\EmailSecurity\Checks\CheckRegistry;
 use App\Domain\EmailSecurity\Checks\DMARC\DmarcCheck;
-use App\Domain\EmailSecurity\Checks\SpfAnalysisCheck;
+use App\Domain\EmailSecurity\Checks\SPF\SpfCheck;
 use App\Domain\EmailSecurity\Contracts\SecurityCheckInterface;
 use App\Domain\EmailSecurity\DTO\CheckContextDTO;
 use App\Domain\EmailSecurity\DTO\CheckExecutionResultDTO;
@@ -14,8 +14,6 @@ use App\Domain\EmailSecurity\DTO\ScanOptionsDTO;
 use App\Domain\EmailSecurity\Support\ScanArtifactKeys;
 use App\Models\Domain;
 use App\Models\Scan;
-use App\Services\Spf\DTOs\SpfResultDTO;
-use App\Services\Spf\SpfResolver;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Mockery;
 use Tests\Support\EmailSecurity\BindsFakeBlacklistDns;
@@ -35,46 +33,35 @@ class SecurityCheckContractTest extends TestCase
             $this->assertContains($key, $registry->keys());
         }
 
-        $this->assertInstanceOf(SecurityCheckInterface::class, app(SpfAnalysisCheck::class));
+        $this->assertInstanceOf(SecurityCheckInterface::class, app(SpfCheck::class));
         $this->assertInstanceOf(SecurityCheckInterface::class, app(DmarcCheck::class));
         $this->assertInstanceOf(SecurityCheckInterface::class, app(BlacklistCheck::class));
     }
 
     public function test_checker_keys_are_stable_and_unique(): void
     {
-        $checks = [app(SpfAnalysisCheck::class), app(DmarcCheck::class), app(BlacklistCheck::class)];
+        $checks = [app(SpfCheck::class), app(DmarcCheck::class), app(BlacklistCheck::class)];
         $keys = array_map(fn (SecurityCheckInterface $check) => $check->key(), $checks);
 
         $this->assertSame(['spf', 'dmarc', 'blacklist'], $keys);
         $this->assertCount(count(array_unique($keys)), $keys);
     }
 
-    public function test_spf_checker_returns_execution_result_with_legacy_artifact(): void
+    public function test_spf_checker_returns_execution_result_with_native_artifacts(): void
     {
         $spfPayload = FixtureLoader::input('spf-configured');
-        $raw = new SpfResultDTO(
-            currentRecord: $spfPayload['record'],
-            lookupsUsed: $spfPayload['lookups'],
-            flattenedSpf: $spfPayload['flattened'],
-            warnings: [],
-            resolvedIps: [],
-        );
-        $resolver = Mockery::mock(SpfResolver::class);
-        $resolver->shouldReceive('resolve')
-            ->once()
-            ->with('example.test')
-            ->andReturn($raw);
+        FixtureLoader::bindNativeSpfDns('example.test', $spfPayload['record']);
 
-        $check = new SpfAnalysisCheck($resolver);
+        $check = app(SpfCheck::class);
         $context = $this->makeContext();
 
         $execution = $check->run($context, null);
 
         $this->assertInstanceOf(CheckExecutionResultDTO::class, $execution);
         $this->assertSame('spf', $execution->result->key);
-        $this->assertSame('safe', $execution->result->status);
+        $this->assertArrayHasKey(ScanArtifactKeys::NATIVE_SPF_RESULT, $execution->artifacts);
         $this->assertArrayHasKey(ScanArtifactKeys::LEGACY_SPF_RAW, $execution->artifacts);
-        $this->assertSame($raw, $execution->artifacts[ScanArtifactKeys::LEGACY_SPF_RAW]);
+        $this->assertSame('spf-native-v1', $execution->result->data['analysis']['version'] ?? null);
     }
 
     public function test_blacklist_checker_returns_execution_result_dto(): void
