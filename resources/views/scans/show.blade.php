@@ -105,12 +105,19 @@
 <script>
     function copyToClipboard(text, button) {
         navigator.clipboard.writeText(text).then(() => {
-            const originalText = button.innerText;
-            button.innerText = 'Copied!';
-            setTimeout(() => { button.innerText = originalText; }, 1500);
+            const copiedLabel = button.dataset.copiedLabel || 'Copied!';
+            const copyLabel = button.dataset.copyLabel || button.getAttribute('aria-label') || 'Copy value';
+            button.setAttribute('aria-label', copiedLabel);
+            button.title = copiedLabel;
+            setTimeout(() => {
+                button.setAttribute('aria-label', copyLabel);
+                button.title = copyLabel;
+            }, 1500);
         }).catch(() => {
-            button.innerText = 'Failed';
-            setTimeout(() => { button.innerText = 'Copy value'; }, 1500);
+            button.setAttribute('aria-label', 'Copy failed');
+            setTimeout(() => {
+                button.setAttribute('aria-label', button.dataset.copyLabel || 'Copy value');
+            }, 1500);
         });
     }
 

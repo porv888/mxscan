@@ -36,9 +36,12 @@ class ReportTechnicalChecksPresenter
 
         $auth = $byLabel->get('Authentication');
         if ($auth) {
+            $items = $this->mapItems($auth['items'] ?? [], $firstOpenId);
             $groups[] = [
                 'label' => 'Authentication',
-                'items' => $this->mapItems($auth['items'] ?? [], $firstOpenId),
+                'icon' => $this->iconForGroup('Authentication'),
+                'summary' => $this->categorySummary($items),
+                'items' => $items,
             ];
         }
 
@@ -51,7 +54,12 @@ class ReportTechnicalChecksPresenter
             $infraItems[] = $this->blacklistRow($firstOpenId);
         }
         $infraItems[] = $this->renewalRow($firstOpenId);
-        $groups[] = ['label' => 'Mail infrastructure', 'items' => $infraItems];
+        $groups[] = [
+            'label' => 'Mail infrastructure',
+            'icon' => $this->iconForGroup('Mail infrastructure'),
+            'summary' => $this->categorySummary($infraItems),
+            'items' => $infraItems,
+        ];
 
         $transportItems = [];
         $transport = $byLabel->get('Transport security');
@@ -59,13 +67,21 @@ class ReportTechnicalChecksPresenter
             $transportItems = $this->mapItems($transport['items'] ?? [], $firstOpenId);
         }
         $transportItems[] = $this->sslRow($firstOpenId);
-        $groups[] = ['label' => 'Transport security', 'items' => $transportItems];
+        $groups[] = [
+            'label' => 'Transport security',
+            'icon' => $this->iconForGroup('Transport security'),
+            'summary' => $this->categorySummary($transportItems),
+            'items' => $transportItems,
+        ];
 
         $branding = $byLabel->get('Optional branding');
         if ($branding) {
+            $items = $this->mapItems($branding['items'] ?? [], $firstOpenId);
             $groups[] = [
                 'label' => 'Optional branding',
-                'items' => $this->mapItems($branding['items'] ?? [], $firstOpenId),
+                'icon' => $this->iconForGroup('Optional branding'),
+                'summary' => $this->categorySummary($items),
+                'items' => $items,
             ];
         }
 
@@ -137,6 +153,7 @@ class ReportTechnicalChecksPresenter
             'badgeVariant' => $detail['badgeVariant'] ?? 'neutral',
             'badgeLabel' => $detail['badgeLabel'] ?? 'Unknown',
             'result' => $result,
+            'metadata' => $this->metadataForDetail($detail, $key),
             'action' => $action,
             'open' => $rowId === $firstOpenId,
             'detail' => $detail,
@@ -159,6 +176,7 @@ class ReportTechnicalChecksPresenter
             'result' => $usable
                 ? "Checked against {$this->blacklistTotal} usable provider results."
                 : 'No usable blacklist checks completed.',
+            'metadata' => $usable ? $this->blacklistHits . '/' . $this->blacklistTotal . ' listed' : null,
             'action' => $listed ? ['label' => 'View details', 'href' => '#what-to-fix'] : null,
             'open' => 'tech-blacklist' === $firstOpenId,
             'detail' => ['type' => 'blacklist', 'hits' => $this->blacklistHits, 'total' => $this->blacklistTotal],
@@ -181,6 +199,7 @@ class ReportTechnicalChecksPresenter
             'result' => $this->domain->domain_expires_at
                 ? 'Expires ' . \Carbon\Carbon::parse($this->domain->domain_expires_at)->toFormattedDateString()
                 : 'Expiry date not set.',
+            'metadata' => $days === null ? null : $days . ' days',
             'action' => ['label' => 'Edit dates', 'href' => route('domains.hub.settings', $this->domain) . '#renewals'],
             'open' => false,
             'detail' => ['type' => 'renewal', 'domainDays' => $this->domainDays],
@@ -195,6 +214,96 @@ class ReportTechnicalChecksPresenter
             mtaStsInfo: $this->mtaStsInfo,
             domain: $this->domain,
         ))->sslRow($firstOpenId);
+    }
+
+    /**
+     * @param list<array<string, mixed>> $items
+     * @return array{configured: int, attention: int, total: int, summary: string, statusVariant: string, statusLabel: string}
+     */
+    public function categorySummary(array $items): array
+    {
+        $configured = 0;
+        $attention = 0;
+
+        foreach ($items as $item) {
+            $variant = $item['badgeVariant'] ?? 'neutral';
+            if ($variant === 'success') {
+                $configured++;
+            } elseif (in_array($variant, ['warning', 'danger'], true)) {
+                $attention++;
+            }
+        }
+
+        $total = count($items);
+        $parts = [];
+
+        if ($configured > 0) {
+            $parts[] = $configured . ' configured';
+        }
+        if ($attention > 0) {
+            $parts[] = $attention . ' need attention';
+        }
+        if ($parts === []) {
+            $parts[] = $total . ' check' . ($total === 1 ? '' : 's');
+        }
+
+        $worstVariant = collect($items)->pluck('badgeVariant')->contains('danger')
+            ? 'danger'
+            : (collect($items)->pluck('badgeVariant')->contains('warning') ? 'warning' : 'success');
+
+        $statusLabel = match ($worstVariant) {
+            'danger' => 'Issues found',
+            'warning' => 'Review needed',
+            default => 'Healthy',
+        };
+
+        return [
+            'configured' => $configured,
+            'attention' => $attention,
+            'total' => $total,
+            'summary' => implode(' · ', $parts),
+            'statusVariant' => $worstVariant === 'success' && $attention === 0 ? 'success' : $worstVariant,
+            'statusLabel' => $statusLabel,
+        ];
+    }
+
+    protected function iconForGroup(string $label): string
+    {
+        return match ($label) {
+            'Authentication' => 'shield',
+            'Mail infrastructure' => 'server',
+            'Transport security' => 'lock',
+            'Optional branding' => 'image',
+            default => 'folder',
+        };
+    }
+
+    /**
+     * @param array<string, mixed> $detail
+     */
+    protected function metadataForDetail(array $detail, string $key): ?string
+    {
+        if ($key === 'renewal' && isset($detail['domainDays'])) {
+            return (string) $detail['domainDays'] . ' days';
+        }
+
+        if ($key === 'ssl' && isset($detail['sslDays'])) {
+            return $detail['sslDays'] === null ? null : (string) $detail['sslDays'] . ' days';
+        }
+
+        if ($key === 'spf' && isset($detail['lookupCount'], $detail['lookupMax'])) {
+            return $detail['lookupCount'] . '/' . $detail['lookupMax'] . ' lookups';
+        }
+
+        if ($key === 'blacklist' && isset($detail['hits'], $detail['total'])) {
+            return $detail['hits'] . '/' . $detail['total'] . ' listed';
+        }
+
+        if (!empty($detail['chips'][0] ?? null)) {
+            return (string) $detail['chips'][0];
+        }
+
+        return null;
     }
 
     protected function iconForKey(string $key): string

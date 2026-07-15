@@ -159,6 +159,8 @@ class ScanReportLayoutTest extends TestCase
         $this->assertStringContainsString('What to fix', $html);
         $this->assertStringContainsString('Score breakdown', $html);
         $this->assertStringContainsString('Technical checks', $html);
+        $this->assertStringContainsString('mx-tech-category-card', $html);
+        $this->assertStringContainsString('mx-recommendation-card', $html);
         $this->assertStringContainsString('Score history', $html);
         $this->assertStringContainsString('max-w-[1320px]', $html);
     }

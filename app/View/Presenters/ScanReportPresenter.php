@@ -238,6 +238,113 @@ class ScanReportPresenter
         };
     }
 
+    /**
+     * @return array{critical: int, high: int, medium: int, low: int, optional: int}
+     */
+    public function severitySummary(): array
+    {
+        $counts = [
+            'critical' => 0,
+            'high' => 0,
+            'medium' => 0,
+            'low' => 0,
+            'optional' => 0,
+        ];
+
+        foreach ($this->recommendations as $rec) {
+            $severity = $rec['severity'] ?? 'medium';
+            if (isset($counts[$severity])) {
+                $counts[$severity]++;
+            }
+        }
+
+        return $counts;
+    }
+
+    public function categoryForRecommendationKey(string $key): ?string
+    {
+        return match (true) {
+            str_starts_with($key, 'spf'),
+            in_array($key, ['dkim_dns', 'dmarc_missing', 'dmarc_policy', 'dmarc_alignment'], true) => 'Authentication',
+            in_array($key, ['tlsrpt', 'mtasts', 'blacklist'], true) => 'Mail infrastructure',
+            $key === 'certificates' || str_contains($key, 'certificate') => 'Transport security',
+            default => null,
+        };
+    }
+
+    public function scoreOpportunityForKey(string $key): ?string
+    {
+        $breakdownKey = match ($key) {
+            'spf_missing', 'spf_invalid', 'spf_lookups' => 'spf',
+            'dmarc_missing', 'dmarc_policy', 'dmarc_alignment' => 'dmarc',
+            'dkim_dns' => 'dkim',
+            'tlsrpt' => 'tlsrpt',
+            'mtasts' => 'mtasts',
+            'mx' => 'mx',
+            default => null,
+        };
+
+        if ($breakdownKey === null) {
+            return null;
+        }
+
+        foreach ($this->scoreBreakdown as $row) {
+            if (($row['key'] ?? '') !== $breakdownKey) {
+                continue;
+            }
+
+            $remaining = max(0, (int) ($row['possible'] ?? 0) - (int) ($row['earned'] ?? 0));
+            if ($remaining <= 0) {
+                return null;
+            }
+
+            $label = $this->categoryForRecommendationKey($key) ?? ucfirst($breakdownKey);
+
+            return $label . ' · +' . $remaining . ' possible points';
+        }
+
+        return null;
+    }
+
+    /**
+     * @param array<string, mixed> $rec
+     * @return array{category: string, endpoint: string}|null
+     */
+    public function endpointMetadataForRecommendation(array $rec): ?array
+    {
+        $explanation = (string) ($rec['explanation'] ?? '');
+
+        if (preg_match('/certificate for (primary HTTPS|MTA-STS HTTPS|SMTP MX) \(([^)]+)\)/i', $explanation, $matches) === 1) {
+            return [
+                'category' => ucwords(strtolower($matches[1])),
+                'endpoint' => $matches[2],
+            ];
+        }
+
+        if (preg_match('/certificate for ([^\s]+) presents/i', $explanation, $matches) === 1) {
+            $hostname = $matches[1];
+            $category = match (true) {
+                str_starts_with($hostname, 'mta-sts.') => 'MTA-STS HTTPS',
+                str_starts_with($hostname, 'mail.') => 'SMTP MX',
+                default => 'Primary HTTPS',
+            };
+
+            return [
+                'category' => $category,
+                'endpoint' => $hostname,
+            ];
+        }
+
+        if (preg_match('/MX host ([^\s]+)/i', $explanation, $matches) === 1) {
+            return [
+                'category' => 'SMTP MX',
+                'endpoint' => $matches[1],
+            ];
+        }
+
+        return null;
+    }
+
     protected function technicalTargetForKey(string $key): ?string
     {
         return match ($key) {

@@ -136,6 +136,7 @@ class CertificateSectionPresenter
             'badgeVariant' => $variant,
             'badgeLabel' => $badgeLabel,
             'result' => $result,
+            'metadata' => $days === null ? null : $days . ' days',
             'action' => $this->domain
                 ? ['label' => 'Edit dates', 'href' => route('domains.hub.settings', $this->domain) . '#renewals']
                 : null,

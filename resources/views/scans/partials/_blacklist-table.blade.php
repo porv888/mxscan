@@ -1,14 +1,14 @@
-<div class="mt-3 overflow-x-auto">
-    <table class="min-w-full text-sm">
+<div class="overflow-x-auto">
+    <table class="mx-evidence-table">
         <thead>
-            <tr class="text-left text-[13px] text-gray-500">
-                <th class="pb-2 pr-4">IP</th>
-                <th class="pb-2 pr-4">Provider</th>
-                <th class="pb-2 pr-4">Status</th>
-                <th class="pb-2">Action</th>
+            <tr>
+                <th>IP</th>
+                <th>Provider</th>
+                <th>Status</th>
+                <th>Action</th>
             </tr>
         </thead>
-        <tbody class="divide-y divide-gray-100">
+        <tbody>
             @forelse($rows as $r)
                 <tr>
                     <td class="py-2 pr-4 font-mono text-xs">{{ $r->ip_address ?? $r['ip'] ?? 'N/A' }}</td>

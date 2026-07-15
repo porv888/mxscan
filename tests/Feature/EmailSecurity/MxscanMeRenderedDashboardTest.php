@@ -93,5 +93,11 @@ class MxscanMeRenderedDashboardTest extends TestCase
         $this->assertStringNotContainsString('mail.mxscan.me does not match mail.mxscan.me', $lower);
 
         $this->assertDoesNotMatchRegularExpression('/dkim[^<]{0,120}>\s*missing\s*</i', $html);
+
+        $this->assertStringContainsString('mx-tech-category-card', $html);
+        $this->assertStringContainsString('mx-evidence-panel', $html);
+        $this->assertStringContainsString('mx-status-pill', $html);
+        $this->assertStringContainsString('data-tech-category', $html);
+        $this->assertStringContainsString('data-recommendation-card', $html);
     }
 }
