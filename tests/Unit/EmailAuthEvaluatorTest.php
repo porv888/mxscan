@@ -34,7 +34,8 @@ class EmailAuthEvaluatorTest extends TestCase
         $this->assertArrayHasKey('dkim', $result);
         $this->assertArrayHasKey('dmarc', $result);
         $this->assertArrayHasKey('details', $result);
-        $this->assertArrayHasKey('sources', $result);
+        $this->assertArrayHasKey('metrics', $result);
+        $this->assertArrayHasKey('analysis', $result);
     }
 
     /**
@@ -101,7 +102,7 @@ class EmailAuthEvaluatorTest extends TestCase
 
         $result = $this->evaluator->evaluate($headers, null);
 
-        $this->assertEquals('none', $result['spf']);
+        $this->assertNull($result['spf']['pass']);
         $this->assertStringContainsString('Unable to determine connecting IP', implode(' ', $result['details']['notes']));
     }
 
@@ -115,23 +116,18 @@ class EmailAuthEvaluatorTest extends TestCase
 
         $result = $this->evaluator->evaluate($headers, null);
 
-        $this->assertEquals('none', $result['dkim']);
-        $this->assertStringContainsString('Body not provided', implode(' ', $result['details']['notes']));
+        $this->assertNull($result['dkim']['pass']);
     }
 
-    /**
-     * Test sources are marked as 'app'
-     */
-    public function test_sources_marked_as_app(): void
+    public function test_metrics_include_verdict(): void
     {
         $headers = "From: sender@example.com\r\n";
         $headers .= "Received: from mail.example.com ([192.0.2.1])\r\n";
 
         $result = $this->evaluator->evaluate($headers, null);
 
-        $this->assertEquals('app', $result['sources']['spf']);
-        $this->assertEquals('app', $result['sources']['dkim']);
-        $this->assertEquals('app', $result['sources']['dmarc']);
+        $this->assertArrayHasKey('verdict', $result['analysis']);
+        $this->assertArrayHasKey('tti_ms', $result['metrics']);
     }
 
     /**

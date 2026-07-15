@@ -6,6 +6,8 @@ use App\Models\Domain;
 
 /**
  * Accordion-row presentation for technical checks on the scan report page.
+ *
+ * MX target rows are rendered from native analysis via {@see DnsSectionPresenter::mxDetail()}.
  */
 class ReportTechnicalChecksPresenter
 {
@@ -17,6 +19,8 @@ class ReportTechnicalChecksPresenter
         protected ?int $domainDays = null,
         protected ?int $sslDays = null,
         protected bool $blacklistEnabled = true,
+        protected ?array $certificatesInfo = null,
+        protected ?array $mtaStsInfo = null,
     ) {
     }
 
@@ -143,17 +147,18 @@ class ReportTechnicalChecksPresenter
     protected function blacklistRow(?string $firstOpenId): array
     {
         $listed = $this->blacklistHits > 0;
+        $usable = $this->blacklistTotal > 0;
 
         return [
             'id' => 'tech-blacklist',
             'key' => 'blacklist',
             'icon' => 'ban',
             'label' => 'Blacklist',
-            'badgeVariant' => $listed ? 'danger' : ($this->blacklistTotal > 0 ? 'success' : 'info'),
-            'badgeLabel' => $listed ? 'Listed' : ($this->blacklistTotal > 0 ? 'Clean' : 'Not scanned'),
-            'result' => $this->blacklistTotal > 0
-                ? "Checked against {$this->blacklistTotal} providers."
-                : 'No blacklist check performed.',
+            'badgeVariant' => $listed ? 'danger' : ($usable ? 'success' : 'info'),
+            'badgeLabel' => $listed ? 'Listed' : ($usable ? 'Clean' : 'Not scanned'),
+            'result' => $usable
+                ? "Checked against {$this->blacklistTotal} usable provider results."
+                : 'No usable blacklist checks completed.',
             'action' => $listed ? ['label' => 'View details', 'href' => '#what-to-fix'] : null,
             'open' => 'tech-blacklist' === $firstOpenId,
             'detail' => ['type' => 'blacklist', 'hits' => $this->blacklistHits, 'total' => $this->blacklistTotal],
@@ -185,24 +190,11 @@ class ReportTechnicalChecksPresenter
 
     protected function sslRow(?string $firstOpenId): array
     {
-        $days = $this->sslDays;
-        $variant = $days === null ? 'neutral' : ($days < 7 ? 'danger' : ($days < 30 ? 'warning' : 'success'));
-
-        return [
-            'id' => 'tech-ssl',
-            'key' => 'ssl',
-            'icon' => 'lock',
-            'label' => 'SSL',
-            'badgeVariant' => $variant,
-            'badgeLabel' => $days === null ? 'Unknown' : ($days . ' days'),
-            'result' => $this->domain->ssl_expires_at
-                ? 'Certificate expires ' . \Carbon\Carbon::parse($this->domain->ssl_expires_at)->toFormattedDateString()
-                : 'Certificate expiry not set.',
-            'action' => ['label' => 'Edit dates', 'href' => route('domains.hub.settings', $this->domain) . '#renewals'],
-            'open' => false,
-            'detail' => ['type' => 'ssl', 'sslDays' => $this->sslDays],
-            'help' => null,
-        ];
+        return (new CertificateSectionPresenter(
+            certificatesInfo: $this->certificatesInfo,
+            mtaStsInfo: $this->mtaStsInfo,
+            domain: $this->domain,
+        ))->sslRow($firstOpenId);
     }
 
     protected function iconForKey(string $key): string

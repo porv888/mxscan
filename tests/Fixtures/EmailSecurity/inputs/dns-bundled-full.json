@@ -1,5 +1,5 @@
 {
-  "score": 75,
+  "score": 64,
   "records": {
     "MX": {
       "status": "found",
@@ -56,16 +56,9 @@
       "status": "ok"
     },
     {
-      "key": "dkim",
-      "label": "DKIM",
-      "earned": 20,
-      "possible": 20,
-      "status": "ok"
-    },
-    {
       "key": "dmarc",
       "label": "DMARC",
-      "earned": 20,
+      "earned": 24,
       "possible": 30,
       "status": "partial"
     },

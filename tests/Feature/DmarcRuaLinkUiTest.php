@@ -7,17 +7,21 @@ use App\Models\Scan;
 use App\Models\User;
 use App\Services\Dmarc\DmarcStatusService;
 use Illuminate\Support\Str;
+use Tests\Concerns\CreatesPlanUsers;
 use Tests\Concerns\UsesSqliteDmarcSchema;
+use Tests\Support\EmailSecurity\DmarcFixtureBuilder;
 use Tests\TestCase;
 
 class DmarcRuaLinkUiTest extends TestCase
 {
+    use CreatesPlanUsers;
     use UsesSqliteDmarcSchema;
 
     protected function setUp(): void
     {
         parent::setUp();
         $this->setUpSqliteDmarcSchema();
+        $this->setUpPlanTables();
     }
 
     protected function makeDomainWithScan(User $user, string $dmarcRecord, string $token = 'newtoken0000000000000001'): Domain
@@ -35,16 +39,10 @@ class DmarcRuaLinkUiTest extends TestCase
             'type' => 'dns',
             'status' => 'finished',
             'facts_json' => ['dmarc' => $dmarcRecord],
-            'result_json' => [
-                'dns' => [
-                    'records' => [
-                        'DMARC' => [
-                            'status' => 'found',
-                            'data' => $dmarcRecord,
-                        ],
-                    ],
-                ],
-            ],
+            'result_json' => DmarcFixtureBuilder::scanResultJsonWithNativeDmarc(
+                $dmarcRecord,
+                'dmarc+' . $token . '@mxscan.me',
+            ),
             'finished_at' => now(),
         ]);
 
@@ -53,7 +51,7 @@ class DmarcRuaLinkUiTest extends TestCase
 
     public function test_connected_label_on_show_page(): void
     {
-        $user = User::factory()->create();
+        $user = $this->createPremiumUser();
         $token = 'newtoken0000000000000001';
         $domain = $this->makeDomainWithScan(
             $user,
@@ -71,7 +69,7 @@ class DmarcRuaLinkUiTest extends TestCase
 
     public function test_detected_unlinked_setup_ui_copy_and_dns_panel(): void
     {
-        $user = User::factory()->create();
+        $user = $this->createPremiumUser();
         $token = 'newtoken0000000000000001';
         $input = 'v=DMARC1; p=quarantine; rua=mailto:dmarc@mxscan.me,mailto:dmarc+oldtoken@mxscan.me,mailto:rua@dmarc.brevo.com';
         $domain = $this->makeDomainWithScan($user, $input, $token);
@@ -118,7 +116,7 @@ class DmarcRuaLinkUiTest extends TestCase
 
     public function test_not_connected_shows_connect_cta(): void
     {
-        $user = User::factory()->create();
+        $user = $this->createPremiumUser();
         $domain = $this->makeDomainWithScan(
             $user,
             'v=DMARC1; p=none; rua=mailto:rua@dmarc.brevo.com'
@@ -136,7 +134,7 @@ class DmarcRuaLinkUiTest extends TestCase
 
     public function test_updated_record_does_not_append_extra_mxscan_address(): void
     {
-        $user = User::factory()->create();
+        $user = $this->createPremiumUser();
         $token = 'newtoken0000000000000001';
         $input = 'v=DMARC1; p=quarantine; rua=mailto:dmarc@mxscan.me,mailto:dmarc+f162461412858183e0eb489f@mxscan.me,mailto:rua@dmarc.brevo.com';
         $domain = $this->makeDomainWithScan($user, $input, $token);
@@ -158,7 +156,7 @@ class DmarcRuaLinkUiTest extends TestCase
 
     public function test_failed_verification_keeps_setup_instructions(): void
     {
-        $user = User::factory()->create();
+        $user = $this->createPremiumUser();
         $token = 'newtoken0000000000000001';
         $input = 'v=DMARC1; p=quarantine; rua=mailto:dmarc@mxscan.me,mailto:rua@dmarc.brevo.com';
         $domain = $this->makeDomainWithScan($user, $input, $token);

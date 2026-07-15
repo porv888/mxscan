@@ -2,8 +2,9 @@
 
 namespace Tests\Unit\Domain\EmailSecurity;
 
-use App\Domain\EmailSecurity\Checks\BlacklistCheck;
+use App\Domain\EmailSecurity\Checks\Blacklist\BlacklistCheck;
 use App\Domain\EmailSecurity\Checks\CheckRegistry;
+use App\Domain\EmailSecurity\Checks\DMARC\DmarcCheck;
 use App\Domain\EmailSecurity\Checks\SpfAnalysisCheck;
 use App\Domain\EmailSecurity\Contracts\SecurityCheckInterface;
 use App\Domain\EmailSecurity\DTO\CheckContextDTO;
@@ -13,36 +14,38 @@ use App\Domain\EmailSecurity\DTO\ScanOptionsDTO;
 use App\Domain\EmailSecurity\Support\ScanArtifactKeys;
 use App\Models\Domain;
 use App\Models\Scan;
-use App\Services\BlacklistChecker;
 use App\Services\Spf\DTOs\SpfResultDTO;
 use App\Services\Spf\SpfResolver;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Mockery;
+use Tests\Support\EmailSecurity\BindsFakeBlacklistDns;
 use Tests\Support\EmailSecurity\FixtureLoader;
 use Tests\TestCase;
 
 class SecurityCheckContractTest extends TestCase
 {
+    use BindsFakeBlacklistDns;
     use RefreshDatabase;
 
     public function test_registered_checkers_implement_security_check_interface(): void
     {
         $registry = app(CheckRegistry::class);
 
-        foreach (['spf', 'blacklist'] as $key) {
+        foreach (['spf', 'dmarc', 'blacklist'] as $key) {
             $this->assertContains($key, $registry->keys());
         }
 
         $this->assertInstanceOf(SecurityCheckInterface::class, app(SpfAnalysisCheck::class));
+        $this->assertInstanceOf(SecurityCheckInterface::class, app(DmarcCheck::class));
         $this->assertInstanceOf(SecurityCheckInterface::class, app(BlacklistCheck::class));
     }
 
     public function test_checker_keys_are_stable_and_unique(): void
     {
-        $checks = [app(SpfAnalysisCheck::class), app(BlacklistCheck::class)];
+        $checks = [app(SpfAnalysisCheck::class), app(DmarcCheck::class), app(BlacklistCheck::class)];
         $keys = array_map(fn (SecurityCheckInterface $check) => $check->key(), $checks);
 
-        $this->assertSame(['spf', 'blacklist'], $keys);
+        $this->assertSame(['spf', 'dmarc', 'blacklist'], $keys);
         $this->assertCount(count(array_unique($keys)), $keys);
     }
 
@@ -76,22 +79,21 @@ class SecurityCheckContractTest extends TestCase
 
     public function test_blacklist_checker_returns_execution_result_dto(): void
     {
-        $summary = FixtureLoader::input('blacklist-clean');
+        $dnsPayload = FixtureLoader::input('dns-bundled-full');
+        FixtureLoader::bindMxFixtures($dnsPayload, 'example.test');
+        $this->bindFakeBlacklistDns();
+
         $domain = Domain::factory()->create(['domain' => 'example.test']);
         $scan = Scan::factory()->create(['domain_id' => $domain->id, 'user_id' => $domain->user_id]);
 
-        $checker = Mockery::mock(BlacklistChecker::class);
-        $checker->shouldReceive('checkDomain')->once()->with(Mockery::type(Scan::class), 'example.test');
-        $checker->shouldReceive('getScanSummary')->once()->with(Mockery::type(Scan::class))->andReturn($summary);
-
-        $check = new BlacklistCheck($checker);
+        $check = app(BlacklistCheck::class);
         $context = $this->makeContext($domain, $scan);
         $execution = $check->run($context, null);
 
         $this->assertInstanceOf(CheckExecutionResultDTO::class, $execution);
         $this->assertSame('blacklist', $execution->result->key);
-        $this->assertSame('clean', $execution->result->status);
-        $this->assertSame([], $execution->artifacts);
+        $this->assertArrayHasKey(ScanArtifactKeys::NATIVE_BLACKLIST_RESULT, $execution->artifacts);
+        $this->assertArrayHasKey('analysis', $execution->result->data);
     }
 
     public function test_registry_rethrows_checker_failures_instead_of_false_pass(): void
@@ -119,9 +121,13 @@ class SecurityCheckContractTest extends TestCase
 
     private function makeContext(?Domain $domain = null, ?Scan $scan = null): CheckContextDTO
     {
-        $domain ??= new Domain(['domain' => 'example.test']);
-        $domain->id ??= 1;
-        $scan ??= new Scan(['id' => '00000000-0000-4000-8000-000000000001']);
+        if ($domain === null) {
+            $domain = Domain::factory()->create(['domain' => 'example.test']);
+        }
+        $scan ??= Scan::factory()->create([
+            'domain_id' => $domain->id,
+            'user_id' => $domain->user_id,
+        ]);
 
         return CheckContextDTO::fromExecution(
             $domain,

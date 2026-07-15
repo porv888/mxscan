@@ -51,6 +51,29 @@
                         @if(isset($detail['lookupCount']))
                             <p class="mt-3 text-sm text-gray-600">Lookup count: {{ $detail['lookupCount'] }}/{{ $detail['lookupMax'] ?? 10 }}</p>
                         @endif
+                    @elseif(($detail['type'] ?? '') === 'bimi')
+                        <p class="text-sm text-gray-600">{{ $row['result'] }}</p>
+                        @if(!empty($detail['previewUrl']))
+                            <img src="{{ $detail['previewUrl'] }}"
+                                 alt="BIMI logo preview"
+                                 class="mt-3 h-24 w-24 rounded-lg border border-gray-200 bg-white object-contain p-2">
+                        @endif
+                        @if(!empty($detail['value']))
+                            <x-report.code-value
+                                class="mt-3"
+                                :value="$detail['value']"
+                                record-type="TXT"
+                                record-host="default._bimi.{{ $domain->domain }}"
+                                :copy-label="$detail['copyLabel'] ?? 'Copy BIMI record'"
+                            />
+                        @endif
+                        @if(!empty($detail['chips']))
+                            <div class="mt-3 flex flex-wrap gap-2">
+                                @foreach($detail['chips'] as $chip)
+                                    <span class="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-700">{{ $chip }}</span>
+                                @endforeach
+                            </div>
+                        @endif
                     @elseif(($detail['type'] ?? '') === 'dkim')
                         <p class="text-sm text-gray-600">{{ $detail['dnsOnlyNote'] ?? '' }}</p>
                         @if(!empty($detail['selectors']))
@@ -84,7 +107,7 @@
                                         <tr class="text-left text-[13px] text-gray-500">
                                             <th class="pb-2 pr-4">Priority</th>
                                             <th class="pb-2 pr-4">Host</th>
-                                            <th class="pb-2">TTL</th>
+                                            <th class="pb-2">Status</th>
                                         </tr>
                                     </thead>
                                     <tbody>

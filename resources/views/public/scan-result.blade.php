@@ -119,6 +119,99 @@
             </div>
         </div>
 
+        @php
+            $certPresenter = new \App\View\Presenters\CertificateSectionPresenter(
+                certificatesInfo: is_array($results['certificates'] ?? null) ? $results['certificates'] : null,
+                mtaStsInfo: is_array($results['mta_sts'] ?? null) ? $results['mta_sts'] : null,
+                domain: new \App\Models\Domain(['domain' => $domain]),
+            );
+            $primaryCert = $certPresenter->publicPrimaryEndpoint();
+        @endphp
+
+        @if($primaryCert)
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden mb-8">
+                <div class="px-6 py-4 border-b border-gray-200 bg-gray-50">
+                    <h2 class="text-lg font-semibold text-gray-900">Website Certificate</h2>
+                </div>
+                <div class="px-6 py-4">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-sm font-medium text-gray-900">{{ $primaryCert['hostname'] ?? $domain }}</p>
+                            @if(!empty($primaryCert['issuer']))
+                                <p class="text-xs text-gray-500 mt-1">Issuer: {{ $primaryCert['issuer'] }}</p>
+                            @endif
+                            @if(!empty($primaryCert['valid_to']))
+                                <p class="text-xs text-gray-500 mt-1">Expires: {{ \Carbon\Carbon::parse($primaryCert['valid_to'])->toFormattedDateString() }}</p>
+                            @endif
+                        </div>
+                        @php
+                            $certState = $primaryCert['ui_state'] ?? 'unknown';
+                            $certBadge = match ($certState) {
+                                'pass' => ['bg-green-100 text-green-800', 'Valid'],
+                                'warning' => ['bg-amber-100 text-amber-800', 'Expiring soon'],
+                                'fail' => ['bg-red-100 text-red-800', 'Action required'],
+                                default => ['bg-gray-100 text-gray-800', 'Unknown'],
+                            };
+                        @endphp
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium {{ $certBadge[0] }}">
+                            {{ $certBadge[1] }}
+                            @if(is_int($primaryCert['days_until_expiry'] ?? null))
+                                ({{ $primaryCert['days_until_expiry'] }} days)
+                            @endif
+                        </span>
+                    </div>
+                </div>
+            </div>
+        @endif
+
+        @php
+            $bimiPresenter = new \App\View\Presenters\BimiSectionPresenter(
+                bimiInfo: $results['bimi'] ?? null,
+                legacyDnsRecord: $results['records']['BIMI'] ?? null,
+            );
+            $bimiSummary = $bimiPresenter->publicSummary();
+        @endphp
+
+        @if($bimiSummary)
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden mb-8">
+                <div class="px-6 py-4 border-b border-gray-200 bg-gray-50">
+                    <h2 class="text-lg font-semibold text-gray-900">BIMI Readiness</h2>
+                </div>
+                <div class="px-6 py-4 space-y-3">
+                    <p class="text-sm text-gray-700">{{ $bimiSummary['summary'] }}</p>
+                    @if(!empty($bimiSummary['record_hostname']))
+                        <p class="text-xs text-gray-500">Selector host: <span class="font-mono text-gray-700">{{ $bimiSummary['record_hostname'] }}</span></p>
+                    @endif
+                    <div class="flex flex-wrap items-center gap-2">
+                        @php
+                            $logoBadge = match ($bimiSummary['logo_validation_status'] ?? 'absent') {
+                                'valid' => ['bg-green-100 text-green-800', $bimiPresenter->logoValidationLabel('valid')],
+                                'invalid', 'unavailable' => ['bg-red-100 text-red-800', $bimiPresenter->logoValidationLabel($bimiSummary['logo_validation_status'])],
+                                default => ['bg-gray-100 text-gray-800', $bimiPresenter->logoValidationLabel($bimiSummary['logo_validation_status'] ?? 'absent')],
+                            };
+                        @endphp
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium {{ $logoBadge[0] }}">
+                            {{ $logoBadge[1] }}
+                        </span>
+                        @if(array_key_exists('dmarc_core_eligible', $bimiSummary) && $bimiSummary['dmarc_core_eligible'] !== null)
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium {{ $bimiSummary['dmarc_core_eligible'] ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-800' }}">
+                                {{ $bimiSummary['dmarc_core_eligible'] ? 'DMARC core eligible' : 'DMARC core not eligible' }}
+                            </span>
+                        @endif
+                        @if(!empty($bimiSummary['mark_certificate_status']))
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                Mark certificate: {{ $bimiSummary['mark_certificate_status'] }}
+                                @if(!empty($bimiSummary['mark_certificate_type']))
+                                    ({{ $bimiSummary['mark_certificate_type'] }})
+                                @endif
+                            </span>
+                        @endif
+                    </div>
+                    <p class="text-xs text-gray-500">Optional branding feature for participating mailbox providers. Does not affect your Email Security Score and does not guarantee logo display.</p>
+                </div>
+            </div>
+        @endif
+
         <!-- Recommendations (blurred for non-auth) -->
         @if(!empty($results['recommendations']))
             <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden mb-8 relative">

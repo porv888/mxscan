@@ -8,10 +8,12 @@ use App\Models\SpfCheck;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
+use Tests\Concerns\CreatesPlanUsers;
 use Tests\TestCase;
 
 class SpfControllerTest extends TestCase
 {
+    use CreatesPlanUsers;
     use RefreshDatabase;
 
     private User $user;
@@ -20,10 +22,9 @@ class SpfControllerTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        
-        $this->user = User::factory()->create([
-            'email_verified_at' => now(),
-        ]);
+        $this->setUpPlanTables();
+
+        $this->user = $this->createPremiumUser();
         
         $this->domain = Domain::factory()->create([
             'user_id' => $this->user->id,
@@ -53,9 +54,7 @@ class SpfControllerTest extends TestCase
 
     public function test_spf_show_requires_domain_ownership(): void
     {
-        $otherUser = User::factory()->create([
-            'email_verified_at' => now(),
-        ]);
+        $otherUser = $this->createPremiumUser();
         
         $response = $this->actingAs($otherUser)
             ->get(route('spf.show', $this->domain->domain));
@@ -80,13 +79,11 @@ class SpfControllerTest extends TestCase
         // Create an SPF check
         $spfCheck = SpfCheck::factory()->create([
             'domain_id' => $this->domain->id,
-            'domain' => $this->domain->domain,
-            'current_record' => 'v=spf1 include:_spf.google.com ~all',
-            'lookups_used' => 3,
-            'flattened_spf' => 'v=spf1 ip4:192.168.1.1 ~all',
+            'looked_up_record' => 'v=spf1 include:_spf.google.com ~all',
+            'lookup_count' => 3,
+            'flattened_suggestion' => 'v=spf1 ip4:192.168.1.1 ~all',
             'warnings' => ['Test warning'],
             'resolved_ips' => ['192.168.1.1'],
-            'checked_at' => now(),
         ]);
         
         $response = $this->actingAs($this->user)
@@ -107,9 +104,7 @@ class SpfControllerTest extends TestCase
 
     public function test_spf_run_requires_domain_ownership(): void
     {
-        $otherUser = User::factory()->create([
-            'email_verified_at' => now(),
-        ]);
+        $otherUser = $this->createPremiumUser();
         
         $response = $this->actingAs($otherUser)
             ->post(route('spf.run', $this->domain->domain));

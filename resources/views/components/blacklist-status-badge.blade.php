@@ -14,6 +14,18 @@
             'icon' => '🔴',
             'label' => $count > 1 ? "Listed ({$count})" : 'Listed'
         ],
+        'partial' => [
+            'bg' => 'bg-yellow-100',
+            'text' => 'text-yellow-800',
+            'icon' => '⚠️',
+            'label' => 'Partial coverage'
+        ],
+        'unknown' => [
+            'bg' => 'bg-gray-100',
+            'text' => 'text-gray-700',
+            'icon' => '❔',
+            'label' => 'Unavailable'
+        ],
         'not-checked' => [
             'bg' => 'bg-gray-100',
             'text' => 'text-gray-600',

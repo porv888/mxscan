@@ -9,10 +9,26 @@ use Tests\TestCase;
 
 class ScanRecommendationServiceTest extends TestCase
 {
+    private function makeService(): ScanRecommendationService
+    {
+        return new ScanRecommendationService(
+            new ScanReportStatusMapper(),
+            new \App\Domain\EmailSecurity\Checks\SPF\Recommendations\SpfRecommendationEvaluator(),
+            new \App\Domain\EmailSecurity\Checks\DMARC\Recommendations\DmarcRecommendationEvaluator(),
+            new \App\Domain\EmailSecurity\Checks\DKIM\Recommendations\DkimRecommendationEvaluator(),
+            new \App\Domain\EmailSecurity\Checks\MtaSts\Recommendations\MtaStsRecommendationEvaluator(),
+            new \App\Domain\EmailSecurity\Checks\Mx\Recommendations\MxRecommendationEvaluator(),
+            new \App\Domain\EmailSecurity\Checks\TlsRpt\Recommendations\TlsRptRecommendationEvaluator(),
+            new \App\Domain\EmailSecurity\Checks\Certificates\Recommendations\CertificateRecommendationEvaluator(),
+            new \App\Domain\EmailSecurity\Checks\Bimi\BimiRecommendationEvaluator(),
+            new \App\Domain\EmailSecurity\Checks\Blacklist\Recommendations\BlacklistRecommendationEvaluator(),
+        );
+    }
+
     public function test_missing_spf_appears_before_tlsrpt_and_mtasts(): void
     {
         $domain = new Domain(['domain' => 'example.test']);
-        $service = new ScanRecommendationService(new ScanReportStatusMapper());
+        $service = $this->makeService();
 
         $recs = $service->build($domain, [
             'dns' => [
@@ -41,7 +57,7 @@ class ScanRecommendationServiceTest extends TestCase
 
     public function test_no_all_clear_when_spf_or_dkim_missing_or_blacklist_unchecked(): void
     {
-        $service = new ScanRecommendationService(new ScanReportStatusMapper());
+        $service = $this->makeService();
 
         $clear = $service->evaluateAllClear([
             'dns' => [
@@ -89,7 +105,7 @@ class ScanRecommendationServiceTest extends TestCase
     public function test_missing_dkim_produces_recommendation(): void
     {
         $domain = new Domain(['domain' => 'example.test']);
-        $service = new ScanRecommendationService(new ScanReportStatusMapper());
+        $service = $this->makeService();
         $recs = $service->build($domain, [
             'dns' => [
                 'records' => [
@@ -105,16 +121,16 @@ class ScanRecommendationServiceTest extends TestCase
             'blacklist' => ['total_checks' => 3, 'listed_count' => 0],
         ]);
 
-        $this->assertTrue(collect($recs)->contains(fn ($r) => $r['key'] === 'dkim_dns'));
-        $dkim = collect($recs)->firstWhere('key', 'dkim_dns');
-        $this->assertStringContainsString('DNS', $dkim['explanation']);
-        $this->assertStringNotContainsString('signing verified', strtolower($dkim['explanation']));
+        $this->assertTrue(collect($recs)->contains(fn ($r) => ($r['semantic_key'] ?? $r['key']) === 'verify_dkim_signing_with_sample_message'));
+        $verify = collect($recs)->first(fn ($r) => ($r['semantic_key'] ?? $r['key']) === 'verify_dkim_signing_with_sample_message');
+        $this->assertStringContainsString('signed message', strtolower($verify['explanation']));
+        $this->assertStringNotContainsString('signing verified', strtolower($verify['explanation']));
     }
 
-    public function test_dmarc_missing_alignment_tags_emits_priority_3_recommendation(): void
+    public function test_quarantine_dmarc_emits_strengthen_recommendation(): void
     {
         $domain = new Domain(['domain' => 'example.test']);
-        $service = new ScanRecommendationService(new ScanReportStatusMapper());
+        $service = $this->makeService();
         $recs = $service->build($domain, [
             'dns' => [
                 'records' => [
@@ -126,43 +142,60 @@ class ScanRecommendationServiceTest extends TestCase
                     'MTA-STS' => ['status' => 'found', 'policy' => 'x'],
                 ],
             ],
-            'spf' => ['lookups' => 1, 'valid' => true],
-            'blacklist' => ['total_checks' => 3, 'listed_count' => 0],
-        ]);
-
-        $alignment = collect($recs)->firstWhere('key', 'dmarc_alignment');
-        $this->assertNotNull($alignment);
-        $this->assertSame(3, $alignment['priority']);
-        $this->assertStringContainsString('adkim=r', $alignment['value']);
-        $this->assertStringContainsString('aspf=r', $alignment['value']);
-    }
-
-    public function test_dmarc_with_aspf_or_adkim_does_not_emit_alignment_recommendation(): void
-    {
-        $domain = new Domain(['domain' => 'example.test']);
-        $service = new ScanRecommendationService(new ScanReportStatusMapper());
-        $recs = $service->build($domain, [
-            'dns' => [
-                'records' => [
-                    'MX' => ['status' => 'found'],
-                    'SPF' => ['status' => 'found', 'data' => 'v=spf1 -all'],
-                    'DKIM' => ['status' => 'found', 'data' => [['selector' => 's1']]],
-                    'DMARC' => ['status' => 'found', 'data' => 'v=DMARC1; p=reject; adkim=r; aspf=r'],
-                    'TLS-RPT' => ['status' => 'found'],
-                    'MTA-STS' => ['status' => 'found', 'policy' => 'x'],
+            'dmarc' => [
+                'analysis' => [
+                    'version' => 'dmarc-native-v1',
+                    'protocol_status' => 'valid',
+                    'state' => 'pass',
+                    'policy' => ['effective_policy' => 'quarantine', 'enforcement' => 'quarantine', 'pct' => 100],
+                    'aggregate_reporting' => ['configured' => true, 'destinations' => []],
                 ],
             ],
             'spf' => ['lookups' => 1, 'valid' => true],
             'blacklist' => ['total_checks' => 3, 'listed_count' => 0],
         ]);
 
-        $this->assertFalse(collect($recs)->contains(fn ($r) => $r['key'] === 'dmarc_alignment'));
+        $strengthen = collect($recs)->firstWhere('semantic_key', 'strengthen_dmarc_policy');
+        $this->assertNotNull($strengthen);
+        $this->assertFalse(collect($recs)->contains(fn ($r) => ($r['semantic_key'] ?? '') === 'dmarc_alignment'));
+    }
+
+    public function test_reject_dmarc_does_not_emit_alignment_recommendation(): void
+    {
+        $domain = new Domain(['domain' => 'example.test']);
+        $service = $this->makeService();
+        $recs = $service->build($domain, [
+            'dns' => [
+                'records' => [
+                    'MX' => ['status' => 'found'],
+                    'SPF' => ['status' => 'found', 'data' => 'v=spf1 -all'],
+                    'DKIM' => ['status' => 'found', 'data' => [['selector' => 's1']]],
+                    'DMARC' => ['status' => 'found', 'data' => 'v=DMARC1; p=reject; adkim=s; aspf=s'],
+                    'TLS-RPT' => ['status' => 'found'],
+                    'MTA-STS' => ['status' => 'found', 'policy' => 'x'],
+                ],
+            ],
+            'dmarc' => [
+                'analysis' => [
+                    'version' => 'dmarc-native-v1',
+                    'protocol_status' => 'valid',
+                    'state' => 'pass',
+                    'policy' => ['effective_policy' => 'reject', 'enforcement' => 'reject', 'pct' => 100],
+                    'aggregate_reporting' => ['configured' => false, 'destinations' => []],
+                    'alignment' => ['dkim' => 'strict', 'spf' => 'strict'],
+                ],
+            ],
+            'spf' => ['lookups' => 1, 'valid' => true],
+            'blacklist' => ['total_checks' => 3, 'listed_count' => 0],
+        ]);
+
+        $this->assertFalse(collect($recs)->contains(fn ($r) => ($r['semantic_key'] ?? '') === 'dmarc_alignment'));
     }
 
     public function test_run_scan_shaped_payload_uses_same_service_keys(): void
     {
         $domain = new Domain(['domain' => 'legacy.test']);
-        $service = new ScanRecommendationService(new ScanReportStatusMapper());
+        $service = $this->makeService();
         $records = [
             'MX' => ['status' => 'missing', 'data' => []],
             'SPF' => ['status' => 'missing', 'data' => null],
@@ -179,6 +212,6 @@ class ScanRecommendationServiceTest extends TestCase
         $keys = array_column($recs, 'key');
         $this->assertContains('dmarc_missing', $keys);
         $this->assertContains('spf_missing', $keys);
-        $this->assertContains('dkim_dns', $keys);
+        $this->assertContains('verify_dkim_signing_with_sample_message', array_column($recs, 'semantic_key'));
     }
 }

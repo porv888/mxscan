@@ -99,7 +99,7 @@ class ScanPendingReportTest extends TestCase
         $scan = $this->makeScan($user, 'finished');
         $response = $this->actingAs($user)->get(route('reports.show', $scan));
         $response->assertOk();
-        $response->assertSee('Email Security Score', false);
+        $response->assertSee('Score breakdown', false);
         $response->assertDontSee('First scan in progress', false);
     }
 

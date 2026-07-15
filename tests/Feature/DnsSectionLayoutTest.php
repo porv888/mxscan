@@ -33,7 +33,28 @@ class DnsSectionLayoutTest extends TestCase
         ], $overrides);
     }
 
-    protected function renderDnsSection(array $records, ?array $dmarcStatus = null, array $statusCards = []): string
+    protected function sampleMxInfo(array $overrides = []): array
+    {
+        return array_replace_recursive([
+            'status' => 'ok',
+            'protocol_status' => 'valid',
+            'analysis' => [
+                'version' => 'mx-native-v1',
+                'protocol_status' => 'valid',
+                'state' => 'pass',
+                'summary' => 'Valid inbound mail exchangers are published.',
+                'service_mode' => 'accepts_mail',
+                'targets' => [[
+                    'preference' => 10,
+                    'normalized_hostname' => 'mail.example.test',
+                    'hostname' => 'mail.example.test',
+                    'status' => 'usable',
+                ]],
+            ],
+        ], $overrides);
+    }
+
+    protected function renderDnsSection(array $records, ?array $dmarcStatus = null, array $statusCards = [], ?array $mxInfo = null): string
     {
         if ($statusCards === []) {
             $mapper = new ScanReportStatusMapper();
@@ -53,12 +74,18 @@ class DnsSectionLayoutTest extends TestCase
             'statusCards' => $statusCards,
             'dmarcPolicy' => 'reject',
             'dmarcAligned' => true,
+            'mxInfo' => $mxInfo ?? $this->sampleMxInfo(),
         ])->render();
     }
 
     public function test_summary_tiles_render_for_core_records(): void
     {
-        $html = $this->renderDnsSection($this->baseRecords());
+        $html = $this->renderDnsSection($this->baseRecords(), [
+            'rua_link_state' => DmarcStatusService::RUA_LINK_NOT_CONNECTED,
+            'has_rua' => true,
+            'has_dmarc_record' => true,
+            'status' => DmarcStatusService::STATUS_ENABLED_NOT_MXSCAN,
+        ]);
 
         foreach (['SPF', 'DKIM DNS', 'DMARC', 'DMARC Reports', 'MX', 'TLS-RPT', 'MTA-STS'] as $label) {
             $this->assertStringContainsString($label, $html);
@@ -78,7 +105,7 @@ class DnsSectionLayoutTest extends TestCase
     {
         $html = $this->renderDnsSection($this->baseRecords());
 
-        $this->assertStringContainsString('1 selector discovered', $html);
+        $this->assertStringContainsString('valid DKIM key', $html);
         $this->assertStringContainsString('published DNS keys only', $html);
     }
 
@@ -178,6 +205,6 @@ class DnsSectionLayoutTest extends TestCase
             domain: $this->sampleDomain(),
         );
 
-        $this->assertCount(7, $presenter->summaryTiles());
+        $this->assertCount(8, $presenter->summaryTiles());
     }
 }

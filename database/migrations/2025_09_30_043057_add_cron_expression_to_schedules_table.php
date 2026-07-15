@@ -19,9 +19,11 @@ return new class extends Migration
             }
         });
         
-        // Update frequency enum to include 'custom' option
-        $schedulesTable = Schema::getConnection()->getTablePrefix() . 'schedules';
-        DB::statement("ALTER TABLE `{$schedulesTable}` MODIFY COLUMN frequency ENUM('daily', 'weekly', 'monthly', 'custom') NOT NULL DEFAULT 'weekly'");
+        // Update frequency enum to include 'custom' option (MySQL only; SQLite uses string column).
+        if (Schema::getConnection()->getDriverName() !== 'sqlite') {
+            $schedulesTable = Schema::getConnection()->getTablePrefix() . 'schedules';
+            DB::statement("ALTER TABLE `{$schedulesTable}` MODIFY COLUMN frequency ENUM('daily', 'weekly', 'monthly', 'custom') NOT NULL DEFAULT 'weekly'");
+        }
     }
 
     /**
@@ -35,8 +37,10 @@ return new class extends Migration
             }
         });
         
-        // Revert frequency enum back to original values
-        $schedulesTable = Schema::getConnection()->getTablePrefix() . 'schedules';
-        DB::statement("ALTER TABLE `{$schedulesTable}` MODIFY COLUMN frequency ENUM('daily', 'weekly', 'monthly') NOT NULL DEFAULT 'weekly'");
+        // Revert frequency enum back to original values (MySQL only).
+        if (Schema::getConnection()->getDriverName() !== 'sqlite') {
+            $schedulesTable = Schema::getConnection()->getTablePrefix() . 'schedules';
+            DB::statement("ALTER TABLE `{$schedulesTable}` MODIFY COLUMN frequency ENUM('daily', 'weekly', 'monthly') NOT NULL DEFAULT 'weekly'");
+        }
     }
 };

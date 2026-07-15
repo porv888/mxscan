@@ -8,10 +8,13 @@ use App\Models\User;
 use App\Services\ScanReport\ScanRecommendationService;
 use App\Services\ScanReport\ScanReportStatusMapper;
 use App\View\Presenters\ScanReportPresenter;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\Support\EmailSecurity\DmarcFixtureBuilder;
 use Tests\TestCase;
 
 class ScanReportLayoutTest extends TestCase
 {
+    use RefreshDatabase;
     protected function sampleDomain(): Domain
     {
         $domain = new Domain(['domain' => 'mxscan.me']);
@@ -48,10 +51,46 @@ class ScanReportLayoutTest extends TestCase
             'dns' => ['records' => $records],
             'spf' => ['lookups' => null, 'valid' => true],
             'blacklist' => ['total_checks' => 6, 'listed_count' => 0],
+            'dmarc' => [
+                'analysis' => DmarcFixtureBuilder::nativeAnalysis([
+                    'policy' => [
+                        'published_p' => 'reject',
+                        'effective_policy' => 'reject',
+                        'pct' => 100,
+                        'testing_mode' => false,
+                        'enforcement' => 'reject',
+                    ],
+                    'alignment' => ['dkim' => 'strict', 'spf' => 'strict'],
+                    'aggregate_reporting' => [
+                        'configured' => true,
+                        'destinations' => [[
+                            'normalized_destination' => 'dmarc@mxscan.me',
+                            'destination_domain' => 'mxscan.me',
+                            'internal' => true,
+                        ]],
+                        'mxscan_expectation' => [
+                            'expected_address' => 'dmarc+token@mxscan.me',
+                            'present' => true,
+                            'other_valid_destination_exists' => false,
+                        ],
+                    ],
+                ], 'v=DMARC1; p=reject; rua=mailto:dmarc@mxscan.me'),
+            ],
         ];
         $mapper = new ScanReportStatusMapper();
         $statusCards = $mapper->buildStatusCards($resultJson, $records, 70);
-        $recommendations = (new ScanRecommendationService($mapper))->build($domain, $resultJson, $records);
+        $recommendations = (new ScanRecommendationService(
+            $mapper,
+            new \App\Domain\EmailSecurity\Checks\SPF\Recommendations\SpfRecommendationEvaluator(),
+            new \App\Domain\EmailSecurity\Checks\DMARC\Recommendations\DmarcRecommendationEvaluator(),
+            new \App\Domain\EmailSecurity\Checks\DKIM\Recommendations\DkimRecommendationEvaluator(),
+            new \App\Domain\EmailSecurity\Checks\MtaSts\Recommendations\MtaStsRecommendationEvaluator(),
+            new \App\Domain\EmailSecurity\Checks\Mx\Recommendations\MxRecommendationEvaluator(),
+            new \App\Domain\EmailSecurity\Checks\TlsRpt\Recommendations\TlsRptRecommendationEvaluator(),
+            new \App\Domain\EmailSecurity\Checks\Certificates\Recommendations\CertificateRecommendationEvaluator(),
+            new \App\Domain\EmailSecurity\Checks\Bimi\BimiRecommendationEvaluator(),
+            new \App\Domain\EmailSecurity\Checks\Blacklist\Recommendations\BlacklistRecommendationEvaluator(),
+        ))->build($domain, $resultJson, $records);
 
         return [
             'scan' => $this->sampleScan(),

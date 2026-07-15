@@ -39,6 +39,7 @@ class RunFullScan implements ShouldQueue
             'dns' => $options->dns,
             'spf' => $options->spf,
             'blacklist' => $options->blacklist,
+            'dkim' => $options->dkim,
         ]);
 
         $scan = $this->resolveScanRecord($domain, $scanType);

@@ -1,12 +1,27 @@
 @props(['results', 'summary'])
 
+@php
+    $blFacts = is_array($summary)
+        ? \App\Domain\EmailSecurity\Checks\Blacklist\Support\BlacklistAnalysisReader::facts($summary)
+        : [];
+    $reputation = $blFacts['blacklist_reputation_status'] ?? 'not_checked';
+    $usable = (int) ($blFacts['blacklist_usable_results'] ?? 0);
+    $badgeStatus = match ($reputation) {
+        'clean' => 'clean',
+        'listed' => 'listed',
+        'partial' => 'partial',
+        'unknown' => 'unknown',
+        default => 'not-checked',
+    };
+@endphp
+
 <div class="bg-white rounded-lg border border-gray-200 p-6">
     <div class="flex items-center justify-between mb-6">
         <h3 class="text-lg font-semibold text-gray-900">Blacklist Status</h3>
         @if($summary)
             <x-blacklist-status-badge 
-                :status="$summary['is_clean'] ? 'clean' : 'listed'" 
-                :count="$summary['listed_count'] ?? 0"
+                :status="$badgeStatus" 
+                :count="$blFacts['blacklist_count'] ?? 0"
                 size="lg" />
         @endif
     </div>
@@ -24,13 +39,28 @@
             </div>
             <div class="bg-green-100 p-4 rounded-lg text-center">
                 <div class="text-2xl font-bold text-green-700">{{ $summary['ok_count'] ?? 0 }}</div>
-                <div class="text-sm text-green-600">✔ Clean</div>
+                <div class="text-sm text-green-600">✔ Clean Results</div>
             </div>
             <div class="bg-red-100 p-4 rounded-lg text-center">
                 <div class="text-2xl font-bold text-red-700">{{ $summary['listed_count'] ?? 0 }}</div>
                 <div class="text-sm text-red-600">❌ Listed</div>
             </div>
         </div>
+
+        @if($reputation === 'partial')
+            <div class="mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                <p class="text-sm text-yellow-800">
+                    {{ \App\Domain\EmailSecurity\Checks\Blacklist\Support\BlacklistAnalysisReader::summary($summary)
+                        ?? 'No listings were found on the successfully checked providers, but some checks could not be completed.' }}
+                </p>
+            </div>
+        @elseif($usable === 0 && $reputation !== 'not_checked')
+            <div class="mb-4 p-4 bg-gray-50 border border-gray-200 rounded-lg">
+                <p class="text-sm text-gray-700">
+                    Blacklist reputation could not be determined because no provider returned a usable result.
+                </p>
+            </div>
+        @endif
 
         @if($results && $results->count() > 0)
             <!-- Results Grouped by IP -->
@@ -40,6 +70,7 @@
                         $listedResults = $ipResults->where('status', 'listed');
                         $cleanResults = $ipResults->where('status', 'ok');
                         $isListed = $listedResults->count() > 0;
+                        $hasUsableClean = $cleanResults->count() > 0;
                     @endphp
                     
                     <div class="border rounded-lg shadow-sm overflow-hidden">
@@ -58,9 +89,13 @@
                                     <span class="px-3 py-1 text-sm bg-red-200 text-red-800 rounded-full font-medium">
                                         ❌ Listed ({{ $listedResults->count() }})
                                     </span>
-                                @else
+                                @elseif($hasUsableClean)
                                     <span class="px-3 py-1 text-sm bg-green-200 text-green-800 rounded-full font-medium">
                                         🟢 Clean
+                                    </span>
+                                @else
+                                    <span class="px-3 py-1 text-sm bg-gray-200 text-gray-700 rounded-full font-medium">
+                                        Not determined
                                     </span>
                                 @endif
                                 @if($cleanResults->count() > 0 && $isListed)
@@ -110,7 +145,7 @@
                                         </div>
                                     @endforeach
                                 </div>
-                            @else
+                            @elseif($hasUsableClean)
                                 <!-- All Clean - Show Summary -->
                                 <div class="p-4 bg-green-50">
                                     <div class="flex items-center justify-between">
@@ -133,6 +168,10 @@
                                             </div>
                                         @endforeach
                                     </div>
+                                </div>
+                            @else
+                                <div class="p-4 bg-gray-50">
+                                    <span class="text-gray-700 text-sm">No usable provider results for this IP.</span>
                                 </div>
                             @endif
                         </div>

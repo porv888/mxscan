@@ -8,6 +8,7 @@ use App\Models\User;
 use App\Services\Dmarc\DmarcStatusService;
 use Illuminate\Support\Str;
 use Tests\Concerns\UsesSqliteDmarcSchema;
+use Tests\Support\EmailSecurity\DmarcFixtureBuilder;
 use Tests\TestCase;
 
 class DmarcStatusServiceRuaLinkTest extends TestCase
@@ -26,9 +27,36 @@ class DmarcStatusServiceRuaLinkTest extends TestCase
     protected function makeDomainWithScan(string $dmarcRecord, array $domainAttrs = [], string $scanStatus = 'finished'): Domain
     {
         $user = User::factory()->create();
+        $token = $domainAttrs['dmarc_token'] ?? 'newtoken0000000000000001';
         $domain = Domain::create(array_merge([
             'user_id' => $user->id,
             'domain' => 'example-' . Str::random(8) . '.com',
+            'dmarc_token' => $token,
+        ], $domainAttrs));
+
+        Scan::create([
+            'id' => (string) Str::uuid(),
+            'domain_id' => $domain->id,
+            'user_id' => $user->id,
+            'type' => 'dns',
+            'status' => $scanStatus,
+            'facts_json' => ['dmarc' => $dmarcRecord],
+            'result_json' => DmarcFixtureBuilder::scanResultJsonWithNativeDmarc(
+                $dmarcRecord,
+                'dmarc+' . $token . '@mxscan.me',
+            ),
+            'finished_at' => now(),
+        ]);
+
+        return $domain->fresh();
+    }
+
+    protected function makeLegacyDomainWithScan(string $dmarcRecord, array $domainAttrs = [], string $scanStatus = 'finished'): Domain
+    {
+        $user = User::factory()->create();
+        $domain = Domain::create(array_merge([
+            'user_id' => $user->id,
+            'domain' => 'legacy-' . Str::random(8) . '.com',
             'dmarc_token' => 'newtoken0000000000000001',
         ], $domainAttrs));
 
@@ -137,10 +165,10 @@ class DmarcStatusServiceRuaLinkTest extends TestCase
     public function test_legacy_completed_scan_status_is_accepted(): void
     {
         $token = 'newtoken0000000000000001';
-        $domain = $this->makeDomainWithScan(
+        $domain = $this->makeLegacyDomainWithScan(
             "v=DMARC1; p=none; rua=mailto:dmarc+{$token}@mxscan.me",
             ['dmarc_token' => $token],
-            'completed'
+            'completed',
         );
 
         $status = $this->service->getStatus($domain);

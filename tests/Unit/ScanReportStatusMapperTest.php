@@ -131,7 +131,7 @@ class ScanReportStatusMapperTest extends TestCase
             ],
         ]);
 
-        $this->assertSame('2 DKIM selectors discovered', $card['status']);
+        $this->assertSame('A valid DKIM key is published for a tested selector (historical scan).', $card['status']);
         $this->assertStringContainsString('published DNS keys only', $card['explanation']);
         $this->assertStringNotContainsString('signing verified', strtolower($card['explanation']));
         $this->assertStringNotContainsString('alignment verified', strtolower($card['explanation']));

@@ -6,18 +6,31 @@ use App\Models\User;
 use App\Models\Domain;
 use App\Models\Schedule;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\Concerns\CreatesPlanUsers;
 use Tests\TestCase;
 
 class AutomationFlowTest extends TestCase
 {
+    use CreatesPlanUsers;
     use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->setUpPlanTables();
+    }
+
+    private function premiumUser(): User
+    {
+        return $this->createPremiumUser();
+    }
 
     /**
      * Test that automations index page loads.
      */
     public function test_automations_index_page_loads(): void
     {
-        $user = User::factory()->create();
+        $user = $this->premiumUser();
 
         $response = $this->actingAs($user)->get(route('automations.index'));
 
@@ -30,7 +43,7 @@ class AutomationFlowTest extends TestCase
      */
     public function test_automation_can_be_created(): void
     {
-        $user = User::factory()->create();
+        $user = $this->premiumUser();
         $domain = Domain::factory()->create(['user_id' => $user->id]);
 
         $response = $this->actingAs($user)
@@ -56,7 +69,7 @@ class AutomationFlowTest extends TestCase
      */
     public function test_automation_can_be_updated(): void
     {
-        $user = User::factory()->create();
+        $user = $this->premiumUser();
         $domain = Domain::factory()->create(['user_id' => $user->id]);
         $schedule = Schedule::factory()->create([
             'user_id' => $user->id,
@@ -87,7 +100,7 @@ class AutomationFlowTest extends TestCase
      */
     public function test_automation_can_be_paused(): void
     {
-        $user = User::factory()->create();
+        $user = $this->premiumUser();
         $domain = Domain::factory()->create(['user_id' => $user->id]);
         $schedule = Schedule::factory()->create([
             'user_id' => $user->id,
@@ -112,7 +125,7 @@ class AutomationFlowTest extends TestCase
      */
     public function test_automation_can_be_resumed(): void
     {
-        $user = User::factory()->create();
+        $user = $this->premiumUser();
         $domain = Domain::factory()->create(['user_id' => $user->id]);
         $schedule = Schedule::factory()->create([
             'user_id' => $user->id,
@@ -137,7 +150,7 @@ class AutomationFlowTest extends TestCase
      */
     public function test_automation_can_be_deleted(): void
     {
-        $user = User::factory()->create();
+        $user = $this->premiumUser();
         $domain = Domain::factory()->create(['user_id' => $user->id, 'domain' => 'example.com']);
         $schedule = Schedule::factory()->create([
             'user_id' => $user->id,
@@ -160,8 +173,8 @@ class AutomationFlowTest extends TestCase
      */
     public function test_users_cannot_access_other_users_automations(): void
     {
-        $user1 = User::factory()->create();
-        $user2 = User::factory()->create();
+        $user1 = $this->createPremiumUser();
+        $user2 = $this->createPremiumUser();
         $domain = Domain::factory()->create(['user_id' => $user1->id]);
         $schedule = Schedule::factory()->create([
             'user_id' => $user1->id,
@@ -179,7 +192,7 @@ class AutomationFlowTest extends TestCase
      */
     public function test_automation_run_now_dispatches_job(): void
     {
-        $user = User::factory()->create();
+        $user = $this->premiumUser();
         $domain = Domain::factory()->create(['user_id' => $user->id]);
         $schedule = Schedule::factory()->create([
             'user_id' => $user->id,
@@ -191,6 +204,6 @@ class AutomationFlowTest extends TestCase
             ->post(route('automations.run-now', $schedule));
 
         $response->assertRedirect(route('automations.index'));
-        $response->assertSessionHas('success', 'Automation executed. Check Reports for results.');
+        $response->assertSessionHas('success', 'Automation executed successfully. Check Reports for results.');
     }
 }

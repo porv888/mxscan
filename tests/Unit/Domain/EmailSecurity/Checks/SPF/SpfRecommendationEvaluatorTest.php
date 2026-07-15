@@ -91,4 +91,27 @@ class SpfRecommendationEvaluatorTest extends TestCase
 
         $this->assertFalse(collect($items)->contains(fn ($item) => $item['semantic_key'] === 'review_weak_terminal_policy'));
     }
+
+    public function test_partially_evaluated_macro_prefers_specific_recommendation_only(): void
+    {
+        $spfInfo = json_decode(
+            (string) file_get_contents(base_path('tests/Fixtures/EmailSecurity/inputs/spf-salesforce-partial.json')),
+            true,
+            512,
+            JSON_THROW_ON_ERROR,
+        );
+        $mapper = new ScanReportStatusMapper();
+        $card = $mapper->mapSpf(['status' => 'found', 'data' => $spfInfo['record']], $spfInfo);
+
+        $items = (new SpfRecommendationEvaluator())->evaluate(
+            ['status' => 'found', 'data' => $spfInfo['record']],
+            $card,
+            $spfInfo,
+        );
+
+        $semanticKeys = array_column($items, 'semantic_key');
+        $this->assertSame(['review_unsupported_spf_macro'], $semanticKeys);
+        $this->assertFalse(in_array('review_weak_terminal_policy', $semanticKeys, true));
+        $this->assertFalse(in_array('fix_invalid_spf', $semanticKeys, true));
+    }
 }

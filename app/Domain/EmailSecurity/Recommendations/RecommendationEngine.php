@@ -11,6 +11,7 @@ final class RecommendationEngine implements RecommendationEngineInterface
 {
     public function __construct(
         private ScanRecommendationService $recommendationService,
+        private RecommendationCollectionGuard $collectionGuard,
     ) {
     }
 
@@ -19,7 +20,9 @@ final class RecommendationEngine implements RecommendationEngineInterface
         $resultJson = $scanResult->toArray();
         $records = $resultJson['dns']['records'] ?? null;
 
-        $items = $this->recommendationService->build($domain, $resultJson, $records);
+        $items = $this->collectionGuard->deduplicate(
+            $this->recommendationService->build($domain, $resultJson, $records)
+        );
         $allClear = $this->recommendationService->evaluateAllClear($resultJson, $records);
 
         return new RecommendationListDTO(items: $items, allClear: $allClear);

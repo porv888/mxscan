@@ -2,7 +2,12 @@
 
 namespace App\Services\Dmarc;
 
+use App\Domain\EmailSecurity\Checks\DMARC\Discovery\DmarcRecordDiscovery;
+use App\Domain\EmailSecurity\Checks\DMARC\Parsing\DmarcParser;
+use App\Domain\EmailSecurity\Checks\DMARC\Support\DmarcAnalysisReader;
 use App\Models\Domain;
+use App\Models\Scan;
+use App\Services\Dmarc\DTO\DmarcStatusContext;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -31,8 +36,9 @@ class DmarcStatusService
     public const DEFAULT_STALE_THRESHOLD_DAYS = 7;
 
     public function __construct(
-        protected DmarcRuaClassifier $ruaClassifier = new DmarcRuaClassifier(),
-        protected DmarcDnsLookup $dnsLookup = new DmarcDnsLookup()
+        protected DmarcRuaClassifier $ruaClassifier,
+        protected DmarcRecordDiscovery $recordDiscovery,
+        protected DmarcParser $dmarcParser,
     ) {
     }
 
@@ -162,8 +168,12 @@ class DmarcStatusService
      */
     protected function hasDmarcRecord(Domain $domain): bool
     {
-        $dmarcRecord = $this->getDmarcRecord($domain);
-        return !empty($dmarcRecord);
+        $context = $this->resolveDmarcContext($domain);
+        if ($context->analysis !== null) {
+            return ($context->analysis['protocol_status'] ?? 'none') !== 'none';
+        }
+
+        return $context->record !== null && $context->record !== '';
     }
 
     /**
@@ -171,17 +181,16 @@ class DmarcStatusService
      */
     protected function hasRuaInDmarc(Domain $domain): bool
     {
-        $dmarcRecord = $this->getDmarcRecord($domain);
-        if (!$dmarcRecord) {
-            return false;
+        $context = $this->resolveDmarcContext($domain);
+        if ($context->analysis !== null) {
+            $reporting = is_array($context->analysis['aggregate_reporting'] ?? null)
+                ? $context->analysis['aggregate_reporting']
+                : [];
+
+            return ($reporting['configured'] ?? false) === true;
         }
 
-        $parts = $this->ruaClassifier->parseDmarcTags($dmarcRecord);
-        if (!isset($parts['rua']) || trim($parts['rua']) === '') {
-            return false;
-        }
-
-        return count($this->ruaClassifier->parseRuaRecipients($parts['rua'])) > 0;
+        return false;
     }
 
     /**
@@ -207,8 +216,13 @@ class DmarcStatusService
      */
     protected function classifyDomainRua(Domain $domain): array
     {
-        $dmarcRecord = $this->getDmarcRecord($domain);
-        if (!$dmarcRecord) {
+        $context = $this->resolveDmarcContext($domain);
+
+        if ($context->analysis !== null) {
+            return $this->ruaClassifier->classifyFromAnalysis($context->analysis, $domain->dmarc_rua_email);
+        }
+
+        if ($context->record === null || $context->record === '') {
             return [
                 'rua_link_state' => self::RUA_LINK_NOT_CONNECTED,
                 'has_any_mxscan_rua' => false,
@@ -219,47 +233,86 @@ class DmarcStatusService
             ];
         }
 
-        return $this->ruaClassifier->classify($dmarcRecord, $domain->dmarc_rua_email);
+        return $this->ruaClassifier->classify($context->record, $domain->dmarc_rua_email);
+    }
+
+    protected function resolveDmarcContext(Domain $domain): DmarcStatusContext
+    {
+        if ($domain->dmarc_dns_record && $domain->dmarc_rua_verified_at) {
+            $shim = DmarcAnalysisReader::fromLegacyDnsRecord(
+                ['status' => 'found', 'data' => $domain->dmarc_dns_record],
+                null,
+            );
+
+            return new DmarcStatusContext(
+                analysis: $shim,
+                record: $domain->dmarc_dns_record,
+                source: 'verified_dns',
+                scan: null,
+            );
+        }
+
+        $latestScan = $this->latestCompletedScan($domain);
+        if (!$latestScan) {
+            return new DmarcStatusContext(null, null, 'none', null);
+        }
+
+        $resultJson = is_array($latestScan->result_json) ? $latestScan->result_json : [];
+        $dmarcInfo = is_array($resultJson['dmarc'] ?? null) ? $resultJson['dmarc'] : null;
+        $analysis = DmarcAnalysisReader::analysis($dmarcInfo);
+
+        if ($analysis !== null) {
+            return new DmarcStatusContext(
+                analysis: $analysis,
+                record: is_string($analysis['record'] ?? null) ? $analysis['record'] : null,
+                source: ($analysis['version'] ?? null) === 'dmarc-native-v1' ? 'native_analysis' : 'legacy_shim',
+                scan: $latestScan,
+            );
+        }
+
+        $dnsRecord = $resultJson['dns']['records']['DMARC'] ?? null;
+        $shim = DmarcAnalysisReader::fromLegacyDnsRecord(
+            is_array($dnsRecord) ? $dnsRecord : null,
+            $dmarcInfo,
+        );
+
+        $factsJson = is_array($latestScan->facts_json) ? $latestScan->facts_json : [];
+        $record = is_string($shim['record'] ?? null) ? $shim['record'] : null;
+        if (($record === null || $record === '') && is_string($factsJson['dmarc'] ?? null)) {
+            $record = $factsJson['dmarc'];
+            $shim = DmarcAnalysisReader::fromLegacyDnsRecord(
+                ['status' => 'found', 'data' => $record],
+                $dmarcInfo,
+            );
+        }
+
+        return new DmarcStatusContext(
+            analysis: $shim,
+            record: $record,
+            source: 'legacy_shim',
+            scan: $latestScan,
+        );
+    }
+
+    protected function getDmarcAnalysis(Domain $domain): ?array
+    {
+        return $this->resolveDmarcContext($domain)->analysis;
     }
 
     /**
      * Get the DMARC record used for status classification.
-     *
-     * Prefers the last verified live DNS snapshot after an explicit Check DNS.
-     * Falls back to the latest finished/completed scan.
      */
     protected function getDmarcRecord(Domain $domain): ?string
     {
-        if ($domain->dmarc_dns_record && $domain->dmarc_rua_verified_at) {
-            return $domain->dmarc_dns_record;
-        }
+        $context = $this->resolveDmarcContext($domain);
 
-        $latestScan = $this->latestCompletedScan($domain);
-
-        if (!$latestScan) {
-            return null;
-        }
-
-        $factsJson = $latestScan->facts_json;
-        if (is_array($factsJson) && isset($factsJson['dmarc']) && !empty($factsJson['dmarc'])) {
-            return $factsJson['dmarc'];
-        }
-
-        $resultJson = $latestScan->result_json;
-        if (is_array($resultJson)) {
-            $dmarcData = $resultJson['dns']['records']['DMARC'] ?? $resultJson['DMARC'] ?? null;
-            if ($dmarcData && isset($dmarcData['data']) && ($dmarcData['status'] ?? null) === 'found') {
-                return $dmarcData['data'];
-            }
-        }
-
-        return null;
+        return $context->record;
     }
 
     /**
      * Latest scan with a completed status (canonical: finished; legacy: completed).
      */
-    protected function latestCompletedScan(Domain $domain)
+    protected function latestCompletedScan(Domain $domain): ?Scan
     {
         return $domain->scans()
             ->whereIn('status', ['finished', 'completed'])
@@ -414,9 +467,9 @@ class DmarcStatusService
         $expectedCanonical = strtolower(trim($domain->dmarc_rua_email));
 
         try {
-            $lookup = $this->dnsLookup->lookupForDomain($domain);
-            $dmarcRecord = $lookup['dmarc_record'];
-            $hostname = $lookup['hostname'];
+            $discovery = $this->recordDiscovery->discoverAtHostname($domain->domain, $hostname, null);
+            $dmarcRecord = $discovery->record;
+            $hostname = $discovery->hostname;
 
             $hasDmarc = !empty($dmarcRecord);
             $hasRua = false;
@@ -428,7 +481,7 @@ class DmarcStatusService
             $normalizedEmails = [];
 
             if ($hasDmarc) {
-                $parts = $this->ruaClassifier->parseDmarcTags($dmarcRecord);
+                $parts = $this->parseLiveDnsRecord($dmarcRecord);
                 $parsedRua = $parts['rua'] ?? null;
                 $hasRua = isset($parts['rua'])
                     && count($this->ruaClassifier->parseRuaRecipients($parts['rua'])) > 0;
@@ -458,17 +511,16 @@ class DmarcStatusService
 
             $dnsDiagnostics = [
                 'hostname' => $hostname,
-                'checked_at' => $lookup['checked_at']->toIso8601String(),
+                'checked_at' => now()->toIso8601String(),
                 'dmarc_record' => $dmarcRecord,
                 'detected_rua_recipients' => $normalizedEmails,
                 'expected_rua_recipient' => $expectedCanonical,
-                'resolver_source' => $lookup['resolver_source'],
+                'resolver_source' => 'dmarc_record_discovery',
             ];
 
             Log::debug('dmarc_rua_dns_check', [
                 'queried_hostname' => $hostname,
-                'raw_dns_txt_response' => $lookup['raw_records'],
-                'reconstructed_txt_records' => $lookup['reconstructed_txt'],
+                'txt_evidence' => $discovery->txtEvidence,
                 'selected_dmarc_record' => $dmarcRecord,
                 'parsed_rua_value' => $parsedRua,
                 'normalized_rua_recipients' => $normalizedEmails,
@@ -480,8 +532,8 @@ class DmarcStatusService
                     'has_canonical_mxscan_rua' => $hasCanonicalMxscanRua,
                     'rua_link_state' => $ruaLinkState,
                 ],
-                'resolver_source' => $lookup['resolver_source'],
-                'checked_at' => $lookup['checked_at']->toIso8601String(),
+                'resolver_source' => 'dmarc_record_discovery',
+                'checked_at' => now()->toIso8601String(),
             ]);
 
             $message = match (true) {
@@ -520,7 +572,7 @@ class DmarcStatusService
                 'dmarc_record' => null,
                 'detected_rua_recipients' => [],
                 'expected_rua_recipient' => $expectedCanonical,
-                'resolver_source' => DmarcDnsLookup::RESOLVER_SOURCE,
+                'resolver_source' => 'dmarc_record_discovery',
             ];
 
             return [
@@ -564,11 +616,29 @@ class DmarcStatusService
     }
 
     /**
-     * Parse a DMARC record into its components.
+     * Parse a DMARC record into its components (live DNS / record rewrite only).
+     *
+     * @internal
+     *
+     * @return array<string, string>
      */
     public function parseDmarcRecord(string $record): array
     {
-        return $this->ruaClassifier->parseDmarcTags($record);
+        return $this->parseLiveDnsRecord($record);
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    protected function parseLiveDnsRecord(string $record): array
+    {
+        $parsed = $this->dmarcParser->parse($record);
+        $tags = [];
+        foreach ($parsed->tags as $key => $tag) {
+            $tags[$key] = $tag['normalized'];
+        }
+
+        return $tags;
     }
 
     /**

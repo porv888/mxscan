@@ -8,6 +8,7 @@ use App\Domain\EmailSecurity\Support\ScanPayloadBuilder;
 use App\Models\Domain;
 use App\Models\Scan;
 use App\Services\Expiry\ExpiryCoordinator;
+use App\Services\Expiry\Providers\ScanCertificateSslProvider;
 use App\Services\ScanReport\ScanFinalizer;
 use Exception;
 use Illuminate\Support\Arr;
@@ -40,13 +41,17 @@ class ScanRunner
             'dns' => Arr::get($options, 'dns', true),
             'spf' => Arr::get($options, 'spf', true),
             'blacklist' => Arr::get($options, 'blacklist', true),
+            'dkim' => Arr::get($options, 'dkim', false),
             'monitoring' => Arr::get($options, 'monitoring', true),
+            'dkim_selector' => Arr::get($options, 'dkim_selector'),
+            'dkim_signature' => Arr::get($options, 'dkim_signature'),
         ]);
 
         $scanType = ScanPayloadBuilder::determineScanType([
             'dns' => $scanOptions->dns,
             'spf' => $scanOptions->spf,
             'blacklist' => $scanOptions->blacklist,
+            'dkim' => $scanOptions->dkim,
         ]);
 
         $scan = Scan::create([
@@ -133,7 +138,12 @@ class ScanRunner
     ): void {
         try {
             $domainExpiryResult = $this->expiryCoordinator->detectDomainExpiry($domain, true);
-            $sslExpiryResult = $this->expiryCoordinator->detectSslExpiry($domain, true);
+            $sslExpiryResult = (new ScanCertificateSslProvider())->detectFromScanSection(
+                $results['certificates'] ?? null,
+            );
+            if (!$sslExpiryResult->isValid()) {
+                $sslExpiryResult = null;
+            }
             $this->expiryCoordinator->updateDomain($domain, $domainExpiryResult, $sslExpiryResult);
         } catch (Exception $e) {
             Log::warning('Fast-path expiry detection failed', [

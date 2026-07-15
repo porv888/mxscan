@@ -20,6 +20,7 @@ final class JsonParityNormalizer
             'collectedAt',
             'executedAt',
             'correlationId',
+            'resolver_diagnostics',
         ];
 
         return self::stripRecursive($payload, $stripKeys);

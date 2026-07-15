@@ -2,99 +2,46 @@
 
 namespace App\Console\Commands;
 
-use Illuminate\Console\Command;
-use App\Services\BlacklistChecker;
+use App\Domain\EmailSecurity\Checks\Blacklist\BlacklistScanOrchestrator;
+use App\Domain\EmailSecurity\Checks\Blacklist\Support\BlacklistAnalysisReader;
+use App\Domain\EmailSecurity\DTO\CheckContextDTO;
+use App\Domain\EmailSecurity\DTO\ScanOptionsDTO;
 use App\Models\Scan;
-use App\Models\Domain;
-use App\Models\User;
+use Illuminate\Console\Command;
 
 class TestBlacklistChecker extends Command
 {
-    /**
-     * The name and signature of the console command.
-     */
-    protected $signature = 'blacklist:test {domain} {--user-id=1}';
+    protected $signature = 'blacklist:test {domain}';
+    protected $description = 'Test native blacklist checking for a domain';
 
-    /**
-     * The console command description.
-     */
-    protected $description = 'Test the blacklist checker with a specific domain';
-
-    /**
-     * Execute the console command.
-     */
-    public function handle()
+    public function handle(BlacklistScanOrchestrator $orchestrator): int
     {
-        $domainName = $this->argument('domain');
-        $userId = $this->option('user-id');
-
-        $this->info("Testing blacklist checker for domain: {$domainName}");
-
-        // Create a test scan
-        $user = User::find($userId);
-        if (!$user) {
-            $this->error("User with ID {$userId} not found");
-            return 1;
-        }
-
-        // Find or create domain
-        $domain = Domain::firstOrCreate([
-            'domain' => $domainName,
-            'user_id' => $userId,
-        ]);
-
-        // Create a test scan
+        $domainName = (string) $this->argument('domain');
         $scan = Scan::create([
-            'domain_id' => $domain->id,
-            'user_id' => $userId,
             'status' => 'running',
+            'progress_pct' => 0,
         ]);
 
-        $this->info("Created test scan: {$scan->id}");
-
-        // Run blacklist check
-        $checker = new BlacklistChecker();
-        
-        $this->info("Checking blacklist status...");
-        $results = $checker->checkDomain($scan, $domainName);
-        
-        $this->info("Blacklist check completed. Results:");
-        
-        // Display results
-        $summary = $checker->getScanSummary($scan);
-        
-        $this->table(
-            ['Metric', 'Value'],
-            [
-                ['Total Checks', $summary['total_checks']],
-                ['Listed Count', $summary['listed_count']],
-                ['OK Count', $summary['ok_count']],
-                ['Unique IPs', $summary['unique_ips']],
-                ['Providers Checked', $summary['providers_checked']],
-                ['Is Clean', $summary['is_clean'] ? 'Yes' : 'No'],
-            ]
+        $context = new CheckContextDTO(
+            domainName: $domainName,
+            domainId: null,
+            scanId: $scan->id,
+            scanType: 'blacklist',
+            enabledServices: ['dns' => false, 'spf' => false, 'blacklist' => true],
+            environment: app()->environment(),
+            correlationId: (string) $scan->id,
+            executedAt: now()->toIso8601String(),
         );
 
-        if ($results) {
-            $this->info("\nDetailed Results:");
-            
-            foreach ($results as $result) {
-                $status = $result->isListed() ? '❌ LISTED' : '✅ OK';
-                $this->line("{$result->ip_address} - {$result->provider}: {$status}");
-                
-                if ($result->isListed() && $result->message) {
-                    $this->line("  Reason: {$result->message}");
-                }
-                if ($result->removal_url) {
-                    $this->line("  Removal: {$result->removal_url}");
-                }
-            }
-        }
+        $execution = $orchestrator->run($scan, $context);
+        $payload = $execution['payload'];
+        $facts = BlacklistAnalysisReader::facts($payload);
 
-        // Clean up test scan
-        $scan->delete();
-        $this->info("\nTest scan cleaned up.");
+        $this->info('Reputation: ' . ($facts['blacklist_reputation_status'] ?? 'unknown'));
+        $this->info('Usable results: ' . ($facts['blacklist_usable_results'] ?? 0));
+        $this->info('Listed results: ' . ($facts['blacklist_listed_results'] ?? 0));
+        $this->line(json_encode($payload['analysis'] ?? [], JSON_PRETTY_PRINT));
 
-        return 0;
+        return self::SUCCESS;
     }
 }

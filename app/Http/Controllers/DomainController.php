@@ -14,6 +14,7 @@ use App\Services\Dmarc\DmarcStatusService;
 use App\Services\Entitlement\EntitlementFeature;
 use App\Services\Entitlement\EntitlementService;
 use App\Services\Expiry\ExpiryCoordinator;
+use App\Services\Expiry\Providers\ScanCertificateSslProvider;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
@@ -357,10 +358,26 @@ class DomainController extends Controller
         $this->authorize('update', $domain);
 
         try {
-            // Run fast-path detection
             $domainResult = $coordinator->detectDomainExpiry($domain, true);
-            $sslResult = $coordinator->detectSslExpiry($domain, true);
-            
+
+            $sslResult = null;
+            $latestScan = $domain->scans()->where('status', 'finished')->latest('finished_at')->first();
+            if ($latestScan !== null) {
+                $resultJson = $latestScan->result_json ?? [];
+                if (is_array($resultJson)) {
+                    $sslResult = (new ScanCertificateSslProvider())->detectFromScanSection(
+                        is_array($resultJson['certificates'] ?? null) ? $resultJson['certificates'] : null,
+                    );
+                    if (!$sslResult->isValid()) {
+                        $sslResult = null;
+                    }
+                }
+            }
+
+            if ($sslResult === null) {
+                $sslResult = $coordinator->detectSslExpiry($domain, false);
+            }
+
             $coordinator->updateDomain($domain, $domainResult, $sslResult);
             
             $messages = [];

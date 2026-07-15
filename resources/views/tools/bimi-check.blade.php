@@ -10,7 +10,7 @@
         </a>
         <div>
             <h1 class="text-2xl font-bold text-gray-900">BIMI Record Check</h1>
-            <p class="text-gray-600 mt-1">Validate your BIMI DNS record and SVG logo for inbox brand display</p>
+            <p class="text-gray-600 mt-1">Analyze BIMI DNS configuration and logo readiness for participating mailbox providers</p>
         </div>
     </div>
 
@@ -157,7 +157,7 @@
                             <li>Host the SVG on HTTPS (e.g., https://example.com/logo.svg)</li>
                             <li>Add a TXT record at <code class="bg-blue-100 px-1 rounded">default._bimi.{{ $results['domain'] }}</code></li>
                             <li>Set the value to: <code class="bg-blue-100 px-1 rounded">v=BIMI1; l=https://example.com/logo.svg;</code></li>
-                            <li>Optional: Get a VMC certificate for verified display in Gmail</li>
+                            <li>Optional: Add a Mark Certificate if a provider profile requires verified authority evidence</li>
                         </ol>
                     </div>
                 @endif

@@ -9,7 +9,7 @@ class CompatibilityAliasTest extends TestCase
 {
     public function test_scan_recommendation_service_alias_extends_domain_implementation(): void
     {
-        $legacy = new \App\Services\ScanReport\ScanRecommendationService();
+        $legacy = app(\App\Services\ScanReport\ScanRecommendationService::class);
         $parent = (new ReflectionClass($legacy))->getParentClass();
 
         $this->assertNotNull($parent);

@@ -60,8 +60,8 @@ class SpfCheckIntegrationTest extends TestCase
             rootTxtRecords: [],
         );
 
-        $domain = new Domain(['domain' => 'missing.test']);
-        $scan = new Scan(['id' => '00000000-0000-4000-8000-000000000099']);
+        $domain = Domain::factory()->create(['domain' => 'missing.test']);
+        $scan = Scan::factory()->create(['domain_id' => $domain->id, 'user_id' => $domain->user_id]);
         $context = CheckContextDTO::fromExecution($domain, $scan, ScanOptionsDTO::fromArray([]));
 
         $execution = app(SpfCheck::class)->run($context, $dns);

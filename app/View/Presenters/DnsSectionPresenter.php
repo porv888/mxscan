@@ -2,7 +2,13 @@
 
 namespace App\View\Presenters;
 
+use App\Domain\EmailSecurity\Checks\Bimi\BimiAnalysisReader;
 use App\Models\Domain;
+use App\Models\Scan;
+use App\Domain\EmailSecurity\Checks\Mx\Support\MxAnalysisReader;
+use App\Domain\EmailSecurity\Checks\Mx\MxRiskStatus;
+use App\Domain\EmailSecurity\Checks\Mx\MxServiceMode;
+use App\Domain\EmailSecurity\Checks\Mx\MxStates;
 use App\Services\Dmarc\DmarcStatusService;
 use App\Services\ScanReport\ScanReportStatusMapper;
 use Illuminate\Support\Str;
@@ -65,9 +71,9 @@ class DnsSectionPresenter
         ],
         'bimi' => [
             'title' => 'BIMI',
-            'text' => 'BIMI displays your brand logo in supporting inboxes.',
-            'impact' => 'Optional — does not affect email authentication or deliverability score.',
-            'fix' => 'Publish a BIMI record with a verified logo.',
+            'text' => 'BIMI publishes brand indicator configuration for participating mailbox providers.',
+            'impact' => 'Optional readiness check — does not affect Email Security Score. Logo display remains subject to mailbox-provider policy.',
+            'fix' => 'Publish a BIMI record with a valid SVG Tiny P/S logo.',
         ],
     ];
 
@@ -75,6 +81,7 @@ class DnsSectionPresenter
      * @param array<string, mixed> $records
      * @param array<string, mixed> $statusCards
      * @param array<string, mixed>|null $dmarcStatus
+     * @param array<string, mixed>|null $mxInfo
      */
     public function __construct(
         protected array $records,
@@ -85,6 +92,9 @@ class DnsSectionPresenter
         protected ?string $dmarcPolicy = null,
         protected ?bool $dmarcAligned = null,
         protected int $spfMax = 10,
+        protected ?array $mxInfo = null,
+        protected ?array $bimiInfo = null,
+        protected ?Scan $scan = null,
     ) {
     }
 
@@ -96,6 +106,13 @@ class DnsSectionPresenter
     public function allGreen(): bool
     {
         foreach (['MX', 'SPF', 'DKIM', 'DMARC', 'TLS-RPT', 'MTA-STS'] as $key) {
+            if ($key === 'MX') {
+                if (!in_array($this->statusCards['mx']['state'] ?? '', [ScanReportStatusMapper::PASS, ScanReportStatusMapper::WARNING], true)) {
+                    return false;
+                }
+                continue;
+            }
+
             if (($this->records[$key]['status'] ?? null) !== 'found') {
                 return false;
             }
@@ -236,9 +253,9 @@ class DnsSectionPresenter
             'dmarc' => ($this->records['DMARC']['status'] ?? '') !== 'found'
                 || ($this->statusCards['dmarc']['state'] ?? '') === ScanReportStatusMapper::WARNING,
             'dmarc_reports' => $this->dmarcReportsNeedsAttention(),
-            'mx' => ($this->records['MX']['status'] ?? '') !== 'found',
+            'mx' => !in_array($this->statusCards['mx']['state'] ?? '', [ScanReportStatusMapper::PASS, ScanReportStatusMapper::WARNING], true),
             'tlsrpt' => ($this->records['TLS-RPT']['status'] ?? '') !== 'found',
-            'mtasts' => ($this->records['MTA-STS']['status'] ?? '') !== 'found',
+            'mtasts' => !in_array($this->statusCards['mtasts']['state'] ?? '', [ScanReportStatusMapper::PASS], true),
             'bimi' => ($this->records['BIMI']['status'] ?? '') === 'partial',
             default => false,
         };
@@ -342,36 +359,33 @@ class DnsSectionPresenter
     protected function dkimSummaryTile(): array
     {
         $card = $this->statusCards['dkim'] ?? [];
-        $found = ($this->records['DKIM']['status'] ?? '') === 'found' && !empty($this->records['DKIM']['data']);
+        $found = in_array($card['state'] ?? '', [ScanReportStatusMapper::PASS, ScanReportStatusMapper::WARNING], true)
+            && (($card['count'] ?? 0) >= 1);
         $style = $this->mapState($card['state'] ?? null, $found);
         $detailId = 'dns-dkim-detail';
 
         if (!$found) {
-            $checked = count(config('dkim.selectors', []));
-
             return [
                 'id' => 'dns-dkim',
                 'label' => 'DKIM DNS',
-                'badgeVariant' => 'warning',
-                'badgeLabel' => 'Missing',
-                'severity' => 'warning',
-                'accent' => $this->severityAccent('warning'),
-                'summary' => "No DKIM selectors discovered (checked {$checked} common selectors).",
+                'badgeVariant' => $style['variant'],
+                'badgeLabel' => $card['state'] === ScanReportStatusMapper::UNKNOWN ? 'Unknown' : 'Missing',
+                'severity' => $style['severity'],
+                'accent' => $this->severityAccent($style['severity']),
+                'summary' => $card['status'] ?? 'No DKIM key was found for the tested selectors.',
                 'primaryAction' => ['label' => 'Add DKIM', 'href' => '#fix-pack'],
                 'detailId' => $detailId,
             ];
         }
 
-        $count = (int) ($card['count'] ?? count($this->records['DKIM']['data']));
-
         return [
             'id' => 'dns-dkim',
             'label' => 'DKIM DNS',
-            'badgeVariant' => 'success',
-            'badgeLabel' => 'Configured',
-            'severity' => 'success',
-            'accent' => $this->severityAccent('success'),
-            'summary' => $count . ' selector' . ($count === 1 ? '' : 's') . ' discovered. This confirms DNS keys only.',
+            'badgeVariant' => $style['variant'],
+            'badgeLabel' => $card['state'] === ScanReportStatusMapper::WARNING ? 'Warning' : 'Configured',
+            'severity' => $style['severity'],
+            'accent' => $this->severityAccent($style['severity']),
+            'summary' => ($card['status'] ?? 'A valid DKIM key is published for a tested selector.') . ' This confirms DNS keys only.',
             'primaryAction' => null,
             'detailId' => $detailId,
         ];
@@ -499,35 +513,20 @@ class DnsSectionPresenter
 
     protected function mxSummaryTile(): array
     {
-        $data = $this->records['MX'] ?? null;
-        $found = ($data['status'] ?? '') === 'found';
+        $card = $this->statusCards['mx'] ?? [];
+        $analysis = MxAnalysisReader::analysis($this->mxInfo)
+            ?? MxAnalysisReader::fromLegacyDnsRecord($this->records['MX'] ?? null, $this->mxInfo);
+        $style = $this->mapState($card['state'] ?? null, ($this->records['MX']['status'] ?? '') === 'found');
         $detailId = 'dns-mx-detail';
-        $count = is_array($data['data'] ?? null) ? count($data['data']) : 0;
-
-        if (!$found) {
-            return [
-                'id' => 'dns-mx',
-                'label' => 'MX',
-                'badgeVariant' => 'danger',
-                'badgeLabel' => 'Missing',
-                'severity' => 'danger',
-                'accent' => $this->severityAccent('danger'),
-                'summary' => 'No MX records found. Mail delivery to this domain may fail.',
-                'primaryAction' => null,
-                'detailId' => $detailId,
-            ];
-        }
-
-        $label = $count === 1 ? '1 MX record found' : $count . ' MX records found';
 
         return [
             'id' => 'dns-mx',
             'label' => 'MX',
-            'badgeVariant' => 'success',
-            'badgeLabel' => 'Configured',
-            'severity' => 'success',
-            'accent' => $this->severityAccent('success'),
-            'summary' => $label . '.',
+            'badgeVariant' => $style['variant'],
+            'badgeLabel' => $card['status'] ?? 'Unknown',
+            'severity' => $style['severity'],
+            'accent' => $this->severityAccent($style['severity']),
+            'summary' => $analysis['summary'] ?? ($card['status'] ?? 'MX configuration could not be evaluated.'),
             'primaryAction' => null,
             'detailId' => $detailId,
         ];
@@ -535,30 +534,48 @@ class DnsSectionPresenter
 
     protected function tlsRptSummaryTile(): array
     {
-        return $this->simplePresenceTile(
-            'TLS-RPT',
-            'dns-tlsrpt',
-            'dns-tlsrpt-detail',
-            'TLS-RPT',
-            $this->records['TLS-RPT'] ?? null,
-            $this->statusCards['tlsrpt'] ?? [],
-            'No TLS-RPT record found. Mail delivery security problems may go unnoticed.',
-            'Add policy'
-        );
+        $card = $this->statusCards['tlsrpt'] ?? [];
+        $record = $this->records['TLS-RPT'] ?? null;
+        $style = $this->mapState($card['state'] ?? null, ($record['status'] ?? '') === 'found');
+
+        return [
+            'id' => 'dns-tlsrpt',
+            'label' => 'TLS-RPT',
+            'badgeVariant' => $style['variant'],
+            'badgeLabel' => $card['status'] ?? 'Not set up',
+            'severity' => $style['severity'],
+            'accent' => $this->severityAccent($style['severity']),
+            'summary' => ($record['status'] ?? '') === 'found'
+                ? ($card['status'] ?? 'TLS reporting is configured.')
+                : 'No TLS-RPT record found. Mail delivery security problems may go unnoticed.',
+            'primaryAction' => ($card['state'] ?? '') === ScanReportStatusMapper::PASS
+                ? null
+                : ['label' => 'Add policy', 'href' => '#fix-pack'],
+            'detailId' => 'dns-tlsrpt-detail',
+        ];
     }
 
     protected function mtaStsSummaryTile(): array
     {
-        return $this->simplePresenceTile(
-            'MTA-STS',
-            'dns-mtasts',
-            'dns-mtasts-detail',
-            'MTA-STS',
-            $this->records['MTA-STS'] ?? null,
-            $this->statusCards['mtasts'] ?? [],
-            'No MTA-STS policy found. Secure mail delivery is less protected.',
-            'Add policy'
-        );
+        $card = $this->statusCards['mtasts'] ?? [];
+        $record = $this->records['MTA-STS'] ?? null;
+        $style = $this->mapState($card['state'] ?? null, ($record['status'] ?? '') === 'found');
+
+        return [
+            'id' => 'dns-mtasts',
+            'label' => 'MTA-STS',
+            'badgeVariant' => $style['variant'],
+            'badgeLabel' => $card['status'] ?? 'Not set up',
+            'severity' => $style['severity'],
+            'accent' => $this->severityAccent($style['severity']),
+            'summary' => ($record['status'] ?? '') === 'found'
+                ? ($card['status'] ?? 'MTA-STS configured.')
+                : 'No MTA-STS policy found. Secure mail delivery is less protected.',
+            'primaryAction' => ($card['state'] ?? '') === ScanReportStatusMapper::PASS
+                ? null
+                : ['label' => 'Add policy', 'href' => '#fix-pack'],
+            'detailId' => 'dns-mtasts-detail',
+        ];
     }
 
     /**
@@ -666,17 +683,20 @@ class DnsSectionPresenter
     {
         $data = $this->records['DKIM'] ?? null;
         $card = $this->statusCards['dkim'] ?? [];
-        $found = ($data['status'] ?? '') === 'found' && !empty($data['data']);
+        $found = in_array($card['state'] ?? '', [ScanReportStatusMapper::PASS, ScanReportStatusMapper::WARNING], true)
+            && (($card['count'] ?? 0) >= 1);
         $id = 'dns-dkim-detail';
         $selectors = [];
 
-        if ($found && is_array($data['data'])) {
+        if ($found && is_array($data['data'] ?? null)) {
             foreach ($data['data'] as $row) {
                 $selectors[] = [
                     'selector' => $row['selector'] ?? 'unknown',
                     'host' => ($row['selector'] ?? 'unknown') . '._domainkey.' . $this->domainName(),
                     'record' => $row['record'] ?? '',
                     'preview' => Str::limit((string) ($row['record'] ?? ''), 80),
+                    'key_type' => $row['key_type'] ?? null,
+                    'key_bits' => $row['key_bits'] ?? null,
                 ];
             }
         }
@@ -687,11 +707,11 @@ class DnsSectionPresenter
             'label' => 'DKIM DNS',
             'helpKey' => 'dkim',
             'badgeVariant' => $found ? 'success' : 'warning',
-            'badgeLabel' => $found ? 'Configured' : 'Missing',
+            'badgeLabel' => $found ? 'Configured' : ($card['state'] === ScanReportStatusMapper::UNKNOWN ? 'Unknown' : 'Missing'),
             'severity' => $found ? 'success' : 'warning',
             'explanation' => $found
-                ? ($card['status'] ?? count($selectors) . ' selector(s) discovered') . '.'
-                : 'No DKIM selectors discovered in common DNS locations.',
+                ? ($card['status'] ?? count($selectors) . ' valid key(s) found') . '.'
+                : ($card['status'] ?? 'No DKIM key was found for the tested selectors.'),
             'open' => $id === $firstOpenId,
             'primaryAction' => $found ? null : ['label' => 'Add DKIM', 'href' => '#fix-pack'],
             'type' => 'dkim',
@@ -805,19 +825,20 @@ class DnsSectionPresenter
 
     protected function mxDetail(?string $firstOpenId): array
     {
-        $data = $this->records['MX'] ?? null;
-        $found = ($data['status'] ?? '') === 'found';
+        $card = $this->statusCards['mx'] ?? [];
+        $analysis = MxAnalysisReader::analysis($this->mxInfo)
+            ?? MxAnalysisReader::fromLegacyDnsRecord($this->records['MX'] ?? null, $this->mxInfo);
+        $style = $this->mapState($card['state'] ?? null, ($this->records['MX']['status'] ?? '') === 'found');
         $id = 'dns-mx-detail';
         $rows = [];
 
-        if ($found && is_array($data['data'] ?? null)) {
-            foreach ($data['data'] as $mx) {
-                $rows[] = [
-                    ['label' => 'Priority', 'value' => (string) ($mx['pri'] ?? 'N/A')],
-                    ['label' => 'Host', 'value' => (string) ($mx['target'] ?? 'Unknown')],
-                    ['label' => 'TTL', 'value' => isset($mx['ttl']) ? $mx['ttl'] . 's' : 'N/A'],
-                ];
-            }
+        $targets = is_array($analysis['targets'] ?? null) ? $analysis['targets'] : [];
+        foreach ($targets as $target) {
+            $rows[] = [
+                ['label' => 'Priority', 'value' => (string) ($target['preference'] ?? 'N/A')],
+                ['label' => 'Host', 'value' => (string) ($target['normalized_hostname'] ?? $target['hostname'] ?? 'Unknown')],
+                ['label' => 'Status', 'value' => (string) ($target['status'] ?? 'unknown')],
+            ];
         }
 
         return [
@@ -825,12 +846,10 @@ class DnsSectionPresenter
             'key' => 'mx',
             'label' => 'MX Records',
             'helpKey' => 'mx',
-            'badgeVariant' => $found ? 'success' : 'danger',
-            'badgeLabel' => $found ? 'Configured' : 'Missing',
-            'severity' => $found ? 'success' : 'danger',
-            'explanation' => $found
-                ? count($rows) . ' MX record' . (count($rows) === 1 ? '' : 's') . ' configured for mail delivery.'
-                : 'Without MX records, people may not be able to send email to this domain.',
+            'badgeVariant' => $style['variant'],
+            'badgeLabel' => $card['status'] ?? 'Unknown',
+            'severity' => $style['severity'],
+            'explanation' => $analysis['summary'] ?? ($card['status'] ?? 'MX configuration could not be evaluated.'),
             'open' => $id === $firstOpenId,
             'primaryAction' => null,
             'type' => 'mx',
@@ -840,34 +859,61 @@ class DnsSectionPresenter
 
     protected function tlsRptDetail(?string $firstOpenId): array
     {
-        return $this->simpleCodeDetail(
-            'dns-tlsrpt-detail',
-            'tlsrpt',
-            'TLS-RPT',
-            'tlsrpt',
-            $this->records['TLS-RPT'] ?? null,
-            'Copy TLS-RPT record',
-            'Add policy',
-            'TLS-RPT sends reports when secure mail delivery has problems.',
-            'No TLS-RPT record found.',
-            $firstOpenId
-        );
+        $data = $this->records['TLS-RPT'] ?? null;
+        $card = $this->statusCards['tlsrpt'] ?? [];
+        $found = ($data['status'] ?? '') === 'found';
+        $style = $this->mapState($card['state'] ?? null, $found);
+        $id = 'dns-tlsrpt-detail';
+        $recordText = is_string($data['data'] ?? null) ? $data['data'] : null;
+
+        return [
+            'id' => $id,
+            'key' => 'tlsrpt',
+            'label' => 'TLS-RPT',
+            'helpKey' => 'tlsrpt',
+            'badgeVariant' => $found ? $style['variant'] : 'danger',
+            'badgeLabel' => $found ? ($card['status'] ?? 'Configured') : 'Missing',
+            'severity' => $found ? $style['severity'] : 'danger',
+            'explanation' => $found
+                ? ($card['status'] ?? 'A syntactically valid TLS-RPT destination is published.')
+                : 'No TLS-RPT record found.',
+            'open' => $id === $firstOpenId,
+            'primaryAction' => $found && ($card['state'] ?? '') === ScanReportStatusMapper::PASS
+                ? null
+                : ['label' => $found ? 'Copy TLS-RPT record' : 'Add policy', 'href' => '#fix-pack'],
+            'type' => 'code',
+            'record' => $recordText,
+        ];
     }
 
     protected function mtaStsDetail(?string $firstOpenId): array
     {
-        return $this->simpleCodeDetail(
-            'dns-mtasts-detail',
-            'mtasts',
-            'MTA-STS',
-            'mtasts',
-            $this->records['MTA-STS'] ?? null,
-            'Copy MTA-STS record',
-            'Add policy',
-            'MTA-STS tells other mail servers to use secure encrypted delivery to your domain.',
-            'No MTA-STS policy found.',
-            $firstOpenId
-        );
+        $data = $this->records['MTA-STS'] ?? null;
+        $card = $this->statusCards['mtasts'] ?? [];
+        $found = ($data['status'] ?? '') === 'found';
+        $style = $this->mapState($card['state'] ?? null, $found);
+        $id = 'dns-mtasts-detail';
+
+        return [
+            'id' => $id,
+            'key' => 'mtasts',
+            'label' => 'MTA-STS',
+            'helpKey' => 'mtasts',
+            'badgeVariant' => $found ? $style['variant'] : 'danger',
+            'badgeLabel' => $found ? ($card['status'] ?? 'Configured') : 'Missing',
+            'severity' => $found ? $style['severity'] : 'danger',
+            'explanation' => $found
+                ? 'MTA-STS tells other mail servers to use secure encrypted delivery to your domain.'
+                : 'No MTA-STS policy found.',
+            'open' => $id === $firstOpenId,
+            'primaryAction' => $found && ($card['state'] ?? '') === ScanReportStatusMapper::PASS
+                ? null
+                : ['label' => 'Add policy', 'href' => '#fix-pack'],
+            'type' => 'code',
+            'value' => $found ? (string) ($data['data'] ?? '') : null,
+            'copyLabel' => 'Copy MTA-STS record',
+            'footer' => $found ? ($card['status'] ?? null) : null,
+        ];
     }
 
     /**
@@ -909,8 +955,33 @@ class DnsSectionPresenter
     {
         $data = $this->records['BIMI'] ?? null;
         $card = $this->statusCards['bimi'] ?? [];
-        $found = ($data['status'] ?? '') === 'found';
+        $analysis = BimiAnalysisReader::analysis($this->bimiInfo);
+        $found = ($data['status'] ?? '') === 'found' || $analysis !== null;
         $style = $this->mapState($card['state'] ?? null, $found);
+        $bimiPresenter = new BimiSectionPresenter(
+            bimiInfo: $this->bimiInfo,
+            legacyDnsRecord: $data,
+            domain: $this->domain,
+            scan: $this->scan,
+        );
+        $publicSummary = $bimiPresenter->publicSummary();
+
+        $chips = [];
+        if (is_array($publicSummary)) {
+            if (!empty($publicSummary['readiness_status'])) {
+                $chips[] = 'Readiness: ' . $publicSummary['readiness_status'];
+            }
+            if (!empty($publicSummary['logo_validation_status'])) {
+                $chips[] = $bimiPresenter->logoValidationLabel($publicSummary['logo_validation_status']);
+            }
+            if (array_key_exists('dmarc_core_eligible', $publicSummary) && $publicSummary['dmarc_core_eligible'] !== null) {
+                $chips[] = $publicSummary['dmarc_core_eligible'] ? 'DMARC core eligible' : 'DMARC core not eligible';
+            }
+        }
+
+        $rawRecord = $found
+            ? (string) ($analysis['record']['raw'] ?? $data['data']['raw_record'] ?? $data['data']['raw'] ?? '')
+            : null;
 
         return [
             'id' => 'dns-bimi-detail',
@@ -920,12 +991,14 @@ class DnsSectionPresenter
             'badgeVariant' => $style['variant'],
             'badgeLabel' => $card['status'] ?? 'Optional',
             'severity' => $style['severity'],
-            'explanation' => $card['subtext'] ?? 'Optional branding feature — does not affect Email Security Score.',
+            'explanation' => $card['subtext'] ?? ($publicSummary['summary'] ?? 'Branding readiness — does not affect Email Security Score.'),
             'open' => 'dns-bimi-detail' === $firstOpenId,
             'primaryAction' => null,
-            'type' => 'code',
-            'value' => $found ? (string) ($data['data'] ?? '') : null,
+            'type' => 'bimi',
+            'value' => $rawRecord !== '' ? $rawRecord : null,
             'copyLabel' => 'Copy BIMI record',
+            'previewUrl' => $bimiPresenter->previewUrl(),
+            'chips' => $chips,
         ];
     }
 }

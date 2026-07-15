@@ -11,6 +11,7 @@
         dmarcPolicy: $dmarcPolicy ?? null,
         dmarcAligned: $dmarcAligned ?? null,
         spfMax: $spfMax ?? 10,
+        mxInfo: $mxInfo ?? null,
     );
 
     $summaryTiles = $presenter->summaryTiles();

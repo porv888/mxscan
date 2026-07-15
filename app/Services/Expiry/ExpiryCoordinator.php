@@ -4,11 +4,12 @@ namespace App\Services\Expiry;
 
 use App\Models\Domain;
 use App\Models\Incident;
+use App\Models\Scan;
 use App\Services\Expiry\Contracts\DomainExpiryProvider;
 use App\Services\Expiry\Contracts\SslExpiryProvider;
 use App\Services\Expiry\DTOs\ExpiryResult;
 use App\Services\Expiry\Providers\CtProvider;
-use App\Services\Expiry\Providers\LiveTlsProvider;
+use App\Services\Expiry\Providers\ScanCertificateSslProvider;
 use App\Services\Expiry\Providers\LocalWhoisProvider;
 use App\Services\Expiry\Providers\RdapAggregatorProvider;
 use App\Services\Expiry\Providers\RdapRegistryProvider;
@@ -34,9 +35,8 @@ class ExpiryCoordinator
             new LocalWhoisProvider(),
         ];
 
-        // Initialize SSL providers in priority order
+        // SSL expiry from CT logs when no recent scan analysis is available.
         $this->sslProviders = [
-            new LiveTlsProvider(),
             new CtProvider(),
         ];
     }
@@ -114,9 +114,16 @@ class ExpiryCoordinator
             return null;
         }
 
-        $providers = $fastPath 
-            ? array_slice($this->sslProviders, 0, 1) // Only use Live TLS for fast path
-            : $this->sslProviders;
+        $scanResult = $this->detectSslExpiryFromLatestScan($domain);
+        if ($scanResult !== null && $scanResult->isValid()) {
+            return $scanResult;
+        }
+
+        if ($fastPath) {
+            return $scanResult;
+        }
+
+        $providers = $this->sslProviders;
 
         foreach ($providers as $provider) {
             if (!$provider->isEnabled()) {
@@ -157,6 +164,28 @@ class ExpiryCoordinator
         ]);
 
         return null;
+    }
+
+    private function detectSslExpiryFromLatestScan(Domain $domain): ?ExpiryResult
+    {
+        $latestScan = Scan::query()
+            ->where('domain_id', $domain->id)
+            ->where('status', 'finished')
+            ->latest('finished_at')
+            ->first();
+
+        if ($latestScan === null) {
+            return null;
+        }
+
+        $resultJson = $latestScan->result_json ?? [];
+        if (!is_array($resultJson)) {
+            return null;
+        }
+
+        return (new ScanCertificateSslProvider())->detectFromScanSection(
+            is_array($resultJson['certificates'] ?? null) ? $resultJson['certificates'] : null,
+        );
     }
 
     /**

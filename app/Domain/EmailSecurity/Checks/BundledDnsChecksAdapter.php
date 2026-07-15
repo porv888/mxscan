@@ -4,7 +4,6 @@ namespace App\Domain\EmailSecurity\Checks;
 
 use App\Domain\EmailSecurity\DTO\CheckResultDTO;
 use App\Domain\EmailSecurity\DTO\DnsCollectionResultDTO;
-use App\Domain\EmailSecurity\Support\ScanRecordKeys;
 
 /**
  * Exposes legacy bundled DNS scanner results as individual check results.
@@ -13,14 +12,7 @@ use App\Domain\EmailSecurity\Support\ScanRecordKeys;
 final class BundledDnsChecksAdapter
 {
     /** @var array<string, string> */
-    private const RECORD_KEY_MAP = [
-        ScanRecordKeys::MX => 'mx',
-        ScanRecordKeys::DKIM => 'dkim',
-        ScanRecordKeys::DMARC => 'dmarc',
-        ScanRecordKeys::TLS_RPT => 'tlsrpt',
-        ScanRecordKeys::MTA_STS => 'mtasts',
-        ScanRecordKeys::BIMI => 'bimi',
-    ];
+    private const RECORD_KEY_MAP = [];
 
     /**
      * @return array<string, CheckResultDTO>

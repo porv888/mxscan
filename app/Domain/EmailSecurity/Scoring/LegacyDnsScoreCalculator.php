@@ -5,6 +5,13 @@ namespace App\Domain\EmailSecurity\Scoring;
 use App\Domain\EmailSecurity\Contracts\ScoreCalculatorInterface;
 use App\Domain\EmailSecurity\DTO\ScoreResultDTO;
 use App\Domain\EmailSecurity\DTO\ScoringInputDTO;
+use App\Domain\EmailSecurity\Checks\Bimi\Scoring\BimiScoreRule;
+use App\Domain\EmailSecurity\Checks\Certificates\Scoring\CertificateScoreRule;
+use App\Domain\EmailSecurity\Scoring\Rules\DkimScoreRule;
+use App\Domain\EmailSecurity\Scoring\Rules\DmarcScoreRule;
+use App\Domain\EmailSecurity\Scoring\Rules\MxScoreRule;
+use App\Domain\EmailSecurity\Scoring\Rules\MtaStsScoreRule;
+use App\Domain\EmailSecurity\Scoring\Rules\TlsRptScoreRule;
 use App\Domain\EmailSecurity\Scoring\Rules\SpfScoreRule;
 use App\Services\ScoreBreakdownService;
 use Illuminate\Support\Facades\Log;
@@ -17,6 +24,13 @@ final class LegacyDnsScoreCalculator implements ScoreCalculatorInterface
     public function __construct(
         private ScoreBreakdownService $scoreBreakdownService,
         private SpfScoreRule $spfScoreRule,
+        private DmarcScoreRule $dmarcScoreRule,
+        private DkimScoreRule $dkimScoreRule,
+        private MtaStsScoreRule $mtaStsScoreRule,
+        private TlsRptScoreRule $tlsRptScoreRule,
+        private MxScoreRule $mxScoreRule,
+        private CertificateScoreRule $certificateScoreRule,
+        private BimiScoreRule $bimiScoreRule,
         private ScoreInvariantGuard $scoreInvariantGuard,
     ) {
     }
@@ -33,8 +47,8 @@ final class LegacyDnsScoreCalculator implements ScoreCalculatorInterface
             ];
 
         if ($legacy === [] && $dns === []) {
-            if ($this->usesNativeSpfScoring($input)) {
-                return $this->scoreNativeSpfOnly($input);
+            if ($this->usesNativeScoring($input)) {
+                return $this->scoreNativeOnly($input);
             }
 
             return new ScoreResultDTO(total: null, breakdown: []);
@@ -46,7 +60,7 @@ final class LegacyDnsScoreCalculator implements ScoreCalculatorInterface
             $breakdown = $this->scoreBreakdownService->buildFromDnsRecords($dns['records']);
         }
 
-        if ($this->usesNativeSpfScoring($input)) {
+        if ($this->usesNativeScoring($input)) {
             return $this->scoreNativeWithBreakdown($input, $breakdown);
         }
 
@@ -65,6 +79,18 @@ final class LegacyDnsScoreCalculator implements ScoreCalculatorInterface
         return new ScoreResultDTO(total: $total, breakdown: $breakdown);
     }
 
+    private function usesNativeScoring(ScoringInputDTO $input): bool
+    {
+        return $this->usesNativeSpfScoring($input)
+            || $input->nativeDmarcResult !== null
+            || $input->nativeDkimResult !== null
+            || $input->nativeMtaStsResult !== null
+            || $input->nativeTlsRptResult !== null
+            || $input->nativeMxResult !== null
+            || $input->nativeCertificateResult !== null
+            || $input->nativeBimiResult !== null;
+    }
+
     private function usesNativeSpfScoring(ScoringInputDTO $input): bool
     {
         return config('email-security.spf_engine', 'legacy') === 'native'
@@ -76,21 +102,84 @@ final class LegacyDnsScoreCalculator implements ScoreCalculatorInterface
      */
     private function scoreNativeWithBreakdown(ScoringInputDTO $input, array $breakdown): ScoreResultDTO
     {
-        $component = $this->spfScoreRule->score($input->nativeSpfResult);
-        $breakdown = $this->scoreBreakdownService->replaceComponent($breakdown, $component);
+        $breakdown = $this->applyNativeComponents($input, $breakdown);
         $total = $this->scoreBreakdownService->totalEarned($breakdown);
         $this->scoreInvariantGuard->assertConsistent($total, $breakdown);
 
         return new ScoreResultDTO(total: $total, breakdown: $breakdown);
     }
 
-    private function scoreNativeSpfOnly(ScoringInputDTO $input): ScoreResultDTO
+    private function scoreNativeOnly(ScoringInputDTO $input): ScoreResultDTO
     {
-        $component = $this->spfScoreRule->score($input->nativeSpfResult);
-        $breakdown = [$component->toBreakdownRow()];
+        $breakdown = $this->applyNativeComponents($input, []);
         $total = $this->scoreBreakdownService->totalEarned($breakdown);
         $this->scoreInvariantGuard->assertConsistent($total, $breakdown);
 
         return new ScoreResultDTO(total: $total, breakdown: $breakdown);
+    }
+
+    /**
+     * @param list<array<string, mixed>> $breakdown
+     * @return list<array<string, mixed>>
+     */
+    private function applyNativeComponents(ScoringInputDTO $input, array $breakdown): array
+    {
+        if ($this->usesNativeSpfScoring($input)) {
+            $breakdown = $this->scoreBreakdownService->replaceComponent(
+                $breakdown,
+                $this->spfScoreRule->score($input->nativeSpfResult),
+            );
+        }
+
+        if ($input->nativeDmarcResult !== null) {
+            $breakdown = $this->scoreBreakdownService->replaceComponent(
+                $breakdown,
+                $this->dmarcScoreRule->score($input->nativeDmarcResult),
+            );
+        }
+
+        if ($input->nativeDkimResult !== null) {
+            $breakdown = $this->scoreBreakdownService->replaceComponent(
+                $breakdown,
+                $this->dkimScoreRule->score($input->nativeDkimResult),
+            );
+        }
+
+        if ($input->nativeMtaStsResult !== null) {
+            $breakdown = $this->scoreBreakdownService->replaceComponent(
+                $breakdown,
+                $this->mtaStsScoreRule->score($input->nativeMtaStsResult),
+            );
+        }
+
+        if ($input->nativeTlsRptResult !== null) {
+            $breakdown = $this->scoreBreakdownService->replaceComponent(
+                $breakdown,
+                $this->tlsRptScoreRule->score($input->nativeTlsRptResult),
+            );
+        }
+
+        if ($input->nativeMxResult !== null) {
+            $breakdown = $this->scoreBreakdownService->replaceComponent(
+                $breakdown,
+                $this->mxScoreRule->score($input->nativeMxResult),
+            );
+        }
+
+        if ($input->nativeCertificateResult !== null) {
+            $breakdown = $this->scoreBreakdownService->replaceComponent(
+                $breakdown,
+                $this->certificateScoreRule->score($input->nativeCertificateResult),
+            );
+        }
+
+        if ($input->nativeBimiResult !== null) {
+            $breakdown = $this->scoreBreakdownService->replaceComponent(
+                $breakdown,
+                $this->bimiScoreRule->score($input->nativeBimiResult),
+            );
+        }
+
+        return $breakdown;
     }
 }

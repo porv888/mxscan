@@ -77,6 +77,8 @@ final class SpfRecommendationEvaluator
                 'suggested' => is_string($spfInfo['record'] ?? null) ? $spfInfo['record'] : ($native?->rawRecord),
                 'card_state' => ScanReportStatusMapper::WARNING,
             ];
+
+            return $items;
         }
 
         if ($this->hasLegacyWarning($spfInfo, SpfResolver::WARNING_PTR_USED)) {

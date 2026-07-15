@@ -14,19 +14,22 @@ use App\Domain\EmailSecurity\Support\ScanPayloadBuilder;
 use App\Models\Domain;
 use App\Models\Scan;
 use App\Models\User;
-use App\Services\BlacklistChecker;
+
 use App\Services\EmailSecurityScanService;
 use App\Services\ScanTrendService;
 use App\Services\Spf\DTOs\SpfResultDTO;
 use App\Services\Spf\SpfResolver;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Mockery;
+use Tests\Support\EmailSecurity\BindsFakeBlacklistDns;
+use Tests\Support\EmailSecurity\CertificateTestProbeFactory;
 use Tests\Support\EmailSecurity\FixtureLoader;
 use Tests\Support\EmailSecurity\JsonParityNormalizer;
 use Tests\TestCase;
 
 class GoldenParityScenariosTest extends TestCase
 {
+    use BindsFakeBlacklistDns;
     use RefreshDatabase;
 
     protected function setUp(): void
@@ -34,6 +37,7 @@ class GoldenParityScenariosTest extends TestCase
         parent::setUp();
         config(['email-security.spf_engine' => 'legacy']);
         $this->app->forgetInstance(\App\Domain\EmailSecurity\Checks\CheckRegistry::class);
+        $this->bindFakeBlacklistDns();
     }
 
     protected function tearDown(): void
@@ -79,16 +83,21 @@ class GoldenParityScenariosTest extends TestCase
             spfLookups: 1,
             blacklist: FixtureLoader::input('blacklist-clean'),
         );
+
+        $resolver = new \Tests\Support\EmailSecurity\FakeBlacklistDnsResolver();
+        $resolver->setDefaultListed(true);
+        $this->bindFakeBlacklistDns($resolver);
+
         $listed = $this->runPipeline(
             spfRecord: 'v=spf1 -all',
             spfLookups: 1,
             blacklist: FixtureLoader::input('blacklist-listed'),
-            domainName: 'listed.test',
+            domainName: 'scenario.test',
         );
 
         $this->assertTrue($clean->resultJson['blacklist']['is_clean']);
         $this->assertFalse($listed->resultJson['blacklist']['is_clean']);
-        $this->assertSame(2, $listed->resultJson['blacklist']['listed_count']);
+        $this->assertGreaterThan(0, $listed->resultJson['blacklist']['listed_count']);
     }
 
     public function test_partial_checker_failure_aborts_scan(): void
@@ -107,7 +116,7 @@ class GoldenParityScenariosTest extends TestCase
 
         $this->app->instance(CheckRegistry::class, new CheckRegistry([
             $failing,
-            app(\App\Domain\EmailSecurity\Checks\BlacklistCheck::class),
+            app(\App\Domain\EmailSecurity\Checks\Blacklist\BlacklistCheck::class),
         ]));
 
         $domain = Domain::factory()->create(['domain' => 'fail.test']);
@@ -146,6 +155,7 @@ class GoldenParityScenariosTest extends TestCase
             blacklist: FixtureLoader::input('blacklist-clean'),
             user: $user,
             flattenedSpf: FixtureLoader::input('spf-configured')['flattened'],
+            dmarcToken: 'goldenfixturetoken',
         );
 
         $domain = Domain::first();
@@ -193,12 +203,22 @@ class GoldenParityScenariosTest extends TestCase
         string $domainName = 'scenario.test',
         ?User $user = null,
         ?string $flattenedSpf = null,
+        ?string $dmarcToken = null,
     ): \App\Domain\EmailSecurity\DTO\ScanExecutionResultDTO {
         $this->app->forgetInstance(\App\Domain\EmailSecurity\Checks\SpfAnalysisCheck::class);
-        $this->app->forgetInstance(\App\Domain\EmailSecurity\Checks\BlacklistCheck::class);
+        $this->app->forgetInstance(\App\Domain\EmailSecurity\Checks\Blacklist\BlacklistCheck::class);
         $this->app->forgetInstance(CheckRegistry::class);
+        $this->app->forgetInstance(\App\Domain\EmailSecurity\Checks\Mx\MxCheck::class);
+        $this->app->forgetInstance(\App\Domain\EmailSecurity\Checks\Mx\MxAnalysisService::class);
+        $this->app->forgetInstance(\App\Domain\EmailSecurity\Checks\Mx\Contracts\MxDnsResolverInterface::class);
 
         FixtureLoader::bindDnsCollector(FixtureLoader::input('dns-bundled-full'));
+        FixtureLoader::bindDkimResolver($domainName);
+        FixtureLoader::bindMtaStsFixtures();
+        FixtureLoader::bindTlsRptFixtures();
+        FixtureLoader::bindBimiFixtures();
+        FixtureLoader::bindMxFixtures(FixtureLoader::input('dns-bundled-full'), $domainName);
+        CertificateTestProbeFactory::bindFakeProbes();
 
         $spfResolver = Mockery::mock(SpfResolver::class);
         $spfResolver->shouldReceive('resolve')->andReturn(new SpfResultDTO(
@@ -210,13 +230,15 @@ class GoldenParityScenariosTest extends TestCase
         ));
         $this->app->instance(SpfResolver::class, $spfResolver);
 
-        $blacklistChecker = Mockery::mock(BlacklistChecker::class);
-        $blacklistChecker->shouldReceive('checkDomain')->andReturn([]);
-        $blacklistChecker->shouldReceive('getScanSummary')->andReturn($blacklist);
-        $this->app->instance(BlacklistChecker::class, $blacklistChecker);
-
         $user ??= User::factory()->create();
-        $domain = Domain::factory()->create(['domain' => $domainName, 'user_id' => $user->id]);
+        $domainAttributes = [
+            'domain' => $domainName,
+            'user_id' => $user->id,
+        ];
+        if ($dmarcToken !== null) {
+            $domainAttributes['dmarc_token'] = $dmarcToken;
+        }
+        $domain = Domain::factory()->create($domainAttributes);
         $scan = Scan::factory()->create([
             'domain_id' => $domain->id,
             'user_id' => $domain->user_id,

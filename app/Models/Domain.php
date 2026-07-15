@@ -105,6 +105,23 @@ class Domain extends Model
     public function getBlacklistStatusAttribute()
     {
         $latestScan = $this->scans()
+            ->whereNotNull('result_json')
+            ->where(function ($query) {
+                $query->where('type', 'full')->orWhere('type', 'blacklist');
+            })
+            ->latest()
+            ->first();
+
+        if ($latestScan !== null) {
+            $blacklist = is_array($latestScan->result_json) ? ($latestScan->result_json['blacklist'] ?? null) : null;
+            if (is_array($blacklist)) {
+                $facts = \App\Domain\EmailSecurity\Checks\Blacklist\Support\BlacklistAnalysisReader::facts($blacklist);
+
+                return $facts['blacklist_status'] ?? 'not-checked';
+            }
+        }
+
+        $latestScan = $this->scans()
             ->whereHas('blacklistResults')
             ->latest()
             ->first();
@@ -115,6 +132,11 @@ class Domain extends Model
 
         $blacklistResults = $latestScan->blacklistResults;
         $listedCount = $blacklistResults->where('status', 'listed')->count();
+        $usableCount = $blacklistResults->count();
+
+        if ($usableCount === 0) {
+            return 'not-checked';
+        }
 
         return $listedCount > 0 ? 'listed' : 'clean';
     }
@@ -124,6 +146,23 @@ class Domain extends Model
      */
     public function getBlacklistCountAttribute()
     {
+        $latestScan = $this->scans()
+            ->whereNotNull('result_json')
+            ->where(function ($query) {
+                $query->where('type', 'full')->orWhere('type', 'blacklist');
+            })
+            ->latest()
+            ->first();
+
+        if ($latestScan !== null) {
+            $blacklist = is_array($latestScan->result_json) ? ($latestScan->result_json['blacklist'] ?? null) : null;
+            if (is_array($blacklist)) {
+                $facts = \App\Domain\EmailSecurity\Checks\Blacklist\Support\BlacklistAnalysisReader::facts($blacklist);
+
+                return (int) ($facts['blacklist_count'] ?? 0);
+            }
+        }
+
         $latestScan = $this->scans()
             ->whereHas('blacklistResults')
             ->latest()
@@ -365,8 +404,11 @@ class Domain extends Model
     {
         if (!$this->dmarc_token) {
             $this->dmarc_token = $this->generateDmarcToken();
-            $this->save();
+            if ($this->exists) {
+                $this->save();
+            }
         }
+
         return $this->dmarc_token;
     }
 
@@ -552,39 +594,15 @@ class Domain extends Model
     public function checkDmarcRuaFromDns(): bool
     {
         try {
-            $lookup = app(\App\Services\Dmarc\DmarcDnsLookup::class)->lookupForDomain($this);
-            $dmarcRecord = $lookup['dmarc_record'];
+            $result = app(\App\Services\Dmarc\DmarcStatusService::class)->checkDnsAndSync($this);
 
-            if (!$dmarcRecord) {
-                $this->update([
-                    'dmarc_rua_verified_at' => null,
-                    'dmarc_dns_record' => null,
-                ]);
-                return false;
-            }
-
-            $classification = app(\App\Services\Dmarc\DmarcRuaClassifier::class)
-                ->classify($dmarcRecord, $this->dmarc_rua_email);
-            $isConfigured = $classification['has_canonical_mxscan_rua'];
-
-            if ($isConfigured) {
-                $this->update([
-                    'dmarc_rua_verified_at' => now(),
-                    'dmarc_dns_record' => $dmarcRecord,
-                ]);
-            } else {
-                $this->update([
-                    'dmarc_rua_verified_at' => null,
-                    'dmarc_dns_record' => null,
-                ]);
-            }
-
-            return $isConfigured;
+            return ($result['has_canonical_mxscan_rua'] ?? false) === true;
         } catch (\Exception $e) {
             \Illuminate\Support\Facades\Log::warning('DMARC DNS check failed', [
                 'domain' => $this->domain,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ]);
+
             return false;
         }
     }

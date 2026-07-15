@@ -29,7 +29,7 @@
                 </div>
                 <h3 class="text-lg font-semibold text-gray-900">BIMI Check</h3>
             </div>
-            <p class="text-sm text-gray-600">Validate your BIMI DNS record and SVG logo. Check compliance with the BIMI standard for brand display in inboxes.</p>
+            <p class="text-sm text-gray-600">Analyze BIMI DNS configuration and SVG logo readiness. Logo display remains subject to mailbox-provider policy.</p>
         </a>
 
         <!-- SPF Wizard -->

@@ -2,6 +2,7 @@
 
 namespace Tests\Unit;
 
+use App\Domain\EmailSecurity\Checks\DMARC\Parsing\DmarcParser;
 use App\Services\Dmarc\DmarcRuaClassifier;
 use PHPUnit\Framework\TestCase;
 
@@ -12,7 +13,7 @@ class DmarcRuaClassifierTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->classifier = new DmarcRuaClassifier();
+        $this->classifier = new DmarcRuaClassifier(new DmarcParser());
     }
 
     public function test_production_brevo_plus_canonical_is_connected(): void

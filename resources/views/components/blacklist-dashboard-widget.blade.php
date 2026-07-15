@@ -74,16 +74,25 @@
             <div class="space-y-2">
                 @foreach($recentBlacklistScans as $scan)
                     @php
-                        $facts = json_decode($scan->facts_json, true) ?? [];
-                        $summary = $facts['blacklist_summary'] ?? null;
+                        $blacklistData = $scan->result_json['blacklist'] ?? null;
+                        $blFacts = is_array($blacklistData)
+                            ? \App\Domain\EmailSecurity\Checks\Blacklist\Support\BlacklistAnalysisReader::facts($blacklistData)
+                            : [];
+                        $badgeStatus = match ($blFacts['blacklist_reputation_status'] ?? 'not_checked') {
+                            'clean' => 'clean',
+                            'listed' => 'listed',
+                            'partial' => 'partial',
+                            'unknown' => 'unknown',
+                            default => 'not-checked',
+                        };
                     @endphp
                     <div class="flex items-center justify-between p-2 bg-gray-50 rounded">
                         <div class="flex items-center space-x-3">
                             <span class="text-sm font-medium">{{ $scan->domain->domain }}</span>
-                            @if($summary)
+                            @if(($blFacts['blacklist_was_checked'] ?? false) || ($blFacts['blacklist_reputation_status'] ?? '') === 'listed')
                                 <x-blacklist-status-badge 
-                                    :status="$summary['is_clean'] ? 'clean' : 'listed'" 
-                                    :count="$summary['listed_count'] ?? 0" />
+                                    :status="$badgeStatus" 
+                                    :count="$blFacts['blacklist_count'] ?? 0" />
                             @endif
                         </div>
                         <div class="text-xs text-gray-500">

@@ -7,6 +7,7 @@ use App\Domain\EmailSecurity\DTO\CheckContextDTO;
 use App\Domain\EmailSecurity\DTO\ScanOptionsDTO;
 use App\Domain\EmailSecurity\Reporting\ScanResultNormalizer;
 use App\Domain\EmailSecurity\Scoring\LegacyDnsScoreCalculator;
+use App\Domain\EmailSecurity\Scoring\Rules\DmarcScoreRule;
 use App\Domain\EmailSecurity\Scoring\Rules\SpfScoreRule;
 use App\Domain\EmailSecurity\Scoring\ScoreInvariantGuard;
 use App\Domain\EmailSecurity\Support\ScanPayloadBuilder;
@@ -15,19 +16,21 @@ use App\Domain\EmailSecurity\Support\ScoringInputFactory;
 use App\Domain\EmailSecurity\Recommendations\RecommendationEngine;
 use App\Models\Domain;
 use App\Models\Scan;
-use App\Services\BlacklistChecker;
 use App\Services\EmailSecurityScanService;
 use App\Services\ScoreBreakdownService;
 use App\Services\Spf\DTOs\SpfResultDTO;
 use App\Services\Spf\SpfResolver;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Mockery;
+use Tests\Support\EmailSecurity\BindsFakeBlacklistDns;
+use Tests\Support\EmailSecurity\CertificateTestProbeFactory;
 use Tests\Support\EmailSecurity\FixtureLoader;
 use Tests\Support\EmailSecurity\JsonParityNormalizer;
 use Tests\TestCase;
 
 class GoldenParityTest extends TestCase
 {
+    use BindsFakeBlacklistDns;
     use RefreshDatabase;
 
     protected function setUp(): void
@@ -35,6 +38,9 @@ class GoldenParityTest extends TestCase
         parent::setUp();
         config(['email-security.spf_engine' => 'legacy']);
         $this->app->forgetInstance(\App\Domain\EmailSecurity\Checks\CheckRegistry::class);
+        $this->app->forgetInstance(\App\Domain\EmailSecurity\Checks\Mx\MxCheck::class);
+        $this->app->forgetInstance(\App\Domain\EmailSecurity\Checks\Mx\MxAnalysisService::class);
+        $this->app->forgetInstance(\App\Domain\EmailSecurity\Checks\Mx\Contracts\MxDnsResolverInterface::class);
     }
 
     protected function tearDown(): void
@@ -58,7 +64,10 @@ class GoldenParityTest extends TestCase
         $assembler = new ScanResultAssembler();
         $legacyResult = $assembler->assemble($legacySections);
 
-        $domain = Domain::factory()->create(['domain' => 'example.test']);
+        $domain = Domain::factory()->create([
+            'domain' => 'example.test',
+            'dmarc_token' => 'goldenfixturetoken',
+        ]);
         $scan = Scan::factory()->create(['domain_id' => $domain->id, 'user_id' => $domain->user_id]);
         $context = CheckContextDTO::fromExecution($domain, $scan, ScanOptionsDTO::fromArray([]));
         $dns = FixtureLoader::dnsCollection();
@@ -82,7 +91,10 @@ class GoldenParityTest extends TestCase
     {
         $dnsPayload = FixtureLoader::input('dns-bundled-full');
         $assembler = new ScanResultAssembler();
-        $domain = Domain::factory()->create(['domain' => 'example.test']);
+        $domain = Domain::factory()->create([
+            'domain' => 'example.test',
+            'dmarc_token' => 'goldenfixturetoken',
+        ]);
         $scan = Scan::factory()->create(['domain_id' => $domain->id, 'user_id' => $domain->user_id]);
         $context = CheckContextDTO::fromExecution($domain, $scan, ScanOptionsDTO::fromArray([]));
         $dns = FixtureLoader::dnsCollection();
@@ -92,11 +104,18 @@ class GoldenParityTest extends TestCase
         $calculator = new LegacyDnsScoreCalculator(
             $scoreBreakdownService,
             new SpfScoreRule(),
+            new DmarcScoreRule(),
+            new \App\Domain\EmailSecurity\Scoring\Rules\DkimScoreRule(),
+            new \App\Domain\EmailSecurity\Scoring\Rules\MtaStsScoreRule(),
+            new \App\Domain\EmailSecurity\Scoring\Rules\TlsRptScoreRule(),
+            new \App\Domain\EmailSecurity\Scoring\Rules\MxScoreRule(),
+            new \App\Domain\EmailSecurity\Checks\Certificates\Scoring\CertificateScoreRule(),
+            new \App\Domain\EmailSecurity\Checks\Bimi\Scoring\BimiScoreRule(),
             new ScoreInvariantGuard($scoreBreakdownService),
         );
         $score = $calculator->calculate((new ScoringInputFactory())->from($normalized));
 
-        $this->assertSame(75, $score->total);
+        $this->assertSame(64, $score->total);
     }
 
     public function test_scan_result_normalizer_round_trip_is_stable(): void
@@ -173,6 +192,12 @@ class GoldenParityTest extends TestCase
         $blacklistPayload = FixtureLoader::input('blacklist-clean');
 
         FixtureLoader::bindDnsCollector($dnsPayload);
+        FixtureLoader::bindDkimResolver('example.test');
+        FixtureLoader::bindMtaStsFixtures();
+        FixtureLoader::bindTlsRptFixtures();
+        FixtureLoader::bindBimiFixtures();
+        FixtureLoader::bindMxFixtures($dnsPayload);
+        CertificateTestProbeFactory::bindFakeProbes();
 
         $spfResolver = Mockery::mock(SpfResolver::class);
         $spfResolver->shouldReceive('resolve')->andReturn(new SpfResultDTO(
@@ -184,17 +209,17 @@ class GoldenParityTest extends TestCase
         ));
         $this->app->instance(SpfResolver::class, $spfResolver);
 
-        $domain = Domain::factory()->create(['domain' => 'example.test']);
+        $domain = Domain::factory()->create([
+            'domain' => 'example.test',
+            'dmarc_token' => 'goldenfixturetoken',
+        ]);
         $scan = Scan::factory()->create([
             'domain_id' => $domain->id,
             'user_id' => $domain->user_id,
             'status' => 'running',
         ]);
 
-        $blacklistChecker = Mockery::mock(BlacklistChecker::class);
-        $blacklistChecker->shouldReceive('checkDomain')->andReturn([]);
-        $blacklistChecker->shouldReceive('getScanSummary')->andReturn($blacklistPayload);
-        $this->app->instance(BlacklistChecker::class, $blacklistChecker);
+        $this->bindFakeBlacklistDns();
 
         return app(EmailSecurityScanService::class)->execute(
             $domain,

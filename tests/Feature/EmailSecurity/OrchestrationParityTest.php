@@ -7,7 +7,7 @@ use App\Domain\EmailSecurity\Support\ScanPayloadBuilder;
 use App\Jobs\RunFullScan;
 use App\Models\Domain;
 use App\Models\Scan;
-use App\Services\BlacklistChecker;
+
 use App\Services\EmailSecurityScanService;
 use App\Services\ScanRunner;
 use App\Services\Spf\DTOs\SpfResultDTO;
@@ -17,10 +17,12 @@ use Illuminate\Support\Facades\Queue;
 use Mockery;
 use Tests\Support\EmailSecurity\FixtureLoader;
 use Tests\Support\EmailSecurity\JsonParityNormalizer;
+use Tests\Support\EmailSecurity\BindsFakeBlacklistDns;
 use Tests\TestCase;
 
 class OrchestrationParityTest extends TestCase
 {
+    use BindsFakeBlacklistDns;
     use RefreshDatabase;
 
     protected function tearDown(): void
@@ -95,6 +97,31 @@ class OrchestrationParityTest extends TestCase
         );
     }
 
+    public function test_async_job_facts_include_dmarc_fields(): void
+    {
+        $this->bindFixtureServices();
+
+        $domain = Domain::factory()->create(['domain' => 'async-dmarc-facts.test']);
+        $job = new RunFullScan($domain->id, [
+            'dns' => true,
+            'spf' => true,
+            'blacklist' => true,
+            'monitoring' => false,
+        ]);
+        $job->handle(
+            app(EmailSecurityScanService::class),
+            app(\App\Domain\EmailSecurity\Contracts\ScanPersisterInterface::class),
+            app(\App\Services\ScanReport\ScanFinalizer::class),
+        );
+
+        $scan = Scan::query()->where('domain_id', $domain->id)->latest('id')->first();
+        $facts = is_array($scan?->facts_json) ? $scan->facts_json : [];
+
+        $this->assertArrayHasKey('dmarc_record', $facts);
+        $this->assertArrayHasKey('dmarc_protocol_status', $facts);
+        $this->assertArrayHasKey('dmarc_effective_policy', $facts);
+    }
+
     private function runDirectPipeline(Domain $domain): \App\Domain\EmailSecurity\DTO\ScanExecutionResultDTO
     {
         $scan = Scan::factory()->create([
@@ -129,9 +156,6 @@ class OrchestrationParityTest extends TestCase
         ));
         $this->app->instance(SpfResolver::class, $spfResolver);
 
-        $blacklistChecker = Mockery::mock(BlacklistChecker::class);
-        $blacklistChecker->shouldReceive('checkDomain')->andReturn([]);
-        $blacklistChecker->shouldReceive('getScanSummary')->andReturn($blacklistPayload);
-        $this->app->instance(BlacklistChecker::class, $blacklistChecker);
+        $this->bindFakeBlacklistDns();
     }
 }

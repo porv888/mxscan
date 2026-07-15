@@ -2,8 +2,13 @@
 
 namespace App\Http\Controllers;
 
+use App\Domain\EmailSecurity\Checks\Bimi\BimiAnalysisReader;
+use App\Domain\EmailSecurity\Checks\Bimi\BimiAnalysisService;
+use App\Domain\EmailSecurity\Checks\Bimi\Compatibility\BimiLegacyPayloadAdapter;
+use App\Domain\EmailSecurity\Checks\DKIM\DkimAnalysisService;
+use App\Domain\EmailSecurity\DTO\CheckContextDTO;
 use App\Http\Controllers\Controller;
-use App\Services\BimiChecker;
+use App\Domain\EmailSecurity\Checks\DKIM\Compatibility\DkimLegacyPayloadAdapter;
 use App\Services\Dns\DnsClient;
 use App\Services\SmtpTester;
 use App\Services\Spf\SpfResolver;
@@ -11,8 +16,12 @@ use Illuminate\Http\Request;
 
 class ToolsController extends Controller
 {
-    public function __construct()
-    {
+    public function __construct(
+        private DkimAnalysisService $dkimAnalysisService,
+        private DkimLegacyPayloadAdapter $dkimLegacyAdapter,
+        private BimiAnalysisService $bimiAnalysisService,
+        private BimiLegacyPayloadAdapter $bimiLegacyAdapter,
+    ) {
         $this->middleware(['auth', 'entitlement:standalone_tools']);
     }
 
@@ -53,16 +62,57 @@ class ToolsController extends Controller
         return view('tools.bimi-check');
     }
 
-    public function bimiCheck(Request $request, BimiChecker $checker)
+    public function bimiCheck(Request $request)
     {
         $request->validate([
             'domain' => 'required|string|max:253',
         ]);
 
         $domain = strtolower(trim($request->input('domain')));
-        $results = $checker->check($domain);
 
-        return view('tools.bimi-check', compact('results', 'domain'));
+        $context = new CheckContextDTO(
+            domainName: $domain,
+            domainId: null,
+            scanId: null,
+            scanType: 'bimi',
+            enabledServices: [
+                'dns' => true,
+                'spf' => false,
+                'blacklist' => false,
+                'dkim' => false,
+                'monitoring' => false,
+            ],
+            environment: app()->environment(),
+            correlationId: 'tools-bimi-' . uniqid(),
+            executedAt: now()->toIso8601String(),
+        );
+
+        $native = $this->bimiAnalysisService->analyze($context, null);
+        $payload = $this->bimiLegacyAdapter->toResultJsonBimi($native);
+        $analysis = $payload['analysis'] ?? [];
+
+        $results = [
+            'domain' => $domain,
+            'record_found' => in_array($analysis['protocol_status'] ?? null, ['valid', 'declined', 'permerror', 'partially_evaluated'], true),
+            'raw_record' => $analysis['record']['raw'] ?? null,
+            'version' => $analysis['record']['tags']['version'] ?? null,
+            'logo_url' => $analysis['record']['tags']['logo_uri'] ?? null,
+            'authority_url' => $analysis['record']['tags']['authority_uri'] ?? null,
+            'logo_valid' => ($analysis['indicator']['status'] ?? null) === 'valid',
+            'logo_content_type' => $analysis['indicator']['fetch']['content_type'] ?? null,
+            'logo_size_bytes' => $analysis['indicator']['decompressed_bytes'] ?? null,
+            'logo_errors' => array_map(
+                fn (array $e) => $e['message'] ?? '',
+                is_array($analysis['indicator']['validation_errors'] ?? null) ? $analysis['indicator']['validation_errors'] : [],
+            ),
+            'protocol_status' => $analysis['protocol_status'] ?? null,
+            'readiness_status' => $analysis['readiness_status'] ?? null,
+            'summary' => $analysis['summary'] ?? null,
+            'declined' => ($analysis['protocol_status'] ?? null) === 'declined',
+            'checked_at' => now()->toISOString(),
+        ];
+
+        return view('tools.bimi-check', compact('results', 'domain', 'analysis'));
     }
 
     // ── SPF Wizard ──────────────────────────────────────────────
@@ -180,123 +230,55 @@ class ToolsController extends Controller
         $request->validate([
             'domain' => 'required|string|max:253',
             'selector' => 'nullable|string|max:253',
+            'dkim_signature' => 'nullable|string|max:4096',
         ]);
 
         $domain = strtolower(trim($request->input('domain')));
         $selectorInput = trim($request->input('selector', ''));
+        $signatureInput = trim($request->input('dkim_signature', ''));
 
-        $selectors = $selectorInput ? [$selectorInput] : config('dkim.selectors', []);
+        $context = new CheckContextDTO(
+            domainName: $domain,
+            domainId: null,
+            scanId: null,
+            scanType: 'dkim',
+            enabledServices: [
+                'dns' => false,
+                'spf' => false,
+                'blacklist' => false,
+                'dkim' => true,
+                'monitoring' => false,
+                'dkim_selector' => $selectorInput !== '' ? $selectorInput : null,
+                'dkim_signature' => $signatureInput !== '' ? $signatureInput : null,
+                'provider_guess' => null,
+                'dmarc_expected_rua' => null,
+            ],
+            environment: app()->environment(),
+            correlationId: 'tools-dkim-' . uniqid(),
+            executedAt: now()->toIso8601String(),
+        );
+
+        $native = $this->dkimAnalysisService->analyze($context);
+        $analysis = $this->dkimLegacyAdapter->toResultJsonDkim($native)['analysis'];
+
         $results = [];
-
-        foreach ($selectors as $sel) {
-            try {
-                $dnsName = "{$sel}._domainkey.{$domain}";
-                $found = false;
-
-                // Try TXT lookup first
-                $records = @dns_get_record($dnsName, DNS_TXT);
-                if (!empty($records)) {
-                    foreach ($records as $rec) {
-                        if (isset($rec['txt']) && str_contains($rec['txt'], 'p=')) {
-                            $keyInfo = $this->parseDkimPublicKey($rec['txt']);
-                            $results[] = [
-                                'selector' => $sel,
-                                'dns_name' => $dnsName,
-                                'record' => $rec['txt'],
-                                'key_type' => $keyInfo['type'],
-                                'key_bits' => $keyInfo['bits'],
-                                'status' => $this->dkimKeyStatus($keyInfo),
-                            ];
-                            $found = true;
-                            break;
-                        }
-                    }
-                }
-
-                // Fallback: check for CNAME (Mandrill, SendGrid, etc.)
-                if (!$found) {
-                    $cnameRecords = @dns_get_record($dnsName, DNS_CNAME);
-                    if (!empty($cnameRecords)) {
-                        $target = $cnameRecords[0]['target'] ?? '';
-                        $targetTxt = @dns_get_record($target, DNS_TXT);
-                        $txtValue = '';
-                        if (!empty($targetTxt)) {
-                            foreach ($targetTxt as $rec) {
-                                if (isset($rec['txt']) && str_contains($rec['txt'], 'p=')) {
-                                    $txtValue = $rec['txt'];
-                                    break;
-                                }
-                            }
-                        }
-                        $keyInfo = $txtValue ? $this->parseDkimPublicKey($txtValue) : ['type' => 'unknown', 'bits' => 0];
-                        $results[] = [
-                            'selector' => $sel,
-                            'dns_name' => $dnsName,
-                            'record' => $txtValue ?: "CNAME → {$target}",
-                            'key_type' => $keyInfo['type'],
-                            'key_bits' => $keyInfo['bits'],
-                            'status' => $txtValue ? $this->dkimKeyStatus($keyInfo) : 'cname',
-                            'cname_target' => $target,
-                        ];
-                    }
-                }
-            } catch (\Exception $e) {
-                // Skip failed lookups
-            }
+        foreach ($analysis['selectors'] ?? [] as $row) {
+            $results[] = [
+                'selector' => $row['selector'] ?? 'unknown',
+                'dns_name' => $row['hostname'] ?? '',
+                'record' => ($row['record_status'] ?? '') === 'valid'
+                    ? 'Valid DKIM key record'
+                    : ($row['record_status'] ?? 'none'),
+                'key_type' => $row['key_type'] ?? null,
+                'key_bits' => $row['key_bits'] ?? null,
+                'status' => $row['record_status'] ?? 'none',
+                'source' => $row['source'] ?? null,
+                'errors' => $row['errors'] ?? [],
+                'warnings' => $row['warnings'] ?? [],
+            ];
         }
 
-        return view('tools.dkim-lookup', compact('domain', 'results', 'selectorInput'));
-    }
-
-    /**
-     * Parse DKIM public key record to extract key type and size.
-     */
-    private function parseDkimPublicKey(string $record): array
-    {
-        $info = ['type' => 'rsa', 'bits' => null, 'revoked' => false];
-
-        // Parse key type
-        if (preg_match('/k\s*=\s*(\w+)/i', $record, $m)) {
-            $info['type'] = strtolower($m[1]);
-        }
-
-        // Extract public key
-        if (preg_match('/p\s*=\s*([A-Za-z0-9+\/=]*)/i', $record, $m)) {
-            $keyData = $m[1];
-
-            if (empty($keyData)) {
-                $info['revoked'] = true;
-                return $info;
-            }
-
-            // Try to determine key size
-            $derKey = base64_decode($keyData);
-            if ($derKey !== false) {
-                $pem = "-----BEGIN PUBLIC KEY-----\n" . chunk_split($keyData, 64) . "-----END PUBLIC KEY-----";
-                $keyResource = @openssl_pkey_get_public($pem);
-                if ($keyResource) {
-                    $details = openssl_pkey_get_details($keyResource);
-                    if ($details) {
-                        $info['bits'] = $details['bits'] ?? null;
-                    }
-                }
-            }
-        }
-
-        return $info;
-    }
-
-    /**
-     * Determine DKIM key status based on key info.
-     */
-    private function dkimKeyStatus(array $keyInfo): string
-    {
-        if ($keyInfo['revoked']) return 'revoked';
-        if ($keyInfo['bits'] === null) return 'unknown';
-        if ($keyInfo['type'] === 'ed25519') return 'strong';
-        if ($keyInfo['bits'] >= 2048) return 'strong';
-        if ($keyInfo['bits'] >= 1024) return 'ok';
-        return 'weak';
+        return view('tools.dkim-lookup', compact('domain', 'results', 'selectorInput', 'analysis'));
     }
 
     /**

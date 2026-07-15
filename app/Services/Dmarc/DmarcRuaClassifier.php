@@ -2,6 +2,8 @@
 
 namespace App\Services\Dmarc;
 
+use App\Domain\EmailSecurity\Checks\DMARC\Parsing\DmarcParser;
+
 /**
  * Shared DMARC RUA parser and MXScan link classifier.
  *
@@ -10,6 +12,11 @@ namespace App\Services\Dmarc;
  */
 class DmarcRuaClassifier
 {
+    public function __construct(
+        private DmarcParser $parser,
+    ) {
+    }
+
     public const LINK_CONNECTED = 'connected';
     public const LINK_DETECTED_UNLINKED = 'detected_unlinked';
     public const LINK_NOT_CONNECTED = 'not_connected';
@@ -17,27 +24,17 @@ class DmarcRuaClassifier
     public const MXSCAN_DOMAIN = 'mxscan.me';
 
     /**
-     * Parse a DMARC record into tag => value pairs.
-     *
      * @return array<string, string>
      */
-    public function parseDmarcTags(string $record): array
+    private function tagsFromParser(string $record): array
     {
-        $parts = [];
-        $tags = preg_split('/\s*;\s*/', trim($record, "; \t\n\r\0\x0B"));
-
-        foreach ($tags as $tag) {
-            $tag = trim($tag);
-            if ($tag === '') {
-                continue;
-            }
-
-            if (preg_match('/^([a-z]+)\s*=\s*(.+)$/i', $tag, $matches)) {
-                $parts[strtolower($matches[1])] = trim($matches[2]);
-            }
+        $parsed = $this->parser->parse($record);
+        $tags = [];
+        foreach ($parsed->tags as $key => $tag) {
+            $tags[$key] = $tag['normalized'];
         }
 
-        return $parts;
+        return $tags;
     }
 
     /**
@@ -118,6 +115,77 @@ class DmarcRuaClassifier
     }
 
     /**
+     * Classify MXScan RUA link state from persisted native analysis.
+     *
+     * @param array<string, mixed> $analysis
+     * @return array{
+     *   rua_link_state: string,
+     *   has_any_mxscan_rua: bool,
+     *   has_canonical_mxscan_rua: bool,
+     *   recipients: list<array{email: string, raw: string, size: string|null, uri: string}>,
+     *   mxscan_recipients: list<array{email: string, raw: string, size: string|null, uri: string}>,
+     *   external_recipients: list<array{email: string, raw: string, size: string|null, uri: string}>
+     * }
+     */
+    public function classifyFromAnalysis(array $analysis, string $canonicalEmail): array
+    {
+        $canonicalEmail = strtolower(trim($canonicalEmail));
+        $reporting = is_array($analysis['aggregate_reporting'] ?? null) ? $analysis['aggregate_reporting'] : [];
+        $destinations = is_array($reporting['destinations'] ?? null) ? $reporting['destinations'] : [];
+        $expectation = is_array($reporting['mxscan_expectation'] ?? null) ? $reporting['mxscan_expectation'] : [];
+
+        $recipients = [];
+        $mxscan = [];
+        $external = [];
+
+        foreach ($destinations as $destination) {
+            if (!is_array($destination)) {
+                continue;
+            }
+
+            $email = strtolower(trim((string) ($destination['normalized_destination'] ?? '')));
+            if ($email === '' || !str_contains($email, '@')) {
+                continue;
+            }
+
+            $recipient = [
+                'email' => $email,
+                'raw' => $email,
+                'size' => null,
+                'uri' => (string) ($destination['raw_uri'] ?? ('mailto:' . $email)),
+            ];
+            $recipients[] = $recipient;
+
+            if (($destination['internal'] ?? false) === true || $this->isMxscanEmail($email)) {
+                $mxscan[] = $recipient;
+            } else {
+                $external[] = $recipient;
+            }
+        }
+
+        $hasCanonical = ($expectation['present'] ?? false) === true
+            || in_array($canonicalEmail, array_column($mxscan, 'email'), true);
+        $hasAnyMxscan = count($mxscan) > 0;
+
+        if ($hasCanonical) {
+            $state = self::LINK_CONNECTED;
+        } elseif ($hasAnyMxscan) {
+            $state = self::LINK_DETECTED_UNLINKED;
+        } else {
+            $state = self::LINK_NOT_CONNECTED;
+        }
+
+        return [
+            'rua_link_state' => $state,
+            'has_any_mxscan_rua' => $hasAnyMxscan,
+            'has_canonical_mxscan_rua' => $hasCanonical,
+            'recipients' => $recipients,
+            'mxscan_recipients' => $mxscan,
+            'external_recipients' => $external,
+        ];
+    }
+
+    /**
      * Classify MXScan RUA link state from a full DMARC record.
      *
      * @return array{
@@ -132,7 +200,7 @@ class DmarcRuaClassifier
     public function classify(string $dmarcRecord, string $canonicalEmail): array
     {
         $canonicalEmail = strtolower(trim($canonicalEmail));
-        $parts = $this->parseDmarcTags($dmarcRecord);
+        $parts = $this->tagsFromParser($dmarcRecord);
         $ruaValue = $parts['rua'] ?? '';
         $recipients = $ruaValue !== '' ? $this->parseRuaRecipients($ruaValue) : [];
 
@@ -187,7 +255,7 @@ class DmarcRuaClassifier
     public function rewriteRua(string $dmarcRecord, string $canonicalEmail): array
     {
         $canonicalEmail = strtolower(trim($canonicalEmail));
-        $parts = $this->parseDmarcTags($dmarcRecord);
+        $parts = $this->tagsFromParser($dmarcRecord);
         $existingRua = $parts['rua'] ?? '';
         $classification = $this->classify($dmarcRecord, $canonicalEmail);
 

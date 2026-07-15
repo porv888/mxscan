@@ -19,7 +19,11 @@ return new class extends Migration
             $table->id();
             $table->foreignId('domain_id')->constrained()->onDelete('cascade');
             $table->foreignId('user_id')->constrained()->onDelete('cascade');
-            $table->set('scan_type', ['dns_security', 'blacklist', 'both'])->default('dns_security');
+            if (Schema::getConnection()->getDriverName() === 'sqlite') {
+                $table->string('scan_type')->default('dns_security');
+            } else {
+                $table->set('scan_type', ['dns_security', 'blacklist', 'both'])->default('dns_security');
+            }
             $table->enum('frequency', ['daily', 'weekly', 'monthly', 'custom'])->default('weekly');
             $table->string('cron_expression')->nullable()->comment('For custom frequency');
             $table->timestamp('next_run_at')->nullable();

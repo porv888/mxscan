@@ -30,6 +30,9 @@
         dmarcPolicy: $dmarcPolicy,
         dmarcAligned: $dmarcAligned,
         spfMax: $spfMax ?? 10,
+        mxInfo: $resultData['mx'] ?? null,
+        bimiInfo: $resultData['bimi'] ?? null,
+        scan: $scan,
     );
 
     $techPresenter = new \App\View\Presenters\ReportTechnicalChecksPresenter(
@@ -40,6 +43,8 @@
         domainDays: $domainDays,
         sslDays: $sslDays,
         blacklistEnabled: $enabled['blacklist'] ?? false,
+        certificatesInfo: $resultData['certificates'] ?? null,
+        mtaStsInfo: $resultData['mta_sts'] ?? null,
     );
 
     $techGroups = $techPresenter->groups();

@@ -2,6 +2,8 @@
 
 namespace App\Domain\EmailSecurity\Reporting;
 
+use App\Domain\EmailSecurity\Checks\Bimi\BimiAnalysisReader;
+use App\Domain\EmailSecurity\Checks\Bimi\BimiStates;
 use App\Domain\EmailSecurity\Contracts\ScanReportFactoryInterface;
 use App\Domain\EmailSecurity\DTO\ScanReportViewModelDTO;
 use App\Domain\EmailSecurity\Recommendations\ScanRecommendationService;
@@ -72,31 +74,56 @@ final class ScanReportFactory implements ScanReportFactoryInterface
         $spfMax = 10;
         $spfSuggestion = is_array($spfInfo) ? ($spfInfo['flattened'] ?? null) : null;
 
-        $dmarcData = $records['DMARC'] ?? null;
-        $dmarcPolicy = null;
-        $dmarcAligned = null;
-        if ($dmarcData && ($dmarcData['status'] ?? '') === 'found') {
-            $dmarcRecord = $dmarcData['data'];
-            if (is_string($dmarcRecord) && preg_match('/p=([^;]+)/', $dmarcRecord, $matches)) {
-                $dmarcPolicy = $matches[1];
-            }
-            if (is_string($dmarcRecord)) {
-                $dmarcAligned = (str_contains($dmarcRecord, 'aspf=') || str_contains($dmarcRecord, 'adkim='));
-            }
-        }
+        $dmarcInfo = $resultData['dmarc'] ?? null;
+        $dmarcAnalysis = \App\Domain\EmailSecurity\Checks\DMARC\Support\DmarcAnalysisReader::analysis($dmarcInfo)
+            ?? \App\Domain\EmailSecurity\Checks\DMARC\Support\DmarcAnalysisReader::fromLegacyDnsRecord(
+                $records['DMARC'] ?? null,
+                $dmarcInfo,
+            );
+        $dmarcPolicy = is_array($dmarcAnalysis['policy'] ?? null)
+            ? ($dmarcAnalysis['policy']['effective_policy'] ?? $dmarcAnalysis['policy']['published_p'] ?? null)
+            : null;
+        $alignment = is_array($dmarcAnalysis['alignment'] ?? null) ? $dmarcAnalysis['alignment'] : [];
+        $dmarcAligned = ($alignment['dkim'] ?? 'relaxed') === 'strict'
+            || ($alignment['spf'] ?? 'relaxed') === 'strict';
 
-        $tlsrptOk = isset($records['TLS-RPT']) && $records['TLS-RPT']['status'] === 'found';
-        $mtastsOk = isset($records['MTA-STS']) && $records['MTA-STS']['status'] === 'found';
-        $bimiHasData = isset($records['BIMI']);
-        $bimiOk = isset($records['BIMI']) && ($records['BIMI']['status'] ?? '') === 'found';
+        $tlsRptInfo = $resultData['tls_rpt'] ?? null;
+        $tlsRptAnalysis = \App\Domain\EmailSecurity\Checks\TlsRpt\Support\TlsRptAnalysisReader::analysis($tlsRptInfo)
+            ?? \App\Domain\EmailSecurity\Checks\TlsRpt\Support\TlsRptAnalysisReader::fromLegacyDnsRecord(
+                $records['TLS-RPT'] ?? null,
+                $tlsRptInfo,
+            );
+        $tlsrptOk = ($tlsRptAnalysis['state'] ?? '') === \App\Domain\EmailSecurity\Checks\TlsRpt\TlsRptStates::PASS;
+        $mtaStsInfo = $resultData['mta_sts'] ?? null;
+        $mtaStsAnalysis = \App\Domain\EmailSecurity\Checks\MtaSts\Support\MtaStsAnalysisReader::analysis($mtaStsInfo)
+            ?? \App\Domain\EmailSecurity\Checks\MtaSts\Support\MtaStsAnalysisReader::fromLegacyDnsRecord(
+                $records['MTA-STS'] ?? null,
+                $mtaStsInfo,
+            );
+        $mtastsOk = ($mtaStsAnalysis['state'] ?? '') === \App\Domain\EmailSecurity\Checks\MtaSts\MtaStsStates::PASS;
+        $bimiInfo = $resultData['bimi'] ?? null;
+        $bimiAnalysis = BimiAnalysisReader::analysis($bimiInfo)
+            ?? BimiAnalysisReader::fromLegacyDnsRecord($records['BIMI'] ?? null, $bimiInfo);
+        $bimiHasData = $bimiInfo !== null || isset($records['BIMI']);
+        $bimiOk = in_array($bimiAnalysis['state'] ?? '', [BimiStates::PASS, BimiStates::DECLINED], true);
 
         $blacklistData = $resultData['blacklist'] ?? null;
-        $blacklistHits = is_array($blacklistData) ? (int) ($blacklistData['listed_count'] ?? 0) : 0;
-        $blacklistTotal = is_array($blacklistData) ? (int) ($blacklistData['total_checks'] ?? 0) : 0;
+        $blacklistAnalysis = \App\Domain\EmailSecurity\Checks\Blacklist\Support\BlacklistAnalysisReader::resolvedAnalysis(
+            is_array($blacklistData) ? $blacklistData : null,
+        );
+        $blacklistCounts = is_array($blacklistAnalysis['counts'] ?? null) ? $blacklistAnalysis['counts'] : [];
+        $blacklistHits = (int) ($blacklistCounts['listed_results'] ?? (is_array($blacklistData) ? ($blacklistData['listed_count'] ?? 0) : 0));
+        $blacklistTotal = (int) ($blacklistCounts['usable_results'] ?? (is_array($blacklistData) ? ($blacklistData['total_checks'] ?? 0) : 0));
         $blacklistRows = $scan->blacklistResults;
 
         $domainDays = $domain->getDaysUntilDomainExpiry();
-        $sslDays = $domain->getDaysUntilSslExpiry();
+        $certificatesInfo = $resultData['certificates'] ?? null;
+        $sslPresenter = new \App\View\Presenters\CertificateSectionPresenter(
+            certificatesInfo: is_array($certificatesInfo) ? $certificatesInfo : null,
+            mtaStsInfo: is_array($mtaStsInfo) ? $mtaStsInfo : null,
+            domain: $domain,
+        );
+        $sslDays = $sslPresenter->sslDays();
 
         $incidents = $domain->incidents()
             ->where('created_at', '>=', now()->subDays(7))

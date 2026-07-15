@@ -18,6 +18,8 @@ return [
         'bonus_soft' => 0,
     ],
     'dkim' => ['label' => 'DKIM DNS configuration', 'max' => 20],
+    // Option A (approved): enforcement-only scoring via DmarcScoreRule.
+    // Reporting/RUA issues surface as recommendations, not score deductions.
     'dmarc' => [
         'label' => 'DMARC',
         'base' => 30,
@@ -27,8 +29,7 @@ return [
     'tlsrpt' => ['label' => 'TLS-RPT', 'max' => 5],
     'mtasts' => [
         'label' => 'MTA-STS',
-        'dns_only' => 5,
-        'full' => 10,
+        'max' => 10,
     ],
     'bimi' => [
         'label' => 'BIMI',

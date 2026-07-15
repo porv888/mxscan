@@ -23,4 +23,17 @@ return [
         'everlytickey1', 'everlytickey2',   // Everlytic
         'dkim1024',                         // Generic 1024
     ],
+
+    'provider_selectors' => [
+        'Google Workspace' => ['google'],
+        'Microsoft 365' => ['selector1', 'selector2'],
+        'ProtonMail' => ['protonmail', 'protonmail2', 'protonmail3'],
+        'FastMail' => ['fm1', 'fm2', 'fm3'],
+        'Zoho Mail' => ['zoho', 'zmail'],
+    ],
+
+    'catalog_limit' => 25,
+    'max_selectors_per_scan' => 30,
+    'cname_max_depth' => 5,
+    'resolver_timeout_ms' => 5000,
 ];

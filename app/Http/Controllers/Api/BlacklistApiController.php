@@ -2,15 +2,18 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Domain\EmailSecurity\Checks\Blacklist\BlacklistScanOrchestrator;
+use App\Domain\EmailSecurity\Checks\Blacklist\Support\BlacklistAnalysisReader;
+use App\Domain\EmailSecurity\DTO\CheckContextDTO;
+use App\Domain\EmailSecurity\DTO\ScanOptionsDTO;
 use App\Http\Controllers\Controller;
-use App\Models\Domain;
 use App\Models\BlacklistResult;
-use App\Services\BlacklistChecker;
+use App\Models\Domain;
 use App\Services\Entitlement\EntitlementFeature;
 use App\Services\Entitlement\EntitlementService;
-use Illuminate\Http\Request;
-use Illuminate\Http\JsonResponse;
 use Carbon\Carbon;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 
 class BlacklistApiController extends Controller
 {
@@ -19,58 +22,59 @@ class BlacklistApiController extends Controller
         $this->middleware('auth:sanctum');
     }
 
-    /**
-     * Get blacklist status for a domain.
-     */
     public function status(Request $request, Domain $domain): JsonResponse
     {
         $this->authorize('view', $domain);
 
         $latestScan = $domain->scans()
-            ->whereHas('blacklistResults')
+            ->where(function ($query) {
+                $query->where('type', 'blacklist')->orWhere('type', 'full');
+            })
+            ->whereNotNull('result_json')
             ->latest()
             ->first();
 
-        if (!$latestScan) {
+        if ($latestScan === null) {
             return response()->json([
                 'status' => 'not_checked',
                 'message' => 'No blacklist checks performed yet',
-                'data' => null
+                'data' => null,
             ]);
         }
 
+        $blacklist = is_array($latestScan->result_json) ? ($latestScan->result_json['blacklist'] ?? null) : null;
+        $facts = BlacklistAnalysisReader::facts(is_array($blacklist) ? $blacklist : null);
         $blacklistResults = $latestScan->blacklistResults;
-        $summary = (new BlacklistChecker())->getScanSummary($latestScan);
 
         return response()->json([
-            'status' => $summary['is_clean'] ? 'clean' : 'listed',
-            'message' => $summary['is_clean'] ? 'Domain is clean' : 'Domain has blacklist entries',
+            'status' => $facts['blacklist_status'] ?? 'not-checked',
+            'reputation_status' => $facts['blacklist_reputation_status'] ?? null,
+            'message' => BlacklistAnalysisReader::summary(is_array($blacklist) ? $blacklist : null)
+                ?? 'Blacklist status available',
             'data' => [
                 'domain' => $domain->domain,
                 'scan_id' => $latestScan->id,
                 'scan_date' => $latestScan->created_at->toISOString(),
-                'summary' => $summary,
-                'results' => $blacklistResults->groupBy('ip_address')->map(function($ipResults, $ip) {
+                'facts' => $facts,
+                'summary' => is_array($blacklist) ? $blacklist : null,
+                'results' => $blacklistResults->groupBy('ip_address')->map(function ($ipResults, $ip) {
                     return [
                         'ip_address' => $ip,
                         'status' => $ipResults->where('status', 'listed')->count() > 0 ? 'listed' : 'clean',
-                        'providers' => $ipResults->map(function($result) {
+                        'providers' => $ipResults->map(function ($result) {
                             return [
                                 'provider' => $result->provider,
                                 'status' => $result->status,
                                 'message' => $result->message,
-                                'removal_url' => $result->removal_url
+                                'removal_url' => $result->removal_url,
                             ];
-                        })
+                        }),
                     ];
-                })
-            ]
+                }),
+            ],
         ]);
     }
 
-    /**
-     * Get blacklist history for a domain.
-     */
     public function history(Request $request, Domain $domain): JsonResponse
     {
         $this->authorize('view', $domain);
@@ -79,23 +83,25 @@ class BlacklistApiController extends Controller
         $startDate = Carbon::now()->subDays($days);
 
         $scans = $domain->scans()
-            ->whereHas('blacklistResults')
+            ->where(function ($query) {
+                $query->where('type', 'blacklist')->orWhere('type', 'full');
+            })
+            ->whereNotNull('result_json')
             ->where('created_at', '>=', $startDate)
-            ->with('blacklistResults')
             ->orderBy('created_at', 'desc')
             ->get();
 
-        $history = $scans->map(function($scan) {
-            $blacklistResults = $scan->blacklistResults;
-            $listedCount = $blacklistResults->where('status', 'listed')->count();
-            
+        $history = $scans->map(function ($scan) {
+            $blacklist = is_array($scan->result_json) ? ($scan->result_json['blacklist'] ?? null) : null;
+            $facts = BlacklistAnalysisReader::facts(is_array($blacklist) ? $blacklist : null);
+
             return [
                 'scan_id' => $scan->id,
                 'scan_date' => $scan->created_at->toISOString(),
-                'status' => $listedCount > 0 ? 'listed' : 'clean',
-                'total_checks' => $blacklistResults->count(),
-                'listed_count' => $listedCount,
-                'unique_ips' => $blacklistResults->pluck('ip_address')->unique()->count()
+                'status' => $facts['blacklist_status'] ?? 'not-checked',
+                'reputation_status' => $facts['blacklist_reputation_status'] ?? null,
+                'usable_results' => $facts['blacklist_usable_results'] ?? 0,
+                'listed_count' => $facts['blacklist_count'] ?? 0,
             ];
         });
 
@@ -106,17 +112,14 @@ class BlacklistApiController extends Controller
                 'period' => [
                     'start' => $startDate->toISOString(),
                     'end' => now()->toISOString(),
-                    'days' => $days
+                    'days' => $days,
                 ],
-                'history' => $history
-            ]
+                'history' => $history,
+            ],
         ]);
     }
 
-    /**
-     * Trigger a new blacklist check.
-     */
-    public function check(Request $request, Domain $domain, EntitlementService $entitlements): JsonResponse
+    public function check(Request $request, Domain $domain, EntitlementService $entitlements, BlacklistScanOrchestrator $orchestrator): JsonResponse
     {
         $this->authorize('update', $domain);
 
@@ -132,21 +135,26 @@ class BlacklistApiController extends Controller
             $scan = \App\Models\Scan::create([
                 'domain_id' => $domain->id,
                 'user_id' => $request->user()->id,
+                'type' => 'blacklist',
                 'status' => 'running',
                 'progress_pct' => 0,
             ]);
 
-            $blacklistChecker = new BlacklistChecker();
-            $results = $blacklistChecker->checkDomain($scan, $domain->domain);
-            $summary = $blacklistChecker->getScanSummary($scan);
+            $context = CheckContextDTO::fromExecution(
+                $domain,
+                $scan,
+                new ScanOptionsDTO(dns: false, spf: false, blacklist: true),
+            );
 
-            $score = $summary['is_clean'] ? 100 : max(100 - ($summary['listed_count'] * 20), 0);
+            $execution = $orchestrator->run($scan, $context);
+            $payload = $execution['payload'];
+            $facts = BlacklistAnalysisReader::facts($payload);
 
             $scan->update([
                 'status' => 'finished',
                 'progress_pct' => 100,
-                'score' => $score,
-                'facts_json' => json_encode(['blacklist_summary' => $summary]),
+                'result_json' => ['blacklist' => $payload],
+                'facts_json' => $facts,
                 'finished_at' => now(),
             ]);
 
@@ -156,81 +164,40 @@ class BlacklistApiController extends Controller
                 'data' => [
                     'scan_id' => $scan->id,
                     'domain' => $domain->domain,
-                    'summary' => $summary,
-                    'scan_url' => route('scans.show', $scan)
-                ]
+                    'reputation_status' => $facts['blacklist_reputation_status'] ?? null,
+                    'facts' => $facts,
+                    'summary' => $payload,
+                    'scan_url' => route('scans.show', $scan),
+                ],
             ]);
-
         } catch (\Exception $e) {
             return response()->json([
                 'status' => 'error',
-                'message' => 'Blacklist check failed: ' . $e->getMessage()
+                'message' => 'Blacklist check failed: ' . $e->getMessage(),
             ], 500);
         }
     }
 
-    /**
-     * Get blacklist statistics for user's domains.
-     */
     public function statistics(Request $request): JsonResponse
     {
         $user = $request->user();
-        $days = $request->get('days', 30);
-        $startDate = Carbon::now()->subDays($days);
+        $domainIds = $user->domains()->pluck('id');
 
-        $domains = $user->domains()->with(['scans' => function($query) use ($startDate) {
-            $query->whereHas('blacklistResults')
-                  ->where('created_at', '>=', $startDate);
-        }])->get();
+        $totalChecks = BlacklistResult::whereHas('scan', function ($query) use ($domainIds) {
+            $query->whereIn('domain_id', $domainIds);
+        })->count();
 
-        $totalChecks = 0;
-        $listedCount = 0;
-        $domainsMonitored = 0;
-        $currentlyListed = 0;
-
-        foreach ($domains as $domain) {
-            $hasChecks = false;
-            $domainListed = false;
-
-            foreach ($domain->scans as $scan) {
-                $results = $scan->blacklistResults;
-                if ($results->count() > 0) {
-                    $hasChecks = true;
-                    $totalChecks += $results->count();
-                    $scanListed = $results->where('status', 'listed')->count();
-                    $listedCount += $scanListed;
-                    
-                    if ($scanListed > 0) {
-                        $domainListed = true;
-                    }
-                }
-            }
-
-            if ($hasChecks) {
-                $domainsMonitored++;
-                if ($domainListed) {
-                    $currentlyListed++;
-                }
-            }
-        }
+        $listedChecks = BlacklistResult::whereHas('scan', function ($query) use ($domainIds) {
+            $query->whereIn('domain_id', $domainIds);
+        })->where('status', 'listed')->count();
 
         return response()->json([
             'status' => 'success',
             'data' => [
-                'period' => [
-                    'start' => $startDate->toISOString(),
-                    'end' => now()->toISOString(),
-                    'days' => $days
-                ],
-                'statistics' => [
-                    'total_checks' => $totalChecks,
-                    'listed_results' => $listedCount,
-                    'clean_results' => $totalChecks - $listedCount,
-                    'domains_monitored' => $domainsMonitored,
-                    'domains_currently_listed' => $currentlyListed,
-                    'domains_clean' => $domainsMonitored - $currentlyListed
-                ]
-            ]
+                'total_checks' => $totalChecks,
+                'listed_checks' => $listedChecks,
+                'clean_checks' => max(0, $totalChecks - $listedChecks),
+            ],
         ]);
     }
 }

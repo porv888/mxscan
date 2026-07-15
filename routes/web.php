@@ -92,6 +92,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->middleware('entitlement:report_export')
         ->name('reports.export');
     Route::get('/reports/{scan}', [App\Http\Controllers\ReportController::class, 'show'])->name('reports.show');
+    Route::get('/domains/{domain}/bimi-preview/{scan}', [App\Http\Controllers\BimiLogoPreviewController::class, 'show'])
+        ->name('domains.bimi.preview');
 
     // Legacy Scan Routes (index redirects to reports, others kept for active use)
     Route::get('/dashboard/scans', fn() => redirect()->route('reports.index'))->name('dashboard.scans');
@@ -123,6 +125,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('/domains/{domain}/scan', [App\Http\Controllers\ScanController::class, 'run'])->name('domains.scan');
     Route::middleware('entitlement:partial_scan')->group(function () {
         Route::post('/domains/{domain}/scan/dns', [App\Http\Controllers\ScanController::class, 'runDns'])->name('domains.scan.dns');
+        Route::post('/domains/{domain}/scan/dkim', [App\Http\Controllers\ScanController::class, 'runDkim'])->name('domains.scan.dkim');
         Route::post('/domains/{domain}/scan/blacklist', [App\Http\Controllers\ScanController::class, 'runBlacklist'])->name('domains.scan.blacklist');
         Route::post('/domains/{domain}/scan/spf', [App\Http\Controllers\ScanController::class, 'runSpf'])->name('domains.scan.spf');
     });

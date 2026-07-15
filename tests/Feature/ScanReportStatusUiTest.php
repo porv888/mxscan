@@ -138,7 +138,7 @@ class ScanReportStatusUiTest extends TestCase
             'dmarcAligned' => true,
         ])->render();
 
-        $this->assertStringContainsString('1 selector discovered', $html);
+        $this->assertStringContainsString('valid DKIM key', $html);
         $this->assertStringContainsString('published DNS keys only', $html);
         $this->assertStringNotContainsString('signing verified', strtolower($html));
     }
@@ -146,7 +146,18 @@ class ScanReportStatusUiTest extends TestCase
     public function test_fix_pack_acceptance_d_spf_before_mtasts_and_add_spf_copy(): void
     {
         $domain = $this->sampleDomain();
-        $service = new ScanRecommendationService(new ScanReportStatusMapper());
+        $service = new ScanRecommendationService(
+            new ScanReportStatusMapper(),
+            new \App\Domain\EmailSecurity\Checks\SPF\Recommendations\SpfRecommendationEvaluator(),
+            new \App\Domain\EmailSecurity\Checks\DMARC\Recommendations\DmarcRecommendationEvaluator(),
+            new \App\Domain\EmailSecurity\Checks\DKIM\Recommendations\DkimRecommendationEvaluator(),
+            new \App\Domain\EmailSecurity\Checks\MtaSts\Recommendations\MtaStsRecommendationEvaluator(),
+            new \App\Domain\EmailSecurity\Checks\Mx\Recommendations\MxRecommendationEvaluator(),
+            new \App\Domain\EmailSecurity\Checks\TlsRpt\Recommendations\TlsRptRecommendationEvaluator(),
+            new \App\Domain\EmailSecurity\Checks\Certificates\Recommendations\CertificateRecommendationEvaluator(),
+            new \App\Domain\EmailSecurity\Checks\Bimi\BimiRecommendationEvaluator(),
+            new \App\Domain\EmailSecurity\Checks\Blacklist\Recommendations\BlacklistRecommendationEvaluator(),
+        );
         $result = [
             'dns' => [
                 'records' => [

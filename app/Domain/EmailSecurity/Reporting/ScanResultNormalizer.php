@@ -6,7 +6,6 @@ use App\Domain\EmailSecurity\Contracts\ScanResultNormalizerInterface;
 use App\Domain\EmailSecurity\DTO\CheckResultDTO;
 use App\Domain\EmailSecurity\DTO\NormalizedScanResultDTO;
 use App\Domain\EmailSecurity\DTO\ScanResultDTO;
-use App\Domain\EmailSecurity\Support\ScanRecordKeys;
 
 final class ScanResultNormalizer implements ScanResultNormalizerInterface
 {
@@ -17,25 +16,11 @@ final class ScanResultNormalizer implements ScanResultNormalizerInterface
         $records = is_array($dns['records'] ?? null) ? $dns['records'] : [];
         $checkResults = [];
 
-        $bundledMap = [
-            ScanRecordKeys::MX => 'mx',
-            ScanRecordKeys::DKIM => 'dkim',
-            ScanRecordKeys::DMARC => 'dmarc',
-            ScanRecordKeys::TLS_RPT => 'tlsrpt',
-            ScanRecordKeys::MTA_STS => 'mtasts',
-            ScanRecordKeys::BIMI => 'bimi',
-        ];
-
-        foreach ($bundledMap as $recordKey => $checkKey) {
-            if (!isset($records[$recordKey]) || !is_array($records[$recordKey])) {
-                continue;
-            }
-
-            $record = $records[$recordKey];
-            $checkResults[$checkKey] = new CheckResultDTO(
-                key: $checkKey,
-                status: (string) ($record['status'] ?? 'missing'),
-                data: $record,
+        if (isset($sections['bimi']) && is_array($sections['bimi'])) {
+            $checkResults['bimi'] = new CheckResultDTO(
+                key: 'bimi',
+                status: (string) ($sections['bimi']['ui_state'] ?? $sections['bimi']['status'] ?? 'unknown'),
+                data: $sections['bimi'],
             );
         }
 
@@ -45,6 +30,46 @@ final class ScanResultNormalizer implements ScanResultNormalizerInterface
                 status: (string) ($sections['spf']['status'] ?? 'safe'),
                 data: $sections['spf'],
                 messages: $sections['spf']['warnings'] ?? [],
+            );
+        }
+
+        if (isset($sections['dmarc']) && is_array($sections['dmarc'])) {
+            $checkResults['dmarc'] = new CheckResultDTO(
+                key: 'dmarc',
+                status: (string) ($sections['dmarc']['ui_state'] ?? $sections['dmarc']['status'] ?? 'unknown'),
+                data: $sections['dmarc'],
+            );
+        }
+
+        if (isset($sections['dkim']) && is_array($sections['dkim'])) {
+            $checkResults['dkim'] = new CheckResultDTO(
+                key: 'dkim',
+                status: (string) ($sections['dkim']['ui_state'] ?? $sections['dkim']['status'] ?? 'unknown'),
+                data: $sections['dkim'],
+            );
+        }
+
+        if (isset($sections['mta_sts']) && is_array($sections['mta_sts'])) {
+            $checkResults['mtasts'] = new CheckResultDTO(
+                key: 'mtasts',
+                status: (string) ($sections['mta_sts']['ui_state'] ?? $sections['mta_sts']['status'] ?? 'unknown'),
+                data: $sections['mta_sts'],
+            );
+        }
+
+        if (isset($sections['tls_rpt']) && is_array($sections['tls_rpt'])) {
+            $checkResults['tlsrpt'] = new CheckResultDTO(
+                key: 'tlsrpt',
+                status: (string) ($sections['tls_rpt']['ui_state'] ?? $sections['tls_rpt']['status'] ?? 'unknown'),
+                data: $sections['tls_rpt'],
+            );
+        }
+
+        if (isset($sections['mx']) && is_array($sections['mx'])) {
+            $checkResults['mx'] = new CheckResultDTO(
+                key: 'mx',
+                status: (string) ($sections['mx']['ui_state'] ?? $sections['mx']['status'] ?? 'unknown'),
+                data: $sections['mx'],
             );
         }
 

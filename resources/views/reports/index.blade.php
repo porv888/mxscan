@@ -137,16 +137,27 @@
                                     @if($scan->hasBlacklistResults())
                                         @php
                                             $blacklistData = $scan->result_json['blacklist'] ?? null;
-                                            $listed = $blacklistData['listed_count'] ?? 0;
+                                            $blFacts = is_array($blacklistData)
+                                                ? \App\Domain\EmailSecurity\Checks\Blacklist\Support\BlacklistAnalysisReader::facts($blacklistData)
+                                                : [];
+                                            $usable = (int) ($blFacts['blacklist_usable_results'] ?? 0);
+                                            $listed = (int) ($blFacts['blacklist_count'] ?? 0);
+                                            $reputation = $blFacts['blacklist_reputation_status'] ?? 'not_checked';
                                         @endphp
-                                        @if($listed > 0)
+                                        @if($reputation === 'listed')
                                             <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
                                                 {{ $listed }} listed
                                             </span>
-                                        @else
+                                        @elseif($reputation === 'clean' && $usable > 0)
                                             <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
                                                 Clean
                                             </span>
+                                        @elseif($reputation === 'partial')
+                                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                                                Partial
+                                            </span>
+                                        @else
+                                            <span class="text-sm text-gray-400">Not scanned</span>
                                         @endif
                                     @else
                                         <span class="text-sm text-gray-400">—</span>

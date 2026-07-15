@@ -2,24 +2,28 @@
 
 namespace Tests\Feature;
 
+use App\Domain\EmailSecurity\Checks\DMARC\Contracts\DmarcDnsResolverInterface;
+use App\Domain\EmailSecurity\Checks\DMARC\Discovery\DmarcRecordDiscovery;
 use App\Models\Domain;
 use App\Models\Scan;
 use App\Models\User;
-use App\Services\Dmarc\DmarcDnsLookup;
 use App\Services\Dmarc\DmarcStatusService;
-use Carbon\Carbon;
 use Illuminate\Support\Str;
+use Tests\Concerns\CreatesPlanUsers;
 use Tests\Concerns\UsesSqliteDmarcSchema;
+use Tests\Support\EmailSecurity\FakeDmarcDnsResolver;
 use Tests\TestCase;
 
 class DmarcDnsCheckTest extends TestCase
 {
+    use CreatesPlanUsers;
     use UsesSqliteDmarcSchema;
 
     protected function setUp(): void
     {
         parent::setUp();
         $this->setUpSqliteDmarcSchema();
+        $this->setUpPlanTables();
     }
 
     protected function makeDomainWithStaleScan(User $user, string $token): Domain
@@ -57,7 +61,7 @@ class DmarcDnsCheckTest extends TestCase
 
     public function test_check_dns_ignores_stale_scan_and_uses_fresh_dns(): void
     {
-        $user = User::factory()->create();
+        $user = $this->createPremiumUser();
         $token = '718d719760053ef030649861';
         $domain = $this->makeDomainWithStaleScan($user, $token);
         $canonical = 'dmarc+' . $token . '@mxscan.me';
@@ -66,27 +70,7 @@ class DmarcDnsCheckTest extends TestCase
         $statusBefore = app(DmarcStatusService::class)->getStatus($domain);
         $this->assertSame(DmarcStatusService::RUA_LINK_DETECTED_UNLINKED, $statusBefore['rua_link_state']);
 
-        $fakeLookup = new class($liveRecord) extends DmarcDnsLookup {
-            public function __construct(private string $liveRecord)
-            {
-            }
-
-            public function lookupForDomain(Domain $domain): array
-            {
-                return [
-                    'hostname' => '_dmarc.' . $domain->domain,
-                    'raw_records' => [
-                        ['host' => '_dmarc.' . $domain->domain, 'type' => 'TXT', 'txt' => $this->liveRecord],
-                    ],
-                    'reconstructed_txt' => [$this->liveRecord],
-                    'dmarc_record' => $this->liveRecord,
-                    'checked_at' => Carbon::now(),
-                    'resolver_source' => self::RESOLVER_SOURCE,
-                ];
-            }
-        };
-
-        $this->app->instance(DmarcDnsLookup::class, $fakeLookup);
+        $this->bindDiscovery($domain->domain, $liveRecord);
 
         $response = $this->actingAs($user)->postJson(route('dmarc.check-dns', $domain));
 
@@ -113,7 +97,7 @@ class DmarcDnsCheckTest extends TestCase
 
     public function test_get_status_prefers_verified_dns_snapshot_over_stale_scan(): void
     {
-        $user = User::factory()->create();
+        $user = $this->createPremiumUser();
         $token = '718d719760053ef030649861';
         $domain = $this->makeDomainWithStaleScan($user, $token);
         $canonical = 'dmarc+' . $token . '@mxscan.me';
@@ -132,27 +116,11 @@ class DmarcDnsCheckTest extends TestCase
 
     public function test_failed_check_returns_diagnostics_without_exception_trace(): void
     {
-        $user = User::factory()->create();
+        $user = $this->createPremiumUser();
         $token = '718d719760053ef030649861';
         $domain = $this->makeDomainWithStaleScan($user, $token);
 
-        $fakeLookup = new class extends DmarcDnsLookup {
-            public function lookupForDomain(Domain $domain): array
-            {
-                return [
-                    'hostname' => '_dmarc.' . $domain->domain,
-                    'raw_records' => [
-                        ['host' => '_dmarc.' . $domain->domain, 'type' => 'TXT', 'txt' => 'google-site-verification=x'],
-                    ],
-                    'reconstructed_txt' => ['google-site-verification=x'],
-                    'dmarc_record' => null,
-                    'checked_at' => Carbon::now(),
-                    'resolver_source' => self::RESOLVER_SOURCE,
-                ];
-            }
-        };
-
-        $this->app->instance(DmarcDnsLookup::class, $fakeLookup);
+        $this->bindDiscovery($domain->domain, null);
 
         $response = $this->actingAs($user)->postJson(route('dmarc.check-dns', $domain));
 
@@ -169,5 +137,19 @@ class DmarcDnsCheckTest extends TestCase
         $response->assertJsonPath('dns_diagnostics.expected_rua_recipient', 'dmarc+' . $token . '@mxscan.me');
         $this->assertArrayNotHasKey('exception', $response->json());
         $this->assertArrayNotHasKey('trace', $response->json());
+    }
+
+    private function bindDiscovery(string $domainName, ?string $record): void
+    {
+        $hostname = '_dmarc.' . $domainName;
+        $resolver = new FakeDmarcDnsResolver();
+        $resolver->setRecord($hostname, $record);
+
+        $this->app->instance(DmarcDnsResolverInterface::class, $resolver);
+        $this->app->instance(
+            DmarcRecordDiscovery::class,
+            new DmarcRecordDiscovery($resolver),
+        );
+        $this->app->forgetInstance(DmarcStatusService::class);
     }
 }

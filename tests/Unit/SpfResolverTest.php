@@ -2,6 +2,7 @@
 
 namespace Tests\Unit;
 
+use App\Services\Dns\DnsResult;
 use App\Services\Dns\DnsClient;
 use App\Services\Spf\SpfResolver;
 use Mockery;
@@ -15,7 +16,7 @@ class SpfResolverTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        
+
         $this->mockDnsClient = Mockery::mock(DnsClient::class);
         $this->spfResolver = new SpfResolver($this->mockDnsClient);
     }
@@ -26,12 +27,17 @@ class SpfResolverTest extends TestCase
         parent::tearDown();
     }
 
+    private function txtResult(array $records): DnsResult
+    {
+        return new DnsResult($records, true);
+    }
+
     public function test_resolve_basic_ip4_record(): void
     {
-        $this->mockDnsClient->shouldReceive('getTxt')
+        $this->mockDnsClient->shouldReceive('getTxtResult')
             ->with('example.com')
             ->once()
-            ->andReturn(['v=spf1 ip4:192.168.1.1 -all']);
+            ->andReturn($this->txtResult(['v=spf1 ip4:192.168.1.1 -all']));
 
         $result = $this->spfResolver->resolve('example.com');
 
@@ -44,10 +50,10 @@ class SpfResolverTest extends TestCase
 
     public function test_resolve_no_spf_record(): void
     {
-        $this->mockDnsClient->shouldReceive('getTxt')
+        $this->mockDnsClient->shouldReceive('getTxtResult')
             ->with('example.com')
             ->once()
-            ->andReturn([]);
+            ->andReturn($this->txtResult([]));
 
         $result = $this->spfResolver->resolve('example.com');
 
@@ -60,15 +66,15 @@ class SpfResolverTest extends TestCase
 
     public function test_resolve_include_mechanism(): void
     {
-        $this->mockDnsClient->shouldReceive('getTxt')
+        $this->mockDnsClient->shouldReceive('getTxtResult')
             ->with('example.com')
             ->once()
-            ->andReturn(['v=spf1 include:_spf.google.com -all']);
+            ->andReturn($this->txtResult(['v=spf1 include:_spf.google.com -all']));
 
-        $this->mockDnsClient->shouldReceive('getTxt')
+        $this->mockDnsClient->shouldReceive('getTxtResult')
             ->with('_spf.google.com')
             ->once()
-            ->andReturn(['v=spf1 ip4:209.85.128.0/17 -all']);
+            ->andReturn($this->txtResult(['v=spf1 ip4:209.85.128.0/17 -all']));
 
         $result = $this->spfResolver->resolve('example.com');
 
@@ -78,24 +84,22 @@ class SpfResolverTest extends TestCase
 
     public function test_resolve_lookup_limit_exceeded(): void
     {
-        // Create SPF record with 11 includes to exceed limit
         $includes = [];
         for ($i = 1; $i <= 11; $i++) {
             $includes[] = "include:spf{$i}.example.com";
         }
         $spfRecord = 'v=spf1 ' . implode(' ', $includes) . ' -all';
 
-        $this->mockDnsClient->shouldReceive('getTxt')
+        $this->mockDnsClient->shouldReceive('getTxtResult')
             ->with('example.com')
             ->once()
-            ->andReturn([$spfRecord]);
+            ->andReturn($this->txtResult([$spfRecord]));
 
-        // Mock responses for first 10 includes only
         for ($i = 1; $i <= 10; $i++) {
-            $this->mockDnsClient->shouldReceive('getTxt')
+            $this->mockDnsClient->shouldReceive('getTxtResult')
                 ->with("spf{$i}.example.com")
                 ->once()
-                ->andReturn(['v=spf1 ip4:192.168.1.' . $i . ' -all']);
+                ->andReturn($this->txtResult(['v=spf1 ip4:192.168.1.' . $i . ' -all']));
         }
 
         $result = $this->spfResolver->resolve('example.com');
@@ -106,10 +110,10 @@ class SpfResolverTest extends TestCase
 
     public function test_resolve_ptr_mechanism_warning(): void
     {
-        $this->mockDnsClient->shouldReceive('getTxt')
+        $this->mockDnsClient->shouldReceive('getTxtResult')
             ->with('example.com')
             ->once()
-            ->andReturn(['v=spf1 ptr -all']);
+            ->andReturn($this->txtResult(['v=spf1 ptr -all']));
 
         $result = $this->spfResolver->resolve('example.com');
 
@@ -119,10 +123,10 @@ class SpfResolverTest extends TestCase
 
     public function test_resolve_plus_all_warning(): void
     {
-        $this->mockDnsClient->shouldReceive('getTxt')
+        $this->mockDnsClient->shouldReceive('getTxtResult')
             ->with('example.com')
             ->once()
-            ->andReturn(['v=spf1 ip4:192.168.1.1 +all']);
+            ->andReturn($this->txtResult(['v=spf1 ip4:192.168.1.1 +all']));
 
         $result = $this->spfResolver->resolve('example.com');
 

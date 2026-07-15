@@ -4,7 +4,11 @@ use App\Jobs\SpfCheckJob;
 use App\Jobs\SendWeeklyReport;
 use App\Jobs\DetectDomainExpiry;
 use App\Jobs\DetectSslExpiry;
+use App\Domain\EmailSecurity\Checks\Certificates\Support\CertificateAnalysisReader;
+use App\Jobs\NotifyIncident;
 use App\Models\Domain;
+use App\Models\Incident;
+use App\View\Presenters\CertificateSectionPresenter;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Schedule;
@@ -51,39 +55,106 @@ Schedule::job(new DetectDomainExpiry)
     ->name('detect-domain-expiry')
     ->description('Detect domain registration expiry dates');
 
-// Simple expiry reminder check (daily at 8:00 AM)
+// Domain expiry reminders (daily at 8:00 AM)
 Schedule::call(function () {
     $now = now();
     $domains = Domain::where('status', 'active')
         ->whereNotNull('user_id')
         ->get();
-    
+
     foreach ($domains as $domain) {
-        // Check domain expiry
-        if ($domain->domain_expires_at) {
-            $daysUntilExpiry = (int) $now->diffInDays($domain->domain_expires_at, false);
-            
-            // Send reminders at 30, 7, and 1 day before expiry
-            if (in_array($daysUntilExpiry, [30, 7, 1]) && $daysUntilExpiry >= 0) {
-                Mail::to($domain->user->email)->send(
-                    new ExpiryReminderMail($domain, 'domain', $daysUntilExpiry, $domain->domain_expires_at)
-                );
-            }
+        if (!$domain->domain_expires_at) {
+            continue;
         }
-        
-        // Check SSL expiry
-        if ($domain->ssl_expires_at) {
-            $daysUntilExpiry = (int) $now->diffInDays($domain->ssl_expires_at, false);
-            
-            // Send reminders at 30, 7, and 1 day before expiry
-            if (in_array($daysUntilExpiry, [30, 7, 1]) && $daysUntilExpiry >= 0) {
-                Mail::to($domain->user->email)->send(
-                    new ExpiryReminderMail($domain, 'ssl', $daysUntilExpiry, $domain->ssl_expires_at)
-                );
-            }
+
+        $daysUntilExpiry = (int) $now->diffInDays($domain->domain_expires_at, false);
+        if (in_array($daysUntilExpiry, [30, 7, 1], true) && $daysUntilExpiry >= 0) {
+            Mail::to($domain->user->email)->send(
+                new ExpiryReminderMail($domain, 'domain', $daysUntilExpiry, $domain->domain_expires_at)
+            );
         }
     }
-})->dailyAt('08:00')->name('expiry-reminders')->description('Send domain and SSL expiry reminders');
+})->dailyAt('08:00')->name('domain-expiry-reminders')->description('Send domain registration expiry reminders');
+
+// Certificate expiry reminders (daily at 8:00 AM) — deduplicated via incidents
+Schedule::call(function () {
+    $domains = Domain::where('status', 'active')
+        ->whereNotNull('user_id')
+        ->get();
+
+    foreach ($domains as $domain) {
+        $latestScan = $domain->scans()->where('status', 'finished')->latest('finished_at')->first();
+        if ($latestScan === null) {
+            continue;
+        }
+
+        $resultJson = $latestScan->result_json ?? [];
+        if (!is_array($resultJson)) {
+            continue;
+        }
+
+        $native = CertificateAnalysisReader::toNativeResult(
+            $domain->domain,
+            is_array($resultJson['certificates'] ?? null) ? $resultJson['certificates'] : null,
+        );
+
+        if ($native === null) {
+            continue;
+        }
+
+        $alreadySent = Incident::query()
+            ->where('domain_id', $domain->id)
+            ->where('type', 'certificate_expiring')
+            ->whereNull('resolved_at')
+            ->get()
+            ->map(fn (Incident $incident) => (string) ($incident->meta['dedup_key'] ?? ''))
+            ->filter(fn (string $key) => $key !== '')
+            ->values()
+            ->all();
+
+        $alerts = app(\App\Domain\EmailSecurity\Checks\Certificates\Monitoring\CertificateAlertEvaluator::class)
+            ->evaluate($domain->domain, $native, $alreadySent);
+
+        foreach ($alerts as $alert) {
+            if (!is_array($alert)) {
+                continue;
+            }
+
+            $dedupKey = (string) ($alert['dedup_key'] ?? '');
+            if ($dedupKey === '') {
+                continue;
+            }
+
+            $existing = Incident::query()
+                ->where('domain_id', $domain->id)
+                ->where('type', 'certificate_expiring')
+                ->whereNull('resolved_at')
+                ->where('meta->dedup_key', $dedupKey)
+                ->exists();
+
+            if ($existing) {
+                continue;
+            }
+
+            $incident = Incident::create([
+                'domain_id' => $domain->id,
+                'type' => 'certificate_expiring',
+                'severity' => (string) ($alert['severity'] ?? 'warning'),
+                'message' => (string) ($alert['message'] ?? 'Certificate alert'),
+                'meta' => [
+                    'dedup_key' => $dedupKey,
+                    'threshold' => $alert['threshold'] ?? null,
+                    'endpoint_key' => $alert['endpoint_key'] ?? null,
+                    'hostname' => $alert['hostname'] ?? null,
+                    'days_remaining' => $alert['days_remaining'] ?? null,
+                ],
+                'occurred_at' => now(),
+            ]);
+
+            NotifyIncident::dispatch($incident);
+        }
+    }
+})->dailyAt('08:00')->name('certificate-expiry-reminders')->description('Send deduplicated certificate expiry reminders');
 
 // Schedule weekly reports (run every Monday at 7:00 AM)
 Schedule::job(new SendWeeklyReport)

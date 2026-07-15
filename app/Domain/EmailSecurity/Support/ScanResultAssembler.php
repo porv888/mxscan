@@ -69,8 +69,36 @@ final class ScanResultAssembler
             $sections['spf'] = $normalized->checkResults['spf']->data ?? [];
         }
 
+        if (isset($normalized->checkResults['dmarc'])) {
+            $sections['dmarc'] = $normalized->checkResults['dmarc']->data ?? [];
+        }
+
+        if (isset($normalized->checkResults['dkim'])) {
+            $sections['dkim'] = $normalized->checkResults['dkim']->data ?? [];
+        }
+
+        if (isset($normalized->checkResults['mtasts'])) {
+            $sections['mta_sts'] = $normalized->checkResults['mtasts']->data ?? [];
+        }
+
+        if (isset($normalized->checkResults['tlsrpt'])) {
+            $sections['tls_rpt'] = $normalized->checkResults['tlsrpt']->data ?? [];
+        }
+
+        if (isset($normalized->checkResults['mx'])) {
+            $sections['mx'] = $normalized->checkResults['mx']->data ?? [];
+        }
+
         if (isset($normalized->checkResults['blacklist'])) {
             $sections['blacklist'] = $normalized->checkResults['blacklist']->data ?? [];
+        }
+
+        if (isset($normalized->checkResults['certificates'])) {
+            $sections['certificates'] = $normalized->checkResults['certificates']->data ?? [];
+        }
+
+        if (isset($normalized->checkResults['bimi'])) {
+            $sections['bimi'] = $normalized->checkResults['bimi']->data ?? [];
         }
 
         return new ScanResultDTO(sections: $sections);

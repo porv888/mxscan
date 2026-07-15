@@ -37,6 +37,7 @@ final class CheckRegistry
         $results = [];
         $artifacts = [];
         $diagnostics = [];
+        $priorArtifacts = [];
 
         foreach ($this->orderedKeys() as $key) {
             if (!$this->isEnabled($key, $options)) {
@@ -45,9 +46,10 @@ final class CheckRegistry
 
             $check = $this->checksByKey[$key];
             try {
-                $execution = $check->run($context, $dns);
+                $execution = $check->run($context->withPriorArtifacts($priorArtifacts), $dns);
                 $results[$key] = $execution->result;
                 $artifacts = $this->mergeUnique($artifacts, $execution->artifacts);
+                $priorArtifacts = $artifacts;
                 $diagnostics = $this->mergeUnique($diagnostics, $execution->diagnostics);
             } catch (Throwable $e) {
                 Log::error('Security check failed', [
@@ -98,7 +100,7 @@ final class CheckRegistry
      */
     private function orderedKeys(): array
     {
-        $preferred = ['spf', 'blacklist'];
+        $preferred = ['spf', 'dmarc', 'dkim', 'mx', 'blacklist'];
         $ordered = [];
 
         foreach ($preferred as $key) {
@@ -120,6 +122,13 @@ final class CheckRegistry
     {
         return match ($key) {
             'spf' => $options->spf,
+            'dmarc' => $options->dns,
+            'dkim' => $options->dns || $options->dkim,
+            'mx' => $options->dns,
+            'mtasts' => $options->dns,
+            'tlsrpt' => $options->dns,
+            'certificates' => $options->dns,
+            'bimi' => $options->dns,
             'blacklist' => $options->blacklist,
             default => false,
         };

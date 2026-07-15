@@ -1,119 +1,1496 @@
 {
-  "result_json": {
-    "dns": {
-      "score": 75,
-      "records": {
-        "MX": {
-          "status": "found",
-          "data": [
-            {
-              "pri": 10,
-              "target": "mail.example.test",
-              "ttl": 3600
+    "score": 84,
+    "result_json": {
+        "dns": {
+            "score": 84,
+            "records": {
+                "MX": {
+                    "status": "found",
+                    "data": [
+                        {
+                            "pri": 10,
+                            "target": "mail.example.test"
+                        }
+                    ]
+                },
+                "SPF": {
+                    "status": "found",
+                    "data": "v=spf1 a mx -all"
+                },
+                "DKIM": {
+                    "status": "found",
+                    "data": [
+                        {
+                            "selector": "google",
+                            "record": "v=DKIM1; k=rsa; p=[2048-bit public key]",
+                            "key_type": "rsa",
+                            "key_bits": 2048
+                        },
+                        {
+                            "selector": "selector1",
+                            "record": "v=DKIM1; k=rsa; p=[2048-bit public key]",
+                            "key_type": "rsa",
+                            "key_bits": 2048
+                        },
+                        {
+                            "selector": "s1",
+                            "record": "v=DKIM1; k=rsa; p=[2048-bit public key]",
+                            "key_type": "rsa",
+                            "key_bits": 2048
+                        }
+                    ]
+                },
+                "DMARC": {
+                    "status": "found",
+                    "data": "v=DMARC1; p=quarantine; rua=mailto:dmarc@example.test"
+                },
+                "TLS-RPT": {
+                    "status": "found",
+                    "data": "v=TLSRPTv1; rua=mailto:tlsrpt@example.test"
+                },
+                "MTA-STS": {
+                    "status": "missing",
+                    "data": null
+                },
+                "BIMI": {
+                    "status": "missing",
+                    "data": null
+                }
+            },
+            "score_breakdown": [
+                {
+                    "key": "mx",
+                    "label": "MX Records",
+                    "earned": 15,
+                    "possible": 15,
+                    "status": "ok",
+                    "hint": "Valid inbound mail exchangers are published.",
+                    "model_version": "mx-v1"
+                },
+                {
+                    "key": "spf",
+                    "label": "SPF",
+                    "earned": 20,
+                    "possible": 20,
+                    "status": "ok"
+                },
+                {
+                    "key": "dmarc",
+                    "label": "DMARC",
+                    "earned": 24,
+                    "possible": 30,
+                    "status": "partial",
+                    "hint": "DMARC enforcement is enabled with a quarantine policy.",
+                    "model_version": "dmarc-v1"
+                },
+                {
+                    "key": "tlsrpt",
+                    "label": "TLS-RPT",
+                    "earned": 5,
+                    "possible": 5,
+                    "status": "ok",
+                    "hint": "TLS reporting is configured.",
+                    "model_version": "tls-rpt-v1"
+                },
+                {
+                    "key": "mtasts",
+                    "label": "MTA-STS",
+                    "earned": 0,
+                    "possible": 10,
+                    "status": "missing",
+                    "hint": "No MTA-STS DNS indicator was found.",
+                    "model_version": "mta-sts-v1"
+                },
+                {
+                    "key": "dkim",
+                    "label": "DKIM DNS configuration",
+                    "earned": 20,
+                    "possible": 20,
+                    "status": "ok",
+                    "hint": "A valid DKIM key is published for selector google.",
+                    "model_version": "dkim-v1"
+                },
+                {
+                    "key": "certificates",
+                    "label": "Certificates",
+                    "earned": 0,
+                    "possible": 0,
+                    "status": "not_scored",
+                    "hint": "One or more certificates are valid but approaching expiry.",
+                    "model_version": "certificates-v1"
+                },
+                {
+                    "key": "bimi",
+                    "label": "BIMI",
+                    "earned": 0,
+                    "possible": 0,
+                    "status": "not_scored",
+                    "hint": "No BIMI record was found.",
+                    "model_version": "bimi-readiness-v1"
+                }
+            ],
+            "recommendations": []
+        },
+        "spf": {
+            "record": "v=spf1 a mx -all",
+            "lookups": 2,
+            "flattened": "v=spf1 ip4:203.0.113.10 -all",
+            "status": "safe",
+            "valid": true,
+            "error": null,
+            "warnings": []
+        },
+        "dmarc": {
+            "record": "v=DMARC1; p=quarantine; rua=mailto:dmarc@example.test",
+            "status": "ok",
+            "valid": true,
+            "protocol_status": "valid",
+            "risk_status": "healthy",
+            "ui_state": "pass",
+            "summary": "DMARC enforcement is enabled with a quarantine policy.",
+            "analysis": {
+                "version": "dmarc-native-v1",
+                "protocol_status": "valid",
+                "risk_status": "healthy",
+                "state": "pass",
+                "summary": "DMARC enforcement is enabled with a quarantine policy.",
+                "record": "v=DMARC1; p=quarantine; rua=mailto:dmarc@example.test",
+                "record_domain": "_dmarc.example.test",
+                "policy_domain": "example.test",
+                "policy_source": "exact",
+                "organizational_domain": "example.test",
+                "discovery": {
+                    "queried_domain": "example.test",
+                    "policy_domain": "example.test",
+                    "policy_source": "exact",
+                    "organizational_domain": "example.test",
+                    "public_suffix_domain": null,
+                    "lookup_path": [
+                        "_dmarc.example.test"
+                    ],
+                    "queries_used": 1,
+                    "discovery_method": "treewalk"
+                },
+                "policy": {
+                    "published_p": "quarantine",
+                    "published_sp": null,
+                    "published_np": null,
+                    "effective_policy": "quarantine",
+                    "pct": 100,
+                    "testing_mode": false,
+                    "enforcement": "quarantine",
+                    "inherited_from": null,
+                    "policy_source": "exact"
+                },
+                "alignment": {
+                    "dkim": "relaxed",
+                    "spf": "relaxed"
+                },
+                "aggregate_reporting": {
+                    "configured": true,
+                    "destinations": [
+                        {
+                            "raw_uri": "mailto:dmarc@example.test",
+                            "normalized_destination": "dmarc@example.test",
+                            "destination_domain": "example.test",
+                            "internal": true,
+                            "authorization_required": false,
+                            "authorization_lookup_name": null,
+                            "authorization_status": "not_required",
+                            "size_limit": null
+                        }
+                    ],
+                    "syntactic": true,
+                    "mxscan_expectation": {
+                        "expected_address": "dmarc+goldenfixturetoken@mxscan.me",
+                        "present": false,
+                        "other_valid_destination_exists": true
+                    }
+                },
+                "failure_reporting": {
+                    "configured": false,
+                    "destinations": [],
+                    "syntactic": false
+                },
+                "external_authorization": {
+                    "destinations_checked": 1,
+                    "unauthorized_count": 0
+                },
+                "errors": [],
+                "warnings": []
             }
-          ]
         },
-        "SPF": {
-          "status": "found",
-          "data": "v=spf1 a mx -all"
-        },
-        "DKIM": {
-          "status": "found",
-          "data": [
-            {
-              "selector": "s1",
-              "record": "v=DKIM1; p=abc"
+        "dkim": {
+            "status": "error",
+            "valid": true,
+            "protocol_status": "valid",
+            "risk_status": "critical",
+            "ui_state": "missing",
+            "summary": "A valid DKIM key is published for selector google.",
+            "analysis": {
+                "version": "dkim-native-v1",
+                "protocol_status": "valid",
+                "risk_status": "critical",
+                "state": "missing",
+                "summary": "A valid DKIM key is published for selector google.",
+                "signing_domain": "example.test",
+                "signing_verified": false,
+                "selector_coverage": {
+                    "selectors_available": true,
+                    "selectors_tested": 25,
+                    "coverage_type": "catalog_only"
+                },
+                "selectors": [
+                    {
+                        "selector": "google",
+                        "source": "catalog",
+                        "confidence": "low",
+                        "hostname": "google._domainkey.example.test",
+                        "dns_status": "answer",
+                        "record_status": "valid",
+                        "protocol_status": "valid",
+                        "risk_status": "healthy",
+                        "state": "pass",
+                        "key_type": "rsa",
+                        "key_bits": 2048,
+                        "testing": false,
+                        "revoked": false,
+                        "errors": [],
+                        "warnings": []
+                    },
+                    {
+                        "selector": "selector1",
+                        "source": "catalog",
+                        "confidence": "low",
+                        "hostname": "selector1._domainkey.example.test",
+                        "dns_status": "answer",
+                        "record_status": "valid",
+                        "protocol_status": "valid",
+                        "risk_status": "healthy",
+                        "state": "pass",
+                        "key_type": "rsa",
+                        "key_bits": 2048,
+                        "testing": false,
+                        "revoked": false,
+                        "errors": [],
+                        "warnings": []
+                    },
+                    {
+                        "selector": "selector2",
+                        "source": "catalog",
+                        "confidence": "low",
+                        "hostname": "selector2._domainkey.example.test",
+                        "dns_status": "empty",
+                        "record_status": "none",
+                        "protocol_status": "none",
+                        "risk_status": "critical",
+                        "state": "missing",
+                        "key_type": null,
+                        "key_bits": null,
+                        "testing": false,
+                        "revoked": false,
+                        "errors": [],
+                        "warnings": []
+                    },
+                    {
+                        "selector": "k1",
+                        "source": "catalog",
+                        "confidence": "low",
+                        "hostname": "k1._domainkey.example.test",
+                        "dns_status": "empty",
+                        "record_status": "none",
+                        "protocol_status": "none",
+                        "risk_status": "critical",
+                        "state": "missing",
+                        "key_type": null,
+                        "key_bits": null,
+                        "testing": false,
+                        "revoked": false,
+                        "errors": [],
+                        "warnings": []
+                    },
+                    {
+                        "selector": "k2",
+                        "source": "catalog",
+                        "confidence": "low",
+                        "hostname": "k2._domainkey.example.test",
+                        "dns_status": "empty",
+                        "record_status": "none",
+                        "protocol_status": "none",
+                        "risk_status": "critical",
+                        "state": "missing",
+                        "key_type": null,
+                        "key_bits": null,
+                        "testing": false,
+                        "revoked": false,
+                        "errors": [],
+                        "warnings": []
+                    },
+                    {
+                        "selector": "k3",
+                        "source": "catalog",
+                        "confidence": "low",
+                        "hostname": "k3._domainkey.example.test",
+                        "dns_status": "empty",
+                        "record_status": "none",
+                        "protocol_status": "none",
+                        "risk_status": "critical",
+                        "state": "missing",
+                        "key_type": null,
+                        "key_bits": null,
+                        "testing": false,
+                        "revoked": false,
+                        "errors": [],
+                        "warnings": []
+                    },
+                    {
+                        "selector": "mte1",
+                        "source": "catalog",
+                        "confidence": "low",
+                        "hostname": "mte1._domainkey.example.test",
+                        "dns_status": "empty",
+                        "record_status": "none",
+                        "protocol_status": "none",
+                        "risk_status": "critical",
+                        "state": "missing",
+                        "key_type": null,
+                        "key_bits": null,
+                        "testing": false,
+                        "revoked": false,
+                        "errors": [],
+                        "warnings": []
+                    },
+                    {
+                        "selector": "mte2",
+                        "source": "catalog",
+                        "confidence": "low",
+                        "hostname": "mte2._domainkey.example.test",
+                        "dns_status": "empty",
+                        "record_status": "none",
+                        "protocol_status": "none",
+                        "risk_status": "critical",
+                        "state": "missing",
+                        "key_type": null,
+                        "key_bits": null,
+                        "testing": false,
+                        "revoked": false,
+                        "errors": [],
+                        "warnings": []
+                    },
+                    {
+                        "selector": "default",
+                        "source": "catalog",
+                        "confidence": "low",
+                        "hostname": "default._domainkey.example.test",
+                        "dns_status": "empty",
+                        "record_status": "none",
+                        "protocol_status": "none",
+                        "risk_status": "critical",
+                        "state": "missing",
+                        "key_type": null,
+                        "key_bits": null,
+                        "testing": false,
+                        "revoked": false,
+                        "errors": [],
+                        "warnings": []
+                    },
+                    {
+                        "selector": "mail",
+                        "source": "catalog",
+                        "confidence": "low",
+                        "hostname": "mail._domainkey.example.test",
+                        "dns_status": "empty",
+                        "record_status": "none",
+                        "protocol_status": "none",
+                        "risk_status": "critical",
+                        "state": "missing",
+                        "key_type": null,
+                        "key_bits": null,
+                        "testing": false,
+                        "revoked": false,
+                        "errors": [],
+                        "warnings": []
+                    },
+                    {
+                        "selector": "dkim",
+                        "source": "catalog",
+                        "confidence": "low",
+                        "hostname": "dkim._domainkey.example.test",
+                        "dns_status": "empty",
+                        "record_status": "none",
+                        "protocol_status": "none",
+                        "risk_status": "critical",
+                        "state": "missing",
+                        "key_type": null,
+                        "key_bits": null,
+                        "testing": false,
+                        "revoked": false,
+                        "errors": [],
+                        "warnings": []
+                    },
+                    {
+                        "selector": "s1",
+                        "source": "catalog",
+                        "confidence": "low",
+                        "hostname": "s1._domainkey.example.test",
+                        "dns_status": "answer",
+                        "record_status": "valid",
+                        "protocol_status": "valid",
+                        "risk_status": "healthy",
+                        "state": "pass",
+                        "key_type": "rsa",
+                        "key_bits": 2048,
+                        "testing": false,
+                        "revoked": false,
+                        "errors": [],
+                        "warnings": []
+                    },
+                    {
+                        "selector": "s2",
+                        "source": "catalog",
+                        "confidence": "low",
+                        "hostname": "s2._domainkey.example.test",
+                        "dns_status": "empty",
+                        "record_status": "none",
+                        "protocol_status": "none",
+                        "risk_status": "critical",
+                        "state": "missing",
+                        "key_type": null,
+                        "key_bits": null,
+                        "testing": false,
+                        "revoked": false,
+                        "errors": [],
+                        "warnings": []
+                    },
+                    {
+                        "selector": "smtp",
+                        "source": "catalog",
+                        "confidence": "low",
+                        "hostname": "smtp._domainkey.example.test",
+                        "dns_status": "empty",
+                        "record_status": "none",
+                        "protocol_status": "none",
+                        "risk_status": "critical",
+                        "state": "missing",
+                        "key_type": null,
+                        "key_bits": null,
+                        "testing": false,
+                        "revoked": false,
+                        "errors": [],
+                        "warnings": []
+                    },
+                    {
+                        "selector": "email",
+                        "source": "catalog",
+                        "confidence": "low",
+                        "hostname": "email._domainkey.example.test",
+                        "dns_status": "empty",
+                        "record_status": "none",
+                        "protocol_status": "none",
+                        "risk_status": "critical",
+                        "state": "missing",
+                        "key_type": null,
+                        "key_bits": null,
+                        "testing": false,
+                        "revoked": false,
+                        "errors": [],
+                        "warnings": []
+                    },
+                    {
+                        "selector": "protonmail",
+                        "source": "catalog",
+                        "confidence": "low",
+                        "hostname": "protonmail._domainkey.example.test",
+                        "dns_status": "empty",
+                        "record_status": "none",
+                        "protocol_status": "none",
+                        "risk_status": "critical",
+                        "state": "missing",
+                        "key_type": null,
+                        "key_bits": null,
+                        "testing": false,
+                        "revoked": false,
+                        "errors": [],
+                        "warnings": []
+                    },
+                    {
+                        "selector": "protonmail2",
+                        "source": "catalog",
+                        "confidence": "low",
+                        "hostname": "protonmail2._domainkey.example.test",
+                        "dns_status": "empty",
+                        "record_status": "none",
+                        "protocol_status": "none",
+                        "risk_status": "critical",
+                        "state": "missing",
+                        "key_type": null,
+                        "key_bits": null,
+                        "testing": false,
+                        "revoked": false,
+                        "errors": [],
+                        "warnings": []
+                    },
+                    {
+                        "selector": "protonmail3",
+                        "source": "catalog",
+                        "confidence": "low",
+                        "hostname": "protonmail3._domainkey.example.test",
+                        "dns_status": "empty",
+                        "record_status": "none",
+                        "protocol_status": "none",
+                        "risk_status": "critical",
+                        "state": "missing",
+                        "key_type": null,
+                        "key_bits": null,
+                        "testing": false,
+                        "revoked": false,
+                        "errors": [],
+                        "warnings": []
+                    },
+                    {
+                        "selector": "sendgrid",
+                        "source": "catalog",
+                        "confidence": "low",
+                        "hostname": "sendgrid._domainkey.example.test",
+                        "dns_status": "empty",
+                        "record_status": "none",
+                        "protocol_status": "none",
+                        "risk_status": "critical",
+                        "state": "missing",
+                        "key_type": null,
+                        "key_bits": null,
+                        "testing": false,
+                        "revoked": false,
+                        "errors": [],
+                        "warnings": []
+                    },
+                    {
+                        "selector": "smtpapi",
+                        "source": "catalog",
+                        "confidence": "low",
+                        "hostname": "smtpapi._domainkey.example.test",
+                        "dns_status": "empty",
+                        "record_status": "none",
+                        "protocol_status": "none",
+                        "risk_status": "critical",
+                        "state": "missing",
+                        "key_type": null,
+                        "key_bits": null,
+                        "testing": false,
+                        "revoked": false,
+                        "errors": [],
+                        "warnings": []
+                    },
+                    {
+                        "selector": "mailgun",
+                        "source": "catalog",
+                        "confidence": "low",
+                        "hostname": "mailgun._domainkey.example.test",
+                        "dns_status": "empty",
+                        "record_status": "none",
+                        "protocol_status": "none",
+                        "risk_status": "critical",
+                        "state": "missing",
+                        "key_type": null,
+                        "key_bits": null,
+                        "testing": false,
+                        "revoked": false,
+                        "errors": [],
+                        "warnings": []
+                    },
+                    {
+                        "selector": "amazonses",
+                        "source": "catalog",
+                        "confidence": "low",
+                        "hostname": "amazonses._domainkey.example.test",
+                        "dns_status": "empty",
+                        "record_status": "none",
+                        "protocol_status": "none",
+                        "risk_status": "critical",
+                        "state": "missing",
+                        "key_type": null,
+                        "key_bits": null,
+                        "testing": false,
+                        "revoked": false,
+                        "errors": [],
+                        "warnings": []
+                    },
+                    {
+                        "selector": "postmark",
+                        "source": "catalog",
+                        "confidence": "low",
+                        "hostname": "postmark._domainkey.example.test",
+                        "dns_status": "empty",
+                        "record_status": "none",
+                        "protocol_status": "none",
+                        "risk_status": "critical",
+                        "state": "missing",
+                        "key_type": null,
+                        "key_bits": null,
+                        "testing": false,
+                        "revoked": false,
+                        "errors": [],
+                        "warnings": []
+                    },
+                    {
+                        "selector": "cm",
+                        "source": "catalog",
+                        "confidence": "low",
+                        "hostname": "cm._domainkey.example.test",
+                        "dns_status": "empty",
+                        "record_status": "none",
+                        "protocol_status": "none",
+                        "risk_status": "critical",
+                        "state": "missing",
+                        "key_type": null,
+                        "key_bits": null,
+                        "testing": false,
+                        "revoked": false,
+                        "errors": [],
+                        "warnings": []
+                    },
+                    {
+                        "selector": "turbo-smtp",
+                        "source": "catalog",
+                        "confidence": "low",
+                        "hostname": "turbo-smtp._domainkey.example.test",
+                        "dns_status": "empty",
+                        "record_status": "none",
+                        "protocol_status": "none",
+                        "risk_status": "critical",
+                        "state": "missing",
+                        "key_type": null,
+                        "key_bits": null,
+                        "testing": false,
+                        "revoked": false,
+                        "errors": [],
+                        "warnings": []
+                    }
+                ],
+                "errors": [],
+                "warnings": []
             }
-          ]
         },
-        "DMARC": {
-          "status": "found",
-          "data": "v=DMARC1; p=quarantine; rua=mailto:dmarc@example.test"
+        "mta_sts": {
+            "status": "error",
+            "valid": false,
+            "protocol_status": "none",
+            "risk_status": "warning",
+            "ui_state": "missing",
+            "summary": "No MTA-STS DNS indicator was found.",
+            "analysis": {
+                "version": "mta-sts-native-v1",
+                "protocol_status": "none",
+                "risk_status": "warning",
+                "state": "missing",
+                "summary": "No MTA-STS DNS indicator was found.",
+                "domain": "example.test",
+                "dns_indicator": [],
+                "policy_fetch": [],
+                "policy_host_tls": [],
+                "policy": [],
+                "mx_validation": [],
+                "evaluation_completeness": "complete",
+                "errors": [],
+                "warnings": []
+            }
         },
-        "TLS-RPT": {
-          "status": "found",
-          "data": "v=TLSRPTv1; rua=mailto:tlsrpt@example.test"
+        "tls_rpt": {
+            "status": "ok",
+            "valid": true,
+            "protocol_status": "valid",
+            "risk_status": "healthy",
+            "ui_state": "pass",
+            "summary": "TLS reporting is configured.",
+            "analysis": {
+                "version": "tls-rpt-native-v1",
+                "protocol_status": "valid",
+                "risk_status": "healthy",
+                "state": "pass",
+                "summary": "TLS reporting is configured.",
+                "domain": "example.test",
+                "record_hostname": "_smtp._tls.example.test",
+                "record": {
+                    "raw": "v=TLSRPTv1; rua=mailto:tlsrpt@example.test",
+                    "normalized": "v=TLSRPTV1; rua=mailto:tlsrpt@example.test",
+                    "ttl": 3600,
+                    "alias_path": []
+                },
+                "reporting": {
+                    "configured": true,
+                    "destinations_total": 1,
+                    "valid_destinations": 1,
+                    "invalid_destinations": 0,
+                    "destinations": [
+                        {
+                            "raw_uri": "mailto:tlsrpt@example.test",
+                            "normalized_uri": "mailto:tlsrpt@example.test",
+                            "scheme": "mailto",
+                            "address_or_host": "tlsrpt@example.test",
+                            "status": "valid",
+                            "duplicate": false,
+                            "errors": [],
+                            "warnings": []
+                        }
+                    ],
+                    "expected_destination": {
+                        "expected_address": "mailto:tls-reports@mxscan.me",
+                        "present": false,
+                        "other_valid_destination_exists": true
+                    }
+                },
+                "evaluation_completeness": "complete",
+                "errors": [],
+                "warnings": []
+            }
         },
-        "MTA-STS": {
-          "status": "missing"
+        "mx": {
+            "status": "ok",
+            "protocol_status": "valid",
+            "risk_status": "healthy",
+            "ui_state": "pass",
+            "summary": "Valid inbound mail exchangers are published.",
+            "analysis": {
+                "version": "mx-native-v1",
+                "protocol_status": "valid",
+                "risk_status": "healthy",
+                "state": "pass",
+                "summary": "Valid inbound mail exchangers are published.",
+                "domain": "example.test",
+                "service_mode": "accepts_mail",
+                "dns_status": "answer",
+                "records_total": 1,
+                "usable_targets": 1,
+                "invalid_targets": 0,
+                "null_mx": {
+                    "published": false,
+                    "valid": false
+                },
+                "implicit_fallback": {
+                    "evaluated": false,
+                    "active": false,
+                    "reason": null,
+                    "a_addresses": [],
+                    "aaaa_addresses": [],
+                    "usable_address_count": 0,
+                    "invalid_address_count": 0
+                },
+                "preference_groups": [
+                    {
+                        "preference": 10,
+                        "targets": [
+                            "mail.example.test"
+                        ]
+                    }
+                ],
+                "targets": [
+                    {
+                        "preference": 10,
+                        "hostname": "mail.example.test",
+                        "normalized_hostname": "mail.example.test",
+                        "status": "usable",
+                        "is_alias": false,
+                        "alias_target": null,
+                        "alias_path": [],
+                        "alias_cycle": false,
+                        "a_addresses": [
+                            {
+                                "address": "8.8.8.8",
+                                "classification": "public",
+                                "usable": true
+                            }
+                        ],
+                        "aaaa_addresses": [],
+                        "usable_address_count": 1,
+                        "errors": [],
+                        "warnings": []
+                    }
+                ],
+                "evaluation_completeness": "complete",
+                "errors": [],
+                "warnings": []
+            }
         },
-        "BIMI": {
-          "status": "missing",
-          "data": null
+        "blacklist": {
+            "analysis": {
+                "version": "blacklist-native-v1",
+                "analysis_status": "complete",
+                "reputation_status": "clean",
+                "state": "pass",
+                "summary": "Checked 6 provider queries across mail targets; no listings found.",
+                "targets": [
+                    {
+                        "address": "8.8.8.8",
+                        "version": 4,
+                        "source_type": "mx_target",
+                        "source_mx_hostnames": [
+                            "mail.example.test"
+                        ]
+                    }
+                ],
+                "providers": [
+                    {
+                        "key": "spamhaus_zen",
+                        "name": "Spamhaus ZEN",
+                        "enabled": true,
+                        "target_types": [
+                            "ipv4",
+                            "ipv6"
+                        ],
+                        "zone": "zen.spamhaus.org"
+                    },
+                    {
+                        "key": "barracuda",
+                        "name": "Barracuda",
+                        "enabled": true,
+                        "target_types": [
+                            "ipv4"
+                        ],
+                        "zone": "b.barracudacentral.org"
+                    },
+                    {
+                        "key": "spamcop",
+                        "name": "SpamCop",
+                        "enabled": true,
+                        "target_types": [
+                            "ipv4"
+                        ],
+                        "zone": "bl.spamcop.net"
+                    },
+                    {
+                        "key": "cbl",
+                        "name": "Composite Blocking List",
+                        "enabled": true,
+                        "target_types": [
+                            "ipv4"
+                        ],
+                        "zone": "cbl.abuseat.org"
+                    },
+                    {
+                        "key": "sorbs",
+                        "name": "SORBS",
+                        "enabled": true,
+                        "target_types": [
+                            "ipv4"
+                        ],
+                        "zone": "dnsbl.sorbs.net"
+                    },
+                    {
+                        "key": "dronebl",
+                        "name": "DroneBL",
+                        "enabled": true,
+                        "target_types": [
+                            "ipv4"
+                        ],
+                        "zone": "dnsbl.dronebl.org"
+                    }
+                ],
+                "checks": [
+                    {
+                        "target": "8.8.8.8",
+                        "target_type": "ipv4",
+                        "source_mx_hostnames": [
+                            "mail.example.test"
+                        ],
+                        "source_type": "mx_target",
+                        "provider_key": "spamhaus_zen",
+                        "provider_name": "Spamhaus ZEN",
+                        "query_hostname": "8.8.8.8.zen.spamhaus.org",
+                        "dns_outcome": "NXDOMAIN",
+                        "response_addresses": [],
+                        "txt_evidence": [],
+                        "ttl": null,
+                        "retry_count": 0,
+                        "outcome": "clean_nxdomain",
+                        "interpreted_status": "clean",
+                        "return_code": null,
+                        "message": "No listing returned (NXDOMAIN).",
+                        "errors": [],
+                        "warnings": []
+                    },
+                    {
+                        "target": "8.8.8.8",
+                        "target_type": "ipv4",
+                        "source_mx_hostnames": [
+                            "mail.example.test"
+                        ],
+                        "source_type": "mx_target",
+                        "provider_key": "barracuda",
+                        "provider_name": "Barracuda",
+                        "query_hostname": "8.8.8.8.b.barracudacentral.org",
+                        "dns_outcome": "NXDOMAIN",
+                        "response_addresses": [],
+                        "txt_evidence": [],
+                        "ttl": null,
+                        "retry_count": 0,
+                        "outcome": "clean_nxdomain",
+                        "interpreted_status": "clean",
+                        "return_code": null,
+                        "message": "No listing returned (NXDOMAIN).",
+                        "errors": [],
+                        "warnings": []
+                    },
+                    {
+                        "target": "8.8.8.8",
+                        "target_type": "ipv4",
+                        "source_mx_hostnames": [
+                            "mail.example.test"
+                        ],
+                        "source_type": "mx_target",
+                        "provider_key": "spamcop",
+                        "provider_name": "SpamCop",
+                        "query_hostname": "8.8.8.8.bl.spamcop.net",
+                        "dns_outcome": "NXDOMAIN",
+                        "response_addresses": [],
+                        "txt_evidence": [],
+                        "ttl": null,
+                        "retry_count": 0,
+                        "outcome": "clean_nxdomain",
+                        "interpreted_status": "clean",
+                        "return_code": null,
+                        "message": "No listing returned (NXDOMAIN).",
+                        "errors": [],
+                        "warnings": []
+                    },
+                    {
+                        "target": "8.8.8.8",
+                        "target_type": "ipv4",
+                        "source_mx_hostnames": [
+                            "mail.example.test"
+                        ],
+                        "source_type": "mx_target",
+                        "provider_key": "cbl",
+                        "provider_name": "Composite Blocking List",
+                        "query_hostname": "8.8.8.8.cbl.abuseat.org",
+                        "dns_outcome": "NXDOMAIN",
+                        "response_addresses": [],
+                        "txt_evidence": [],
+                        "ttl": null,
+                        "retry_count": 0,
+                        "outcome": "clean_nxdomain",
+                        "interpreted_status": "clean",
+                        "return_code": null,
+                        "message": "No listing returned (NXDOMAIN).",
+                        "errors": [],
+                        "warnings": []
+                    },
+                    {
+                        "target": "8.8.8.8",
+                        "target_type": "ipv4",
+                        "source_mx_hostnames": [
+                            "mail.example.test"
+                        ],
+                        "source_type": "mx_target",
+                        "provider_key": "sorbs",
+                        "provider_name": "SORBS",
+                        "query_hostname": "8.8.8.8.dnsbl.sorbs.net",
+                        "dns_outcome": "NXDOMAIN",
+                        "response_addresses": [],
+                        "txt_evidence": [],
+                        "ttl": null,
+                        "retry_count": 0,
+                        "outcome": "clean_nxdomain",
+                        "interpreted_status": "clean",
+                        "return_code": null,
+                        "message": "No listing returned (NXDOMAIN).",
+                        "errors": [],
+                        "warnings": []
+                    },
+                    {
+                        "target": "8.8.8.8",
+                        "target_type": "ipv4",
+                        "source_mx_hostnames": [
+                            "mail.example.test"
+                        ],
+                        "source_type": "mx_target",
+                        "provider_key": "dronebl",
+                        "provider_name": "DroneBL",
+                        "query_hostname": "8.8.8.8.dnsbl.dronebl.org",
+                        "dns_outcome": "NXDOMAIN",
+                        "response_addresses": [],
+                        "txt_evidence": [],
+                        "ttl": null,
+                        "retry_count": 0,
+                        "outcome": "clean_nxdomain",
+                        "interpreted_status": "clean",
+                        "return_code": null,
+                        "message": "No listing returned (NXDOMAIN).",
+                        "errors": [],
+                        "warnings": []
+                    }
+                ],
+                "target_results": [
+                    {
+                        "target": "8.8.8.8",
+                        "target_type": "ipv4",
+                        "source_mx_hostnames": [
+                            "mail.example.test"
+                        ],
+                        "listed_providers": [],
+                        "usable_checks": 6,
+                        "unavailable_checks": 0
+                    }
+                ],
+                "provider_health": [
+                    {
+                        "provider_key": "spamhaus_zen",
+                        "provider_name": "Spamhaus ZEN",
+                        "usable": 1,
+                        "unavailable": 0,
+                        "listed": 0
+                    },
+                    {
+                        "provider_key": "barracuda",
+                        "provider_name": "Barracuda",
+                        "usable": 1,
+                        "unavailable": 0,
+                        "listed": 0
+                    },
+                    {
+                        "provider_key": "spamcop",
+                        "provider_name": "SpamCop",
+                        "usable": 1,
+                        "unavailable": 0,
+                        "listed": 0
+                    },
+                    {
+                        "provider_key": "cbl",
+                        "provider_name": "Composite Blocking List",
+                        "usable": 1,
+                        "unavailable": 0,
+                        "listed": 0
+                    },
+                    {
+                        "provider_key": "sorbs",
+                        "provider_name": "SORBS",
+                        "usable": 1,
+                        "unavailable": 0,
+                        "listed": 0
+                    },
+                    {
+                        "provider_key": "dronebl",
+                        "provider_name": "DroneBL",
+                        "usable": 1,
+                        "unavailable": 0,
+                        "listed": 0
+                    }
+                ],
+                "listings": [],
+                "counts": {
+                    "targets_total": 1,
+                    "ipv4_targets": 1,
+                    "ipv6_targets": 0,
+                    "domain_targets": 0,
+                    "providers_enabled": 6,
+                    "providers_compatible": 6,
+                    "queries_planned": 6,
+                    "queries_completed": 6,
+                    "usable_results": 6,
+                    "clean_results": 6,
+                    "listed_results": 0,
+                    "unknown_results": 0,
+                    "blocked_results": 0,
+                    "timeout_results": 0,
+                    "skipped_results": 0
+                },
+                "evaluation_completeness": "complete",
+                "errors": [],
+                "warnings": [],
+                "mx_evidence_version": "mx-native-v1"
+            },
+            "total_checks": 6,
+            "listed_count": 0,
+            "ok_count": 6,
+            "unique_ips": 1,
+            "providers_checked": 6,
+            "is_clean": true
+        },
+        "certificates": {
+            "status": "warning",
+            "analysis_status": "complete",
+            "risk_status": "warning",
+            "ui_state": "warning",
+            "summary": "One or more certificates are valid but approaching expiry.",
+            "analysis": {
+                "version": "certificates-native-v1",
+                "analysis_status": "complete",
+                "risk_status": "warning",
+                "state": "warning",
+                "summary": "One or more certificates are valid but approaching expiry.",
+                "domain": "example.test",
+                "counts": {
+                    "endpoints_total": 3,
+                    "evaluated": 3,
+                    "valid": 0,
+                    "warning": 3,
+                    "invalid": 0,
+                    "unavailable": 0,
+                    "expiring_soon": 3
+                },
+                "endpoints": [
+                    {
+                        "endpoint_key": "primary_https:example.test",
+                        "endpoint_type": "primary_https",
+                        "hostname": "example.test",
+                        "port": 443,
+                        "transport": "https",
+                        "mx_priority": null,
+                        "protocol_status": "evaluated",
+                        "certificate_status": "warning",
+                        "ui_state": "warning",
+                        "evidence_source": "certificate_probe",
+                        "reused": false,
+                        "hostname_match": true,
+                        "matched_identity": "example.test",
+                        "hostname_mismatch_reason": null,
+                        "trusted": true,
+                        "trust_status": "trusted",
+                        "validity_classification": "valid",
+                        "valid_from": "2026-07-14T23:59:51+00:00",
+                        "valid_to": "2026-10-12T23:59:51+00:00",
+                        "days_until_expiry": 89,
+                        "issuer": "Test CA",
+                        "subject": "example.test",
+                        "san_dns": [
+                            "example.test"
+                        ],
+                        "fingerprint_sha256": null,
+                        "serial_fingerprint": null,
+                        "key": {
+                            "algorithm": null,
+                            "bits": null,
+                            "curve": null
+                        },
+                        "signature_algorithm": null,
+                        "key_strength_classification": "unknown",
+                        "signature_classification": "unavailable",
+                        "self_signed": false,
+                        "failure_category": null,
+                        "errors": [],
+                        "warnings": [
+                            {
+                                "code": "KEY_ALGORITHM_UNKNOWN",
+                                "message": "Certificate public-key algorithm could not be determined."
+                            }
+                        ]
+                    },
+                    {
+                        "endpoint_key": "mta_sts_https:mta-sts.example.test",
+                        "endpoint_type": "mta_sts_https",
+                        "hostname": "mta-sts.example.test",
+                        "port": 443,
+                        "transport": "https",
+                        "mx_priority": null,
+                        "protocol_status": "evaluated",
+                        "certificate_status": "warning",
+                        "ui_state": "warning",
+                        "evidence_source": "certificate_probe",
+                        "reused": false,
+                        "hostname_match": true,
+                        "matched_identity": "mta-sts.example.test",
+                        "hostname_mismatch_reason": null,
+                        "trusted": true,
+                        "trust_status": "trusted",
+                        "validity_classification": "valid",
+                        "valid_from": "2026-07-14T23:59:51+00:00",
+                        "valid_to": "2026-10-12T23:59:51+00:00",
+                        "days_until_expiry": 89,
+                        "issuer": "Test CA",
+                        "subject": "mta-sts.example.test",
+                        "san_dns": [
+                            "mta-sts.example.test"
+                        ],
+                        "fingerprint_sha256": null,
+                        "serial_fingerprint": null,
+                        "key": {
+                            "algorithm": null,
+                            "bits": null,
+                            "curve": null
+                        },
+                        "signature_algorithm": null,
+                        "key_strength_classification": "unknown",
+                        "signature_classification": "unavailable",
+                        "self_signed": false,
+                        "failure_category": null,
+                        "errors": [],
+                        "warnings": [
+                            {
+                                "code": "KEY_ALGORITHM_UNKNOWN",
+                                "message": "Certificate public-key algorithm could not be determined."
+                            }
+                        ]
+                    },
+                    {
+                        "endpoint_key": "smtp_mx:mail.example.test",
+                        "endpoint_type": "smtp_mx",
+                        "hostname": "mail.example.test",
+                        "port": 25,
+                        "transport": "smtp",
+                        "mx_priority": 10,
+                        "protocol_status": "evaluated",
+                        "certificate_status": "warning",
+                        "ui_state": "warning",
+                        "evidence_source": "certificate_probe",
+                        "reused": false,
+                        "hostname_match": true,
+                        "matched_identity": "mail.example.test",
+                        "hostname_mismatch_reason": null,
+                        "trusted": true,
+                        "trust_status": "trusted",
+                        "validity_classification": "valid",
+                        "valid_from": "2026-07-14T23:59:51+00:00",
+                        "valid_to": "2026-10-12T23:59:51+00:00",
+                        "days_until_expiry": 89,
+                        "issuer": "Test CA",
+                        "subject": "mail.example.test",
+                        "san_dns": [
+                            "mail.example.test"
+                        ],
+                        "fingerprint_sha256": null,
+                        "serial_fingerprint": null,
+                        "key": {
+                            "algorithm": null,
+                            "bits": null,
+                            "curve": null
+                        },
+                        "signature_algorithm": null,
+                        "key_strength_classification": "unknown",
+                        "signature_classification": "unavailable",
+                        "self_signed": false,
+                        "failure_category": null,
+                        "errors": [],
+                        "warnings": [
+                            {
+                                "code": "KEY_ALGORITHM_UNKNOWN",
+                                "message": "Certificate public-key algorithm could not be determined."
+                            }
+                        ]
+                    }
+                ],
+                "earliest_expiry": {
+                    "endpoint_key": "primary_https:example.test",
+                    "expires_at": "2026-10-12T23:59:51+00:00",
+                    "days_remaining": 89
+                },
+                "evaluation_completeness": "complete",
+                "errors": [],
+                "warnings": [
+                    {
+                        "code": "KEY_ALGORITHM_UNKNOWN",
+                        "message": "Certificate public-key algorithm could not be determined."
+                    },
+                    {
+                        "code": "KEY_ALGORITHM_UNKNOWN",
+                        "message": "Certificate public-key algorithm could not be determined."
+                    },
+                    {
+                        "code": "KEY_ALGORITHM_UNKNOWN",
+                        "message": "Certificate public-key algorithm could not be determined."
+                    }
+                ]
+            }
+        },
+        "bimi": {
+            "status": "error",
+            "valid": false,
+            "protocol_status": "none",
+            "readiness_status": "not_participating",
+            "evidence_status": "absent",
+            "risk_status": "informational",
+            "ui_state": "missing",
+            "summary": "No BIMI record was found.",
+            "analysis": {
+                "version": "bimi-native-v1",
+                "protocol_status": "none",
+                "readiness_status": "not_participating",
+                "evidence_status": "absent",
+                "risk_status": "informational",
+                "state": "missing",
+                "summary": "No BIMI record was found.",
+                "domain": "example.test",
+                "record_hostname": "default._bimi.example.test",
+                "evaluation_completeness": "complete",
+                "standards_profile": {
+                    "core": "draft-brand-indicators-for-message-identification-14",
+                    "svg": "svg-tiny-ps-current",
+                    "mark_certificate": "current",
+                    "vmc_fetch_validation": "current-draft"
+                },
+                "record": {
+                    "raw": null,
+                    "normalized": null,
+                    "ttl": null,
+                    "alias_path": [
+                        "default._bimi.example.test"
+                    ],
+                    "tags": [],
+                    "avatar_preference": "brand",
+                    "lps_prefixes": [],
+                    "declined": false
+                },
+                "selector": {
+                    "value": "default",
+                    "source": "default",
+                    "test_local_part": null
+                },
+                "discovery": {
+                    "queried_domain": "example.test",
+                    "record_hostname": "default._bimi.example.test",
+                    "source": "dns_query",
+                    "selector": "default",
+                    "selector_source": "default",
+                    "fallback_path": [
+                        {
+                            "domain": "example.test",
+                            "hostname": "default._bimi.example.test",
+                            "source": "dns_query",
+                            "outcome": "missing",
+                            "selector": "default"
+                        }
+                    ],
+                    "selected_record_count": 0
+                },
+                "indicator": {
+                    "status": "absent"
+                },
+                "authority_evidence": {
+                    "status": "absent"
+                },
+                "indicator_comparison": [],
+                "dmarc_eligibility": {
+                    "core_eligible": true,
+                    "author_domain_eligible": true,
+                    "organizational_domain_eligible": true,
+                    "message_dmarc_pass_verified": false,
+                    "source_analysis_version": "dmarc-native-v1",
+                    "core_requirements_met": [
+                        "organizational_policy_enforcement",
+                        "pct_100"
+                    ],
+                    "core_requirements_missing": [],
+                    "author_policy": {
+                        "protocol_status": "valid",
+                        "effective_policy": "quarantine",
+                        "pct": 100,
+                        "policy_domain": "example.test",
+                        "organizational_domain": "example.test"
+                    },
+                    "organizational_policy": {
+                        "protocol_status": "valid",
+                        "effective_policy": "quarantine",
+                        "pct": 100,
+                        "policy_domain": "example.test",
+                        "organizational_domain": "example.test"
+                    }
+                },
+                "provider_profiles": [],
+                "local_part_evaluation": {
+                    "complete": true,
+                    "test_local_part": null
+                },
+                "errors": [],
+                "warnings": []
+            }
         }
-      },
-      "score_breakdown": [
-        {
-          "key": "mx",
-          "label": "MX",
-          "earned": 15,
-          "possible": 15,
-          "status": "ok"
-        },
-        {
-          "key": "spf",
-          "label": "SPF",
-          "earned": 20,
-          "possible": 20,
-          "status": "ok"
-        },
-        {
-          "key": "dkim",
-          "label": "DKIM",
-          "earned": 20,
-          "possible": 20,
-          "status": "ok"
-        },
-        {
-          "key": "dmarc",
-          "label": "DMARC",
-          "earned": 20,
-          "possible": 30,
-          "status": "partial"
-        },
-        {
-          "key": "tlsrpt",
-          "label": "TLS-RPT",
-          "earned": 5,
-          "possible": 5,
-          "status": "ok"
-        },
-        {
-          "key": "mtasts",
-          "label": "MTA-STS",
-          "earned": 0,
-          "possible": 10,
-          "status": "missing"
-        }
-      ],
-      "recommendations": []
     },
-    "spf": {
-      "record": "v=spf1 a mx -all",
-      "lookups": 2,
-      "flattened": "v=spf1 ip4:203.0.113.10 -all",
-      "status": "safe",
-      "valid": true,
-      "error": null,
-      "warnings": []
+    "facts_json": {
+        "spf_record": "v=spf1 a mx -all",
+        "spf_lookups": 2,
+        "blacklist_analysis_status": "complete",
+        "blacklist_reputation_status": "clean",
+        "blacklist_targets_total": 1,
+        "blacklist_ipv4_targets": 1,
+        "blacklist_ipv6_targets": 0,
+        "blacklist_providers_enabled": 6,
+        "blacklist_queries_planned": 6,
+        "blacklist_queries_completed": 6,
+        "blacklist_usable_results": 6,
+        "blacklist_clean_results": 6,
+        "blacklist_listed_results": 0,
+        "blacklist_unknown_results": 0,
+        "blacklist_blocked_results": 0,
+        "blacklist_timeout_results": 0,
+        "blacklist_is_listed": false,
+        "blacklist_is_partial": false,
+        "blacklist_was_checked": true,
+        "blacklist_status": "clean",
+        "blacklist_count": 0,
+        "dmarc": "v=DMARC1; p=quarantine; rua=mailto:dmarc@example.test",
+        "dmarc_record": "v=DMARC1; p=quarantine; rua=mailto:dmarc@example.test",
+        "dmarc_protocol_status": "valid",
+        "dmarc_risk_status": "healthy",
+        "dmarc_effective_policy": "quarantine",
+        "dkim_protocol_status": "valid",
+        "tls_rpt_protocol_status": "valid",
+        "tls_rpt_risk_status": "healthy",
+        "tls_rpt_configured": true,
+        "tls_rpt_destination_count": 1,
+        "tls_rpt_valid_destination_count": 1,
+        "tls_rpt_has_mailto": true,
+        "tls_rpt_has_https": false,
+        "tls_rpt_expected_destination_present": false,
+        "mx_protocol_status": "valid",
+        "mx_risk_status": "healthy",
+        "mx_service_mode": "accepts_mail",
+        "mx_record_count": 1,
+        "mx_usable_target_count": 1,
+        "mx_invalid_target_count": 0,
+        "mx_null_published": false,
+        "mx_null_valid": false,
+        "mx_implicit_fallback": false,
+        "mx_has_ipv4": true,
+        "mx_has_ipv6": false,
+        "mx_has_cname_target": false,
+        "mx_has_dangling_target": false,
+        "certificates_analysis_status": "complete",
+        "certificates_risk_status": "warning",
+        "certificates_endpoints_total": 3,
+        "certificates_evaluated": 3,
+        "certificates_valid": 0,
+        "certificates_warning": 3,
+        "certificates_invalid": 0,
+        "certificates_unavailable": 0,
+        "certificates_expiring_30_days": 0,
+        "certificates_expiring_14_days": 0,
+        "certificates_expiring_7_days": 0,
+        "certificates_expired": 0,
+        "certificates_hostname_mismatches": 0,
+        "certificates_untrusted": 0,
+        "certificates_earliest_expiry": "2026-10-12T23:59:51+00:00",
+        "certificates_earliest_expiry_days": 89,
+        "certificates_primary_https_valid": true,
+        "certificates_mta_sts_https_valid": true,
+        "certificates_smtp_mx_valid_count": 1,
+        "bimi_protocol_status": "none",
+        "bimi_readiness_status": "not_participating",
+        "bimi_evidence_status": "absent",
+        "bimi_risk_status": "informational",
+        "bimi_record_present": false,
+        "bimi_declined": false,
+        "bimi_selector": "default",
+        "bimi_selector_source": "default",
+        "bimi_logo_present": false,
+        "bimi_logo_valid": false,
+        "bimi_logo_format": null,
+        "bimi_svg_tiny_ps_valid": null,
+        "bimi_logo_bytes": null,
+        "bimi_dmarc_core_eligible": true,
+        "bimi_mark_certificate_present": false,
+        "bimi_mark_certificate_type": null,
+        "bimi_mark_certificate_valid": false,
+        "bimi_mark_certificate_expires_at": null,
+        "bimi_indicator_match": null,
+        "bimi_avatar_preference": "brand",
+        "bimi_evaluation_complete": true
     },
-    "blacklist": {
-      "total_checks": 5,
-      "listed_count": 0,
-      "is_clean": true,
-      "providers_checked": 5
-    }
-  },
-  "score": 75,
-  "facts_json": {
-    "spf_record": "v=spf1 a mx -all",
-    "spf_lookups": 2,
-    "blacklist_status": "clean",
-    "blacklist_count": 0
-  },
-  "recommendation_keys": [
-    "dmarc_alignment",
-    "mtasts",
-    "bimi"
-  ]
+    "recommendation_keys": [
+        "dmarc_strengthen",
+        "dmarc_mxscan_rua",
+        "mx",
+        "dkim_verify",
+        "certificates",
+        "tlsrpt",
+        "mtasts",
+        "bimi"
+    ]
 }

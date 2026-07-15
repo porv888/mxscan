@@ -9,6 +9,8 @@ use App\Domain\EmailSecurity\Checks\SPF\SpfTerminalPolicy;
 use App\Domain\EmailSecurity\DTO\NormalizedScanResultDTO;
 use App\Domain\EmailSecurity\DTO\ScoringInputDTO;
 use App\Domain\EmailSecurity\Scoring\LegacyDnsScoreCalculator;
+use App\Domain\EmailSecurity\Checks\DMARC\DmarcCheck;
+use App\Domain\EmailSecurity\Scoring\Rules\DmarcScoreRule;
 use App\Domain\EmailSecurity\Scoring\Rules\SpfScoreRule;
 use App\Domain\EmailSecurity\Scoring\ScoreInvariantGuard;
 use App\Services\ScoreBreakdownService;
@@ -28,7 +30,7 @@ class LegacyDnsScoreCalculatorNativeTest extends TestCase
 
         $result = $calculator->calculate($input);
 
-        $this->assertSame(75, $result->total);
+        $this->assertSame(64, $result->total);
     }
 
     public function test_native_branch_replaces_spf_earned_and_recomputes_total(): void
@@ -55,7 +57,7 @@ class LegacyDnsScoreCalculatorNativeTest extends TestCase
         $spfRow = (new ScoreBreakdownService())->findRow($result->breakdown, 'spf');
 
         $this->assertSame(18, $spfRow['earned'] ?? null);
-        $this->assertSame(78, $result->total);
+        $this->assertSame(62, $result->total);
         $this->assertSame($result->total, (new ScoreBreakdownService())->totalEarned($result->breakdown));
     }
 
@@ -84,7 +86,7 @@ class LegacyDnsScoreCalculatorNativeTest extends TestCase
 
         $result = $calculator->calculate($input);
 
-        $this->assertSame(60, $result->total);
+        $this->assertSame(44, $result->total);
         $this->assertSame(0, (new ScoreBreakdownService())->findRow($result->breakdown, 'spf')['earned'] ?? null);
     }
 
@@ -95,6 +97,13 @@ class LegacyDnsScoreCalculatorNativeTest extends TestCase
         return new LegacyDnsScoreCalculator(
             $scoreBreakdownService,
             new SpfScoreRule(),
+            new DmarcScoreRule(),
+            new \App\Domain\EmailSecurity\Scoring\Rules\DkimScoreRule(),
+            new \App\Domain\EmailSecurity\Scoring\Rules\MtaStsScoreRule(),
+            new \App\Domain\EmailSecurity\Scoring\Rules\TlsRptScoreRule(),
+            new \App\Domain\EmailSecurity\Scoring\Rules\MxScoreRule(),
+            new \App\Domain\EmailSecurity\Checks\Certificates\Scoring\CertificateScoreRule(),
+            new \App\Domain\EmailSecurity\Checks\Bimi\Scoring\BimiScoreRule(),
             new ScoreInvariantGuard($scoreBreakdownService),
         );
     }

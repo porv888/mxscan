@@ -5,6 +5,7 @@ namespace Tests\Unit\Domain\EmailSecurity;
 use App\Domain\EmailSecurity\DTO\NormalizedScanResultDTO;
 use App\Domain\EmailSecurity\DTO\ScoringInputDTO;
 use App\Domain\EmailSecurity\Scoring\LegacyDnsScoreCalculator;
+use App\Domain\EmailSecurity\Scoring\Rules\DmarcScoreRule;
 use App\Domain\EmailSecurity\Scoring\Rules\SpfScoreRule;
 use App\Domain\EmailSecurity\Scoring\ScoreInvariantGuard;
 use App\Domain\EmailSecurity\Support\ScanPayloadBuilder;
@@ -38,6 +39,13 @@ class EmailSecurityArchitectureTest extends TestCase
         $calculator = new LegacyDnsScoreCalculator(
             $scoreBreakdownService,
             new SpfScoreRule(),
+            new DmarcScoreRule(),
+            new \App\Domain\EmailSecurity\Scoring\Rules\DkimScoreRule(),
+            new \App\Domain\EmailSecurity\Scoring\Rules\MtaStsScoreRule(),
+            new \App\Domain\EmailSecurity\Scoring\Rules\TlsRptScoreRule(),
+            new \App\Domain\EmailSecurity\Scoring\Rules\MxScoreRule(),
+            new \App\Domain\EmailSecurity\Checks\Certificates\Scoring\CertificateScoreRule(),
+            new \App\Domain\EmailSecurity\Checks\Bimi\Scoring\BimiScoreRule(),
             new ScoreInvariantGuard($scoreBreakdownService),
         );
         $dnsPayload = FixtureLoader::input('dns-bundled-full');
@@ -60,8 +68,8 @@ class EmailSecurityArchitectureTest extends TestCase
 
         $result = $calculator->calculate($input);
 
-        $this->assertSame(75, $result->total);
-        $this->assertCount(6, $result->breakdown);
+        $this->assertSame(64, $result->total);
+        $this->assertCount(5, $result->breakdown);
     }
 
     public function test_determine_scan_type_for_single_blacklist_scan(): void

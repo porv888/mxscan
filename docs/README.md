@@ -216,7 +216,9 @@ php artisan plans:sync-limits
 
 Full scan checks MX, SPF, DKIM, DMARC, MTA-STS, TLS-RPT, BIMI, and blacklist status. Triggered manually or via automations (paid).
 
-Key code: `App\Services\ScannerService`, `App\Http\Controllers\ScanController`
+DMARC policy analysis runs through the native `DmarcCheck` pipeline (`EmailSecurityScanService`); enforcement is scored by `DmarcScoreRule` (30-point tier). Reporting gaps are recommendations only (Option A).
+
+Key code: `App\Services\EmailSecurityScanService`, `App\Domain\EmailSecurity\Checks\DMARC\DmarcCheck`, `App\Http\Controllers\ScanController`
 
 ### Blacklist monitoring
 

@@ -184,10 +184,20 @@
                             <i data-lucide="shield-check" class="w-4 h-4 mr-2"></i>
                             Clean
                         </span>
-                    @else
+                    @elseif($snapshot->blacklist_status === 'listed')
                         <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-red-100 text-red-800">
                             <i data-lucide="alert-triangle" class="w-4 h-4 mr-2"></i>
                             Listed
+                        </span>
+                    @elseif($snapshot->blacklist_status === 'partial')
+                        <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-yellow-100 text-yellow-800">
+                            <i data-lucide="alert-triangle" class="w-4 h-4 mr-2"></i>
+                            Partial coverage
+                        </span>
+                    @elseif($snapshot->blacklist_status === 'unknown')
+                        <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-gray-100 text-gray-700">
+                            <i data-lucide="help-circle" class="w-4 h-4 mr-2"></i>
+                            Unavailable
                         </span>
                     @endif
                 </div>

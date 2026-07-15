@@ -10,6 +10,7 @@ use App\Models\Incident;
 use App\Services\Dmarc\DmarcAnalyticsService;
 use App\Services\Dmarc\DmarcStatusService;
 use App\Services\ScanTrendService;
+use App\View\Presenters\CertificateSectionPresenter;
 
 class DashboardController extends Controller
 {
@@ -127,7 +128,7 @@ class DashboardController extends Controller
             
             // Check for expiring domains/SSL
             $domainDays = $domain->getDaysUntilDomainExpiry();
-            $sslDays = $domain->getDaysUntilSslExpiry();
+            $sslDays = $this->sslDaysForDomain($domain);
             
             if ($domainDays !== null && $domainDays < 30) {
                 $priorityActions->push([
@@ -181,9 +182,10 @@ class DashboardController extends Controller
             return ($d->score_last !== null && $d->score_last < 70) || $d->blacklist_status === 'listed';
         })->count();
         
-        $expiringSoon = $domains->filter(function($d) {
+        $expiringSoon = $domains->filter(function ($d) {
             $domainDays = $d->getDaysUntilDomainExpiry();
-            $sslDays = $d->getDaysUntilSslExpiry();
+            $sslDays = $this->sslDaysForDomain($d);
+
             return ($domainDays !== null && $domainDays < 30) || ($sslDays !== null && $sslDays < 30);
         })->count();
         
@@ -397,5 +399,26 @@ class DashboardController extends Controller
             'label' => $label,
             'url' => route('reports.show', $scan) . '#fix-pack',
         ];
+    }
+
+    private function sslDaysForDomain(Domain $domain): ?int
+    {
+        $latestScan = $domain->scans()->where('status', 'finished')->latest('finished_at')->first();
+        $certificatesInfo = null;
+        $mtaStsInfo = null;
+
+        if ($latestScan !== null) {
+            $resultJson = $latestScan->result_json ?? [];
+            if (is_array($resultJson)) {
+                $certificatesInfo = is_array($resultJson['certificates'] ?? null)
+                    ? $resultJson['certificates']
+                    : null;
+                $mtaStsInfo = is_array($resultJson['mta_sts'] ?? null)
+                    ? $resultJson['mta_sts']
+                    : null;
+            }
+        }
+
+        return (new CertificateSectionPresenter($certificatesInfo, $mtaStsInfo, $domain))->sslDays();
     }
 }

@@ -89,6 +89,26 @@ class ScanController extends Controller
     }
 
     /**
+     * Run DKIM-only scan
+     */
+    public function runDkim(Request $request, Domain $domain)
+    {
+        $this->authorize('partialScan', $domain);
+        $this->throttle($domain);
+
+        RunFullScan::dispatch($domain->id, [
+            'dns' => false,
+            'spf' => false,
+            'blacklist' => false,
+            'dkim' => true,
+            'dkim_selector' => $request->input('dkim_selector'),
+            'dkim_signature' => $request->input('dkim_signature'),
+        ]);
+
+        return $this->queued($request, 'DKIM scan started for ' . $domain->domain);
+    }
+
+    /**
      * Run Blacklist-only scan (plan gated)
      */
     public function runBlacklist(Request $request, Domain $domain)

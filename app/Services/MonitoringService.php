@@ -127,12 +127,12 @@ class MonitoringService
     protected function normalizeFullScanResults(array $results): array
     {
         return [
-            'mx_ok' => data_get($results, 'dns.records.MX.status') === 'found',
+            'mx_ok' => $this->mxOkFromResults($results),
             'spf_ok' => data_get($results, 'dns.records.SPF.status') === 'found',
             'spf_lookups' => data_get($results, 'spf.lookups', 0),
             'dmarc_ok' => data_get($results, 'dns.records.DMARC.status') === 'found',
-            'tlsrpt_ok' => data_get($results, 'dns.records.TLS-RPT.status') === 'found',
-            'mtasts_ok' => data_get($results, 'dns.records.MTA-STS.status') === 'found',
+            'tlsrpt_ok' => $this->tlsRptOkFromResults($results),
+            'mtasts_ok' => $this->mtaStsOkFromResults($results),
             'rbl_hits' => $this->extractRblHits($results),
             'score' => data_get($results, 'dns.score', 0),
         ];
@@ -144,12 +144,12 @@ class MonitoringService
     protected function normalizeDnsScanResults(array $results): array
     {
         return [
-            'mx_ok' => data_get($results, 'dns.records.MX.status') === 'found',
+            'mx_ok' => $this->mxOkFromResults($results),
             'spf_ok' => data_get($results, 'dns.records.SPF.status') === 'found',
             'spf_lookups' => 0,
             'dmarc_ok' => data_get($results, 'dns.records.DMARC.status') === 'found',
-            'tlsrpt_ok' => data_get($results, 'dns.records.TLS-RPT.status') === 'found',
-            'mtasts_ok' => data_get($results, 'dns.records.MTA-STS.status') === 'found',
+            'tlsrpt_ok' => $this->tlsRptOkFromResults($results),
+            'mtasts_ok' => $this->mtaStsOkFromResults($results),
             'rbl_hits' => [],
             'score' => data_get($results, 'dns.score', 0),
         ];
@@ -227,29 +227,31 @@ class MonitoringService
      */
     protected function extractRblHits(array $results): array
     {
-        // Try different possible locations for RBL data
-        $rblData = data_get($results, 'rbl_hits') 
-                ?? data_get($results, 'blacklist.hits')
-                ?? data_get($results, 'blacklist_results')
-                ?? [];
+        $blacklist = data_get($results, 'blacklist.analysis.listings')
+            ?? data_get($results, 'blacklist.listings')
+            ?? [];
 
-        if (is_array($rblData)) {
-            // If it's an array of RBL names
-            if (array_is_list($rblData)) {
-                return $rblData;
+        if (!is_array($blacklist) || $blacklist === []) {
+            $listedCount = (int) data_get($results, 'blacklist.listed_count', 0);
+            if ($listedCount <= 0) {
+                return [];
             }
-            
-            // If it's an associative array, extract the listed ones
-            $hits = [];
-            foreach ($rblData as $rbl => $status) {
-                if ($status === 'listed' || $status === true) {
-                    $hits[] = $rbl;
-                }
-            }
-            return $hits;
         }
 
-        return [];
+        $hits = [];
+        if (is_array($blacklist)) {
+            foreach ($blacklist as $listing) {
+                if (!is_array($listing)) {
+                    continue;
+                }
+                $provider = (string) ($listing['provider_name'] ?? $listing['provider_key'] ?? '');
+                if ($provider !== '' && !in_array($provider, $hits, true)) {
+                    $hits[] = $provider;
+                }
+            }
+        }
+
+        return $hits;
     }
 
     /**
@@ -426,5 +428,67 @@ class MonitoringService
 
         // Dispatch notification job
         NotifyIncident::dispatch($incident);
+    }
+
+    /**
+     * @param array<string, mixed> $results
+     */
+    protected function mxOkFromResults(array $results): bool
+    {
+        $mxInfo = data_get($results, 'mx');
+        $analysis = \App\Domain\EmailSecurity\Checks\Mx\Support\MxAnalysisReader::analysis(
+            is_array($mxInfo) ? $mxInfo : null,
+        ) ?? \App\Domain\EmailSecurity\Checks\Mx\Support\MxAnalysisReader::fromLegacyDnsRecord(
+            data_get($results, 'dns.records.MX'),
+            is_array($mxInfo) ? $mxInfo : null,
+        );
+
+        if (in_array($analysis['state'] ?? '', [
+            \App\Domain\EmailSecurity\Checks\Mx\MxStates::FAIL,
+            \App\Domain\EmailSecurity\Checks\Mx\MxStates::MISSING,
+        ], true)) {
+            return false;
+        }
+
+        if (($analysis['risk_status'] ?? '') === \App\Domain\EmailSecurity\Checks\Mx\MxRiskStatus::UNKNOWN) {
+            return false;
+        }
+
+        return in_array($analysis['risk_status'] ?? '', [
+            \App\Domain\EmailSecurity\Checks\Mx\MxRiskStatus::HEALTHY,
+            \App\Domain\EmailSecurity\Checks\Mx\MxRiskStatus::WARNING,
+        ], true);
+    }
+
+    /**
+     * @param array<string, mixed> $results
+     */
+    protected function mtaStsOkFromResults(array $results): bool
+    {
+        $mtaStsInfo = data_get($results, 'mta_sts');
+        $analysis = \App\Domain\EmailSecurity\Checks\MtaSts\Support\MtaStsAnalysisReader::analysis(
+            is_array($mtaStsInfo) ? $mtaStsInfo : null,
+        ) ?? \App\Domain\EmailSecurity\Checks\MtaSts\Support\MtaStsAnalysisReader::fromLegacyDnsRecord(
+            data_get($results, 'dns.records.MTA-STS'),
+            is_array($mtaStsInfo) ? $mtaStsInfo : null,
+        );
+
+        return ($analysis['state'] ?? '') === \App\Domain\EmailSecurity\Checks\MtaSts\MtaStsStates::PASS;
+    }
+
+    /**
+     * @param array<string, mixed> $results
+     */
+    protected function tlsRptOkFromResults(array $results): bool
+    {
+        $tlsRptInfo = data_get($results, 'tls_rpt');
+        $analysis = \App\Domain\EmailSecurity\Checks\TlsRpt\Support\TlsRptAnalysisReader::analysis(
+            is_array($tlsRptInfo) ? $tlsRptInfo : null,
+        ) ?? \App\Domain\EmailSecurity\Checks\TlsRpt\Support\TlsRptAnalysisReader::fromLegacyDnsRecord(
+            data_get($results, 'dns.records.TLS-RPT'),
+            is_array($tlsRptInfo) ? $tlsRptInfo : null,
+        );
+
+        return ($analysis['state'] ?? '') === \App\Domain\EmailSecurity\Checks\TlsRpt\TlsRptStates::PASS;
     }
 }

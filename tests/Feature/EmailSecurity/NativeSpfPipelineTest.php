@@ -6,7 +6,7 @@ use App\Domain\EmailSecurity\DTO\ScanOptionsDTO;
 use App\Domain\EmailSecurity\Reporting\ScanReportStatusMapper;
 use App\Models\Domain;
 use App\Models\Scan;
-use App\Services\BlacklistChecker;
+
 use App\Services\Dns\DnsClient;
 use App\Services\Dns\DnsResult;
 use App\Services\EmailSecurityScanService;
@@ -15,10 +15,12 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Mockery;
 use Tests\Support\EmailSecurity\FakeDnsClient;
 use Tests\Support\EmailSecurity\FixtureLoader;
+use Tests\Support\EmailSecurity\BindsFakeBlacklistDns;
 use Tests\TestCase;
 
 class NativeSpfPipelineTest extends TestCase
 {
+    use BindsFakeBlacklistDns;
     use RefreshDatabase;
 
     private ScoreBreakdownService $scoreBreakdownService;
@@ -217,10 +219,7 @@ class NativeSpfPipelineTest extends TestCase
     public function test_blacklist_with_native_spf_preserves_score_invariant(): void
     {
         $blacklistPayload = FixtureLoader::input('blacklist-clean');
-        $blacklistChecker = Mockery::mock(BlacklistChecker::class);
-        $blacklistChecker->shouldReceive('checkDomain')->andReturn([]);
-        $blacklistChecker->shouldReceive('getScanSummary')->andReturn($blacklistPayload);
-        $this->app->instance(BlacklistChecker::class, $blacklistChecker);
+        $this->bindFakeBlacklistDns();
 
         $execution = $this->runPipeline('native-blacklist.test', 'v=spf1 a mx -all', null, null, true);
 

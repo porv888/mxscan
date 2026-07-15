@@ -20,10 +20,13 @@ return new class extends Migration
         Schema::table('users', function (Blueprint $table) {
             $table->enum('role', ['user', 'admin', 'superadmin'])->default('user')->after('email');
             $table->enum('status', ['active', 'suspended'])->default('active')->after('role');
-            
-            // Add indexes
-            $table->index('role');
-            $table->index('status');
+
+            if (! Schema::hasIndex('users', 'users_role_index')) {
+                $table->index('role');
+            }
+            if (! Schema::hasIndex('users', 'users_status_index')) {
+                $table->index('status');
+            }
         });
     }
 

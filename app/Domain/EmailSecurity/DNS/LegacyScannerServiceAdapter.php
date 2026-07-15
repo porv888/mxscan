@@ -26,6 +26,10 @@ final class LegacyScannerServiceAdapter implements DnsCollectorInterface
             scoreBreakdown: $payload['score_breakdown'] ?? [],
             legacyDnsPayload: $payload,
             rootTxtRecords: $payload['root_txt_records'] ?? [],
+            dmarcTxtRecords: $payload['dmarc_txt_records'] ?? [],
+            mtaStsTxtRecords: $payload['mta_sts_txt_records'] ?? [],
+            tlsRptTxtRecords: $payload['tls_rpt_txt_records'] ?? [],
+            bimiTxtRecords: $payload['bimi_txt_records'] ?? [],
         );
     }
 }
