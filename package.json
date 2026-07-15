@@ -2,7 +2,8 @@
     "private": true,
     "type": "module",
     "scripts": {
-        "build": "vite build",
+        "build": "vite build && npm run build:css",
+        "build:css": "tailwindcss -i resources/css/app.css -o public/css/tailwind.css --minify",
         "dev": "vite"
     },
     "devDependencies": {
