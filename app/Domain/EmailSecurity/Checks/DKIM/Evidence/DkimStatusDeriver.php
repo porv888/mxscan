@@ -95,15 +95,20 @@ final class DkimStatusDeriver
             ];
         }
 
-        $validSelectors = array_filter($selectorResults, fn (array $row) => ($row['record_status'] ?? '') === 'valid');
+        $validSelectors = array_values(array_filter(
+            $selectorResults,
+            fn (array $row) => ($row['record_status'] ?? '') === 'valid',
+        ));
         if ($validSelectors !== []) {
             $first = reset($validSelectors);
             $selector = $first['selector'] ?? 'a tested selector';
+            $validStates = array_column($validSelectors, 'state');
+            $validRisks = array_column($validSelectors, 'risk_status');
 
             return [
                 'protocol_status' => DkimProtocolStatus::VALID,
-                'risk_status' => $this->worstRisk(array_column($selectorResults, 'risk_status')),
-                'state' => $this->worstState(array_column($selectorResults, 'state')),
+                'risk_status' => $this->worstRisk($validRisks),
+                'state' => $this->bestState($validStates),
                 'summary' => "A valid DKIM key is published for selector {$selector}.",
             ];
         }
@@ -173,6 +178,22 @@ final class DkimStatusDeriver
     private function worstState(array $states): string
     {
         foreach ([DkimStates::FAIL, DkimStates::UNKNOWN, DkimStates::WARNING, DkimStates::MISSING, DkimStates::PASS] as $state) {
+            if (in_array($state, $states, true)) {
+                return $state;
+            }
+        }
+
+        return DkimStates::UNKNOWN;
+    }
+
+    /**
+     * Prefer the strongest positive state among selectors with valid keys.
+     *
+     * @param list<string> $states
+     */
+    private function bestState(array $states): string
+    {
+        foreach ([DkimStates::PASS, DkimStates::WARNING, DkimStates::UNKNOWN, DkimStates::MISSING, DkimStates::FAIL] as $state) {
             if (in_array($state, $states, true)) {
                 return $state;
             }

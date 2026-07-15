@@ -312,7 +312,8 @@ final class CertificateAnalysisReader
                 }
             }
 
-            if (($endpoint['hostname_match'] ?? true) === false) {
+            if (($endpoint['hostname_match'] ?? null) === false
+                && ($endpoint['certificate_status'] ?? '') !== CertificateEndpointEvaluation::CERTIFICATE_UNAVAILABLE) {
                 $hostnameMismatches++;
             }
 

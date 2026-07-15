@@ -84,8 +84,14 @@ final class ScanReportFactory implements ScanReportFactoryInterface
             ? ($dmarcAnalysis['policy']['effective_policy'] ?? $dmarcAnalysis['policy']['published_p'] ?? null)
             : null;
         $alignment = is_array($dmarcAnalysis['alignment'] ?? null) ? $dmarcAnalysis['alignment'] : [];
-        $dmarcAligned = ($alignment['dkim'] ?? 'relaxed') === 'strict'
-            || ($alignment['spf'] ?? 'relaxed') === 'strict';
+        $dmarcAlignmentVerification = is_string($dmarcAnalysis['alignment_verification'] ?? null)
+            ? $dmarcAnalysis['alignment_verification']
+            : \App\Domain\EmailSecurity\Checks\DMARC\DmarcAlignmentVerification::NOT_VERIFIED;
+        $dmarcAligned = match ($dmarcAlignmentVerification) {
+            \App\Domain\EmailSecurity\Checks\DMARC\DmarcAlignmentVerification::ALIGNED => true,
+            \App\Domain\EmailSecurity\Checks\DMARC\DmarcAlignmentVerification::NOT_ALIGNED => false,
+            default => null,
+        };
 
         $tlsRptInfo = $resultData['tls_rpt'] ?? null;
         $tlsRptAnalysis = \App\Domain\EmailSecurity\Checks\TlsRpt\Support\TlsRptAnalysisReader::analysis($tlsRptInfo)
@@ -156,6 +162,16 @@ final class ScanReportFactory implements ScanReportFactoryInterface
         $recommendations = $this->recommendationService->build($domain, $resultData, $records);
         $allClear = $this->recommendationService->evaluateAllClear($resultData, $records);
 
+        app(ScanReportInvariantGuard::class)->assertConsistent(
+            $scan->score,
+            $resultData,
+            $records,
+            $statusCards,
+            $recommendations,
+            $scoreBreakdown,
+            (string) $scan->id,
+        );
+
         $includeIncidentTrend = auth()->user()->canUseMonitoring();
         $scoreTrend = $this->scanTrendService->getDomainTrend(
             $domain->id,
@@ -190,6 +206,7 @@ final class ScanReportFactory implements ScanReportFactoryInterface
             'spfSuggestion',
             'dmarcPolicy',
             'dmarcAligned',
+            'dmarcAlignmentVerification',
             'tlsrptOk',
             'mtastsOk',
             'bimiHasData',
@@ -237,6 +254,7 @@ final class ScanReportFactory implements ScanReportFactoryInterface
             'spfSuggestion' => null,
             'dmarcPolicy' => null,
             'dmarcAligned' => null,
+            'dmarcAlignmentVerification' => 'not_verified',
             'tlsrptOk' => false,
             'mtastsOk' => false,
             'bimiHasData' => false,

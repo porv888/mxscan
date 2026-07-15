@@ -174,7 +174,7 @@ final class CertificateStatusDeriver
     {
         return $evaluation->parsed !== null
             && (
-                !$evaluation->hostnameMatch
+                $evaluation->hostnameMatch === false
                 || !$evaluation->trusted
                 || $evaluation->certificateStatus === CertificateEndpointEvaluation::CERTIFICATE_EXPIRED
                 || $evaluation->certificateStatus === CertificateEndpointEvaluation::CERTIFICATE_NOT_YET_VALID

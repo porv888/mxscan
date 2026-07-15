@@ -35,7 +35,7 @@ final class CertificateEndpointEvaluation
         public readonly string $protocolStatus,
         public readonly string $certificateStatus,
         public readonly string $uiState,
-        public readonly bool $hostnameMatch,
+        public readonly ?bool $hostnameMatch,
         public readonly ?string $matchedIdentity,
         public readonly ?string $hostnameMismatchReason,
         public readonly bool $trusted,

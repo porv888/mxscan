@@ -3,6 +3,7 @@
 namespace App\Domain\EmailSecurity\Checks\Certificates\Recommendations;
 
 use App\Domain\EmailSecurity\Checks\Certificates\CertificateEndpoint;
+use App\Domain\EmailSecurity\Checks\Certificates\CertificateVerificationState;
 use App\Domain\EmailSecurity\Checks\Certificates\CertificateKeyInspector;
 use App\Domain\EmailSecurity\Checks\Certificates\CertificateNativeResult;
 use App\Domain\EmailSecurity\Checks\Certificates\CertificateSignatureInspector;
@@ -78,11 +79,12 @@ final class CertificateRecommendationEvaluator
                 continue;
             }
 
-            if (($endpoint['hostname_match'] ?? true) === false) {
+            if ($this->isEvaluatedEndpoint($endpoint)
+                && ($endpoint['verification_state'] ?? '') === CertificateVerificationState::HOSTNAME_MISMATCH) {
                 $items[] = $this->once($seen, 'fix_certificate_hostname_mismatch', $this->item(
                     'fix_certificate_hostname_mismatch',
                     'Fix certificate hostname mismatch',
-                    'The certificate presented by ' . $endpointLabel . ' does not match ' . $hostname . '.',
+                    $this->hostnameMismatchBody($endpoint),
                     'high',
                     ScanReportStatusMapper::FAIL,
                 ));
@@ -200,6 +202,42 @@ final class CertificateRecommendationEvaluator
         }
 
         return $items;
+    }
+
+    /**
+     * @param array<string, mixed> $endpoint
+     */
+    private function isEvaluatedEndpoint(array $endpoint): bool
+    {
+        return in_array($endpoint['protocol_status'] ?? '', [
+            CertificateEndpointEvaluation::PROTOCOL_EVALUATED,
+            CertificateEndpointEvaluation::PROTOCOL_PARTIALLY_EVALUATED,
+        ], true)
+            && ($endpoint['certificate_status'] ?? '') !== CertificateEndpointEvaluation::CERTIFICATE_UNAVAILABLE;
+    }
+
+    /**
+     * @param array<string, mixed> $endpoint
+     */
+    private function hostnameMismatchBody(array $endpoint): string
+    {
+        $hostname = (string) ($endpoint['hostname'] ?? 'unknown');
+        $presented = (string) ($endpoint['matched_identity']
+            ?? $endpoint['subject']
+            ?? $endpoint['common_name']
+            ?? '');
+        $sans = is_array($endpoint['san_dns'] ?? null) ? $endpoint['san_dns'] : [];
+        $sanList = $sans !== [] ? implode(', ', $sans) : null;
+
+        if ($presented === '' && $sanList !== null) {
+            $presented = $sanList;
+        }
+
+        if ($presented === '') {
+            return 'The certificate presented for ' . $hostname . ' does not include a matching hostname identity.';
+        }
+
+        return 'The certificate for ' . $hostname . ' presents identity "' . $presented . '" which does not match the requested hostname.';
     }
 
     /**

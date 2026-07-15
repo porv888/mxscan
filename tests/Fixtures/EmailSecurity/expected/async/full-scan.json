@@ -208,6 +208,7 @@
                     "dkim": "relaxed",
                     "spf": "relaxed"
                 },
+                "alignment_verification": "not_verified",
                 "aggregate_reporting": {
                     "configured": true,
                     "destinations": [
@@ -243,17 +244,18 @@
             }
         },
         "dkim": {
-            "status": "error",
+            "status": "ok",
             "valid": true,
             "protocol_status": "valid",
-            "risk_status": "critical",
-            "ui_state": "missing",
+            "risk_status": "healthy",
+            "ui_state": "pass",
             "summary": "A valid DKIM key is published for selector google.",
             "analysis": {
                 "version": "dkim-native-v1",
                 "protocol_status": "valid",
-                "risk_status": "critical",
-                "state": "missing",
+                "risk_status": "healthy",
+                "state": "pass",
+                "publication_state": "published_valid",
                 "summary": "A valid DKIM key is published for selector google.",
                 "signing_domain": "example.test",
                 "signing_verified": false,
@@ -1163,6 +1165,7 @@
                         "evidence_source": "certificate_probe",
                         "reused": false,
                         "hostname_match": true,
+                        "verification_state": "valid",
                         "matched_identity": "example.test",
                         "hostname_mismatch_reason": null,
                         "trusted": true,
@@ -1209,6 +1212,7 @@
                         "evidence_source": "certificate_probe",
                         "reused": false,
                         "hostname_match": true,
+                        "verification_state": "valid",
                         "matched_identity": "mta-sts.example.test",
                         "hostname_mismatch_reason": null,
                         "trusted": true,
@@ -1255,6 +1259,7 @@
                         "evidence_source": "certificate_probe",
                         "reused": false,
                         "hostname_match": true,
+                        "verification_state": "valid",
                         "matched_identity": "mail.example.test",
                         "hostname_mismatch_reason": null,
                         "trusted": true,

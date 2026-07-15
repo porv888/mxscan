@@ -29,9 +29,11 @@
         domain: $domain,
         dmarcPolicy: $dmarcPolicy,
         dmarcAligned: $dmarcAligned,
+        dmarcAlignmentVerification: $dmarcAlignmentVerification ?? \App\Domain\EmailSecurity\Checks\DMARC\DmarcAlignmentVerification::NOT_VERIFIED,
         spfMax: $spfMax ?? 10,
         mxInfo: $resultData['mx'] ?? null,
         bimiInfo: $resultData['bimi'] ?? null,
+        dkimInfo: $resultData['dkim'] ?? null,
         scan: $scan,
     );
 

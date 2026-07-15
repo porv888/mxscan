@@ -121,6 +121,28 @@ class ScanReportStatusMapperTest extends TestCase
         $this->assertSame('Not checked', $card['status']);
     }
 
+    public function test_dkim_quarantine_policy_maps_to_pass_not_monitoring(): void
+    {
+        $card = $this->mapper->mapDmarc(
+            ['status' => 'found', 'data' => 'v=DMARC1; p=quarantine'],
+            [
+                'analysis' => [
+                    'version' => 'dmarc-native-v1',
+                    'state' => 'warning',
+                    'policy' => [
+                        'published_p' => 'quarantine',
+                        'effective_policy' => 'quarantine',
+                        'enforcement' => 'quarantine',
+                    ],
+                    'alignment_verification' => 'not_verified',
+                ],
+            ],
+        );
+
+        $this->assertSame(ScanReportStatusMapper::PASS, $card['state']);
+        $this->assertSame('Policy quarantine', $card['status']);
+    }
+
     public function test_dkim_selectors_discovered_wording_is_dns_only(): void
     {
         $card = $this->mapper->mapDkim([

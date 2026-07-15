@@ -2,6 +2,7 @@
 
 namespace App\Domain\EmailSecurity\Checks\DMARC\Compatibility;
 
+use App\Domain\EmailSecurity\Checks\DMARC\DmarcAlignmentVerification;
 use App\Domain\EmailSecurity\Checks\DMARC\DmarcNativeResult;
 
 final class DmarcNativeAnalysisPayload
@@ -27,6 +28,7 @@ final class DmarcNativeAnalysisPayload
             'discovery' => $native->discovery,
             'policy' => $native->policy,
             'alignment' => $native->alignment,
+            'alignment_verification' => DmarcAlignmentVerification::NOT_VERIFIED,
             'aggregate_reporting' => $native->aggregateReporting,
             'failure_reporting' => $native->failureReporting,
             'external_authorization' => $native->externalAuthorization,

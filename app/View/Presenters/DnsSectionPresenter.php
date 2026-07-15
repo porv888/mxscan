@@ -3,6 +3,8 @@
 namespace App\View\Presenters;
 
 use App\Domain\EmailSecurity\Checks\Bimi\BimiAnalysisReader;
+use App\Domain\EmailSecurity\Checks\DMARC\DmarcAlignmentVerification;
+use App\Domain\EmailSecurity\Checks\DKIM\Support\DkimAnalysisReader;
 use App\Models\Domain;
 use App\Models\Scan;
 use App\Domain\EmailSecurity\Checks\Mx\Support\MxAnalysisReader;
@@ -91,6 +93,8 @@ class DnsSectionPresenter
         protected Domain $domain,
         protected ?string $dmarcPolicy = null,
         protected ?bool $dmarcAligned = null,
+        protected ?string $dmarcAlignmentVerification = null,
+        protected ?array $dkimInfo = null,
         protected int $spfMax = 10,
         protected ?array $mxInfo = null,
         protected ?array $bimiInfo = null,
@@ -688,16 +692,37 @@ class DnsSectionPresenter
         $id = 'dns-dkim-detail';
         $selectors = [];
 
-        if ($found && is_array($data['data'] ?? null)) {
-            foreach ($data['data'] as $row) {
-                $selectors[] = [
-                    'selector' => $row['selector'] ?? 'unknown',
-                    'host' => ($row['selector'] ?? 'unknown') . '._domainkey.' . $this->domainName(),
-                    'record' => $row['record'] ?? '',
-                    'preview' => Str::limit((string) ($row['record'] ?? ''), 80),
-                    'key_type' => $row['key_type'] ?? null,
-                    'key_bits' => $row['key_bits'] ?? null,
-                ];
+        if ($found) {
+            $analysis = DkimAnalysisReader::analysis($this->dkimInfo);
+            $analysisSelectors = is_array($analysis['selectors'] ?? null) ? $analysis['selectors'] : [];
+            $validAnalysisSelectors = array_values(array_filter(
+                $analysisSelectors,
+                fn (array $row) => ($row['record_status'] ?? '') === 'valid',
+            ));
+
+            if ($validAnalysisSelectors !== []) {
+                foreach ($validAnalysisSelectors as $row) {
+                    $selectorName = $row['selector'] ?? 'unknown';
+                    $selectors[] = [
+                        'selector' => $selectorName,
+                        'host' => ($row['hostname'] ?? ($selectorName . '._domainkey.' . $this->domainName())),
+                        'record' => '',
+                        'preview' => 'Valid DKIM key published',
+                        'key_type' => $row['key_type'] ?? null,
+                        'key_bits' => $row['key_bits'] ?? null,
+                    ];
+                }
+            } elseif (is_array($data['data'] ?? null)) {
+                foreach ($data['data'] as $row) {
+                    $selectors[] = [
+                        'selector' => $row['selector'] ?? 'unknown',
+                        'host' => ($row['selector'] ?? 'unknown') . '._domainkey.' . $this->domainName(),
+                        'record' => $row['record'] ?? '',
+                        'preview' => Str::limit((string) ($row['record'] ?? ''), 80),
+                        'key_type' => $row['key_type'] ?? null,
+                        'key_bits' => $row['key_bits'] ?? null,
+                    ];
+                }
             }
         }
 
@@ -748,7 +773,11 @@ class DnsSectionPresenter
             'copyLabel' => 'Copy DMARC record',
             'chips' => array_filter([
                 $policy ? 'Policy: ' . $policy : null,
-                $this->dmarcAligned === true ? 'Aligned' : ($this->dmarcAligned === false ? 'Not aligned' : null),
+                match ($this->dmarcAlignmentVerification) {
+                    DmarcAlignmentVerification::ALIGNED => 'Aligned',
+                    DmarcAlignmentVerification::NOT_ALIGNED => 'Not aligned',
+                    default => 'Alignment not verified',
+                },
             ]),
         ];
     }

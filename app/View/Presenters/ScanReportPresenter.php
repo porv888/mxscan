@@ -267,12 +267,17 @@ class ScanReportPresenter
                     : 'SPF configuration is published.',
             },
             'dkim' => ($card['state'] ?? '') === ScanReportStatusMapper::PASS
+                || (($card['count'] ?? 0) >= 1 && in_array($card['state'] ?? '', [ScanReportStatusMapper::PASS, ScanReportStatusMapper::WARNING], true))
                 ? (($card['count'] ?? 0) . ' selector' . (($card['count'] ?? 0) === 1 ? '' : 's') . ' discovered.')
-                : 'No DKIM selectors discovered.',
+                : ($card['status'] ?? 'No DKIM selectors discovered.'),
             'dmarc' => match ($card['state'] ?? '') {
                 ScanReportStatusMapper::MISSING => 'No DMARC policy published.',
-                ScanReportStatusMapper::WARNING => 'Policy is monitoring only.',
-                default => 'Policy is active.',
+                ScanReportStatusMapper::WARNING => ($card['policy'] ?? '') === 'none' || ($card['policy'] ?? '') === ''
+                    ? 'Policy is monitoring only.'
+                    : ('Policy is ' . ($card['policy'] ?? 'active') . '.'),
+                default => ($card['policy'] ?? null)
+                    ? ('Policy is ' . $card['policy'] . '.')
+                    : 'Policy is active.',
             },
             default => $card['subtext'] ?? '',
         };

@@ -3,6 +3,7 @@
 namespace App\Domain\EmailSecurity\Checks\Certificates;
 
 use App\Domain\EmailSecurity\Checks\Certificates\DTO\CertificateEndpointEvaluation;
+use App\Domain\EmailSecurity\Checks\Certificates\CertificateVerificationState;
 use App\Domain\EmailSecurity\Checks\Mx\Evaluation\MxRecordNormalizer;
 use App\Domain\EmailSecurity\DTO\CheckContextDTO;
 
@@ -76,6 +77,7 @@ final class CertificateEvidenceBuilder
             'evidence_source' => $evaluation->evidenceSource,
             'reused' => $evaluation->reused,
             'hostname_match' => $evaluation->hostnameMatch,
+            'verification_state' => $this->verificationState($evaluation),
             'matched_identity' => $evaluation->matchedIdentity,
             'hostname_mismatch_reason' => $evaluation->hostnameMismatchReason,
             'trusted' => $evaluation->trusted,
@@ -173,5 +175,36 @@ final class CertificateEvidenceBuilder
         }
 
         return $candidate;
+    }
+
+    private function verificationState(CertificateEndpointEvaluation $evaluation): string
+    {
+        if ($evaluation->certificateStatus === CertificateEndpointEvaluation::CERTIFICATE_UNAVAILABLE
+            || $evaluation->protocolStatus === CertificateEndpointEvaluation::PROTOCOL_UNAVAILABLE) {
+            return match ($evaluation->failureCategory) {
+                'connection_timeout', 'connection_refused', 'dns_failure' => CertificateVerificationState::CONNECTION_FAILED,
+                'tls_handshake_failure' => CertificateVerificationState::UNABLE_TO_VERIFY,
+                default => CertificateVerificationState::UNABLE_TO_VERIFY,
+            };
+        }
+
+        if ($evaluation->certificateStatus === CertificateEndpointEvaluation::CERTIFICATE_EXPIRED) {
+            return CertificateVerificationState::EXPIRED;
+        }
+
+        if ($evaluation->hostnameMatch === false) {
+            return CertificateVerificationState::HOSTNAME_MISMATCH;
+        }
+
+        if (!$evaluation->trusted) {
+            return CertificateVerificationState::CHAIN_INVALID;
+        }
+
+        if ($evaluation->certificateStatus === CertificateEndpointEvaluation::CERTIFICATE_VALID
+            || $evaluation->certificateStatus === CertificateEndpointEvaluation::CERTIFICATE_WARNING) {
+            return CertificateVerificationState::VALID;
+        }
+
+        return CertificateVerificationState::UNABLE_TO_VERIFY;
     }
 }

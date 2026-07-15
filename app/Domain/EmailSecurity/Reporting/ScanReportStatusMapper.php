@@ -283,7 +283,12 @@ class ScanReportStatusMapper
             ];
         }
 
-        if ($policy === 'none' || $state === DmarcStates::WARNING) {
+        $enforcement = is_array($analysis['policy'] ?? null)
+            ? ($analysis['policy']['enforcement'] ?? null)
+            : null;
+        $isMonitoringPolicy = $policy === 'none' || $enforcement === 'monitoring';
+
+        if ($isMonitoringPolicy) {
             return [
                 'state' => self::WARNING,
                 'status' => $policy ? ('Policy ' . $policy) : 'Monitoring',

@@ -10,8 +10,12 @@
         domain: $domain,
         dmarcPolicy: $dmarcPolicy ?? null,
         dmarcAligned: $dmarcAligned ?? null,
+        dmarcAlignmentVerification: $dmarcAlignmentVerification ?? null,
+        dkimInfo: $dkimInfo ?? null,
         spfMax: $spfMax ?? 10,
         mxInfo: $mxInfo ?? null,
+        bimiInfo: $bimiInfo ?? null,
+        scan: $scan ?? null,
     );
 
     $summaryTiles = $presenter->summaryTiles();
