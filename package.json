@@ -3,7 +3,7 @@
     "type": "module",
     "scripts": {
         "build": "vite build && npm run build:css",
-        "build:css": "tailwindcss -i resources/css/app.css -o public/css/tailwind.css --minify",
+        "build:css": "php artisan view:clear && tailwindcss -i resources/css/app.css -o public/css/tailwind.css --minify",
         "dev": "vite"
     },
     "devDependencies": {

@@ -5,8 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>{{ config('app.name', 'MXScan') }} - MXScan</title>
-    <link rel="stylesheet" href="{{ asset('css/tailwind.css') }}">
-    <link rel="stylesheet" href="{{ asset('css/mx-ui.css') }}">
+    @php
+        $tailwindCssVersion = @filemtime(public_path('css/tailwind.css')) ?: '1';
+        $mxUiCssVersion = @filemtime(public_path('css/mx-ui.css')) ?: '1';
+    @endphp
+    <link rel="stylesheet" href="{{ asset('css/tailwind.css') }}?v={{ $tailwindCssVersion }}">
+    <link rel="stylesheet" href="{{ asset('css/mx-ui.css') }}?v={{ $mxUiCssVersion }}">
     <style>[x-cloak]{display:none!important}</style>
     <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
     <script defer src="https://unpkg.com/@alpinejs/collapse@3.14.8/dist/cdn.min.js"></script>
