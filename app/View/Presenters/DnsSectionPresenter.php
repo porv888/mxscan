@@ -654,8 +654,8 @@ class DnsSectionPresenter
         $id = 'dns-spf-detail';
 
         $explanation = $found
-            ? 'SPF tells inboxes which servers are allowed to send email for your domain.'
-            : 'Without SPF, attackers can spoof your domain more easily and your real emails may go to spam.';
+            ? ($card['subtext'] ?? 'An SPF TXT record is published for this domain.')
+            : 'No SPF TXT record was found for this domain.';
 
         $detail = [
             'id' => $id,
@@ -663,11 +663,12 @@ class DnsSectionPresenter
             'label' => 'SPF',
             'helpKey' => 'spf',
             'badgeVariant' => $found ? $style['variant'] : 'danger',
-            'badgeLabel' => $found ? ($card['status'] ?? 'Configured') : 'Missing',
+            'badgeLabel' => $found ? ($card['status'] ?? 'OK') : 'Missing',
             'severity' => $found ? $style['severity'] : 'danger',
             'explanation' => $explanation,
-            'open' => $id === $firstOpenId,
-            'primaryAction' => $found ? null : ['label' => 'Add SPF', 'href' => '#fix-pack'],
+            'needsAttention' => $this->detailNeedsAttention('spf'),
+            'open' => $this->detailNeedsAttention('spf'),
+            'primaryAction' => $found ? null : ['label' => 'Add SPF', 'href' => '#what-to-fix'],
             'type' => 'code',
             'value' => $found ? (string) ($data['data'] ?? '') : null,
             'copyLabel' => 'Copy SPF record',
@@ -704,25 +705,17 @@ class DnsSectionPresenter
                 foreach ($validAnalysisSelectors as $row) {
                     $selectorName = $row['selector'] ?? 'unknown';
                     $record = $this->dkimRecordForSelector($selectorName, $row, $data);
-                    $selectors[] = [
-                        'selector' => $selectorName,
-                        'host' => ($row['hostname'] ?? ($selectorName . '._domainkey.' . $this->domainName())),
-                        'record' => $record,
-                        'preview' => Str::limit($record, 80),
-                        'key_type' => $row['key_type'] ?? null,
-                        'key_bits' => $row['key_bits'] ?? null,
-                    ];
+                    $selectors[] = $this->dkimSelectorRow($selectorName, $row, $record);
                 }
             } elseif (is_array($data['data'] ?? null)) {
                 foreach ($data['data'] as $row) {
-                    $selectors[] = [
-                        'selector' => $row['selector'] ?? 'unknown',
-                        'host' => ($row['selector'] ?? 'unknown') . '._domainkey.' . $this->domainName(),
-                        'record' => $row['record'] ?? '',
-                        'preview' => Str::limit((string) ($row['record'] ?? ''), 80),
-                        'key_type' => $row['key_type'] ?? null,
-                        'key_bits' => $row['key_bits'] ?? null,
-                    ];
+                    $selectorName = $row['selector'] ?? 'unknown';
+                    $selectors[] = $this->dkimSelectorRow(
+                        $selectorName,
+                        $row,
+                        (string) ($row['record'] ?? ''),
+                        ($selectorName . '._domainkey.' . $this->domainName()),
+                    );
                 }
             }
         }
@@ -733,18 +726,61 @@ class DnsSectionPresenter
             'label' => 'DKIM DNS',
             'helpKey' => 'dkim',
             'badgeVariant' => $found ? 'success' : 'warning',
-            'badgeLabel' => $found ? 'Configured' : ($card['state'] === ScanReportStatusMapper::UNKNOWN ? 'Unknown' : 'Missing'),
+            'badgeLabel' => $found ? 'Published' : ($card['state'] === ScanReportStatusMapper::UNKNOWN ? 'Unable to verify' : 'Not detected'),
             'severity' => $found ? 'success' : 'warning',
-            'explanation' => $found
-                ? ($card['status'] ?? count($selectors) . ' valid key(s) found') . '.'
-                : ($card['status'] ?? 'No DKIM key was found for the tested selectors.'),
-            'open' => $id === $firstOpenId,
-            'primaryAction' => $found ? null : ['label' => 'Add DKIM', 'href' => '#fix-pack'],
+            'explanation' => $this->dkimSummaryText($selectors, $found, $card),
+            'needsAttention' => $this->detailNeedsAttention('dkim'),
+            'open' => $this->detailNeedsAttention('dkim'),
+            'primaryAction' => $found ? null : ['label' => 'Add DKIM', 'href' => '#what-to-fix'],
             'type' => 'dkim',
-            'dnsOnlyNote' => $card['explanation'] ?? 'This confirms published DNS keys only. Live signing and alignment require DMARC report or email-header evidence.',
+            'dnsOnlyNote' => 'DNS publication confirmed. Active signing and DMARC alignment require email-header or DMARC-report evidence.',
             'selectors' => $selectors,
             'checkedCount' => count(config('dkim.selectors', [])),
         ];
+    }
+
+    /**
+     * @param array<string, mixed> $row
+     * @return array<string, mixed>
+     */
+    protected function dkimSelectorRow(string $selectorName, array $row, string $record, ?string $host = null): array
+    {
+        $keyType = strtoupper((string) ($row['key_type'] ?? 'rsa'));
+
+        return [
+            'selector' => $selectorName,
+            'host' => $host ?? ($row['hostname'] ?? ($selectorName . '._domainkey.' . $this->domainName())),
+            'record' => $record,
+            'preview' => Str::limit($record, 80),
+            'key_type' => $row['key_type'] ?? null,
+            'key_bits' => $row['key_bits'] ?? null,
+            'keyLabel' => trim($keyType . ' ' . ($row['key_bits'] ?? '') . '-bit'),
+            'statusLabel' => 'Published',
+        ];
+    }
+
+    /**
+     * @param list<array<string, mixed>> $selectors
+     * @param array<string, mixed> $card
+     */
+    protected function dkimSummaryText(array $selectors, bool $found, array $card): string
+    {
+        if (!$found) {
+            return 'No valid DKIM selectors were detected in DNS.';
+        }
+
+        $count = count($selectors);
+        if ($count === 0) {
+            return 'DKIM DNS publication could not be confirmed.';
+        }
+
+        if ($count === 1) {
+            $selector = $selectors[0]['selector'] ?? 'unknown';
+
+            return 'A valid DKIM key is published for selector `' . $selector . '`.';
+        }
+
+        return $count . ' valid DKIM selectors are published.';
     }
 
     protected function dmarcDetail(?string $firstOpenId): array
@@ -765,10 +801,11 @@ class DnsSectionPresenter
             'badgeLabel' => $found ? ($card['status'] ?? 'Configured') : 'Missing',
             'severity' => $found ? $style['severity'] : 'danger',
             'explanation' => $found
-                ? ($policy ? 'Policy: ' . $policy . '.' : 'DMARC policy record found.')
-                : 'Without DMARC, spoofed emails using your domain are harder to stop and track.',
-            'open' => $id === $firstOpenId,
-            'primaryAction' => $found ? null : ['label' => 'Add DMARC', 'href' => '#fix-pack'],
+                ? ($policy ? 'DMARC policy is set to ' . $policy . '.' : 'A DMARC policy record is published.')
+                : 'No DMARC TXT record was found for this domain.',
+            'needsAttention' => $this->detailNeedsAttention('dmarc'),
+            'open' => $this->detailNeedsAttention('dmarc'),
+            'primaryAction' => $found ? null : ['label' => 'Add DMARC', 'href' => '#what-to-fix'],
             'type' => 'code',
             'value' => $found ? (string) ($data['data'] ?? '') : null,
             'copyLabel' => 'Copy DMARC record',
@@ -845,7 +882,8 @@ class DnsSectionPresenter
             'badgeLabel' => $badgeLabel,
             'severity' => $severity,
             'explanation' => $explanation,
-            'open' => $id === $firstOpenId,
+            'needsAttention' => $this->detailNeedsAttention('dmarc_reports'),
+            'open' => $this->detailNeedsAttention('dmarc_reports'),
             'primaryAction' => $primaryAction,
             'type' => 'dmarc_reports',
             'footer' => $footer,
@@ -880,7 +918,8 @@ class DnsSectionPresenter
             'badgeLabel' => $card['status'] ?? 'Unknown',
             'severity' => $style['severity'],
             'explanation' => $analysis['summary'] ?? ($card['status'] ?? 'MX configuration could not be evaluated.'),
-            'open' => $id === $firstOpenId,
+            'needsAttention' => $this->detailNeedsAttention('mx'),
+            'open' => $this->detailNeedsAttention('mx'),
             'primaryAction' => null,
             'type' => 'mx',
             'rows' => $rows,
@@ -905,14 +944,16 @@ class DnsSectionPresenter
             'badgeLabel' => $found ? ($card['status'] ?? 'Configured') : 'Missing',
             'severity' => $found ? $style['severity'] : 'danger',
             'explanation' => $found
-                ? ($card['status'] ?? 'A syntactically valid TLS-RPT destination is published.')
-                : 'No TLS-RPT record found.',
-            'open' => $id === $firstOpenId,
+                ? 'A TLS-RPT record is published for this domain.'
+                : 'No TLS-RPT record was found for this domain.',
+            'needsAttention' => $this->detailNeedsAttention('tlsrpt'),
+            'open' => $this->detailNeedsAttention('tlsrpt'),
             'primaryAction' => $found && ($card['state'] ?? '') === ScanReportStatusMapper::PASS
                 ? null
-                : ['label' => $found ? 'Copy TLS-RPT record' : 'Add policy', 'href' => '#fix-pack'],
+                : ['label' => $found ? 'Review TLS-RPT' : 'Add TLS-RPT', 'href' => '#what-to-fix'],
             'type' => 'code',
-            'record' => $recordText,
+            'value' => $recordText,
+            'copyLabel' => 'Copy TLS-RPT record',
         ];
     }
 
@@ -933,12 +974,13 @@ class DnsSectionPresenter
             'badgeLabel' => $found ? ($card['status'] ?? 'Configured') : 'Missing',
             'severity' => $found ? $style['severity'] : 'danger',
             'explanation' => $found
-                ? 'MTA-STS tells other mail servers to use secure encrypted delivery to your domain.'
-                : 'No MTA-STS policy found.',
-            'open' => $id === $firstOpenId,
+                ? 'An MTA-STS policy record is published for this domain.'
+                : 'No MTA-STS policy was found for this domain.',
+            'needsAttention' => $this->detailNeedsAttention('mtasts'),
+            'open' => $this->detailNeedsAttention('mtasts'),
             'primaryAction' => $found && ($card['state'] ?? '') === ScanReportStatusMapper::PASS
                 ? null
-                : ['label' => 'Add policy', 'href' => '#fix-pack'],
+                : ['label' => 'Add policy', 'href' => '#what-to-fix'],
             'type' => 'code',
             'value' => $found ? (string) ($data['data'] ?? '') : null,
             'copyLabel' => 'Copy MTA-STS record',
@@ -973,8 +1015,9 @@ class DnsSectionPresenter
             'badgeLabel' => $found ? 'Configured' : 'Missing',
             'severity' => $found ? 'success' : 'danger',
             'explanation' => $found ? $foundExplanation : $missingExplanation,
-            'open' => $id === $firstOpenId,
-            'primaryAction' => $found ? null : ['label' => $missingActionLabel, 'href' => '#fix-pack'],
+            'needsAttention' => $this->detailNeedsAttention($key),
+            'open' => $this->detailNeedsAttention($key),
+            'primaryAction' => $found ? null : ['label' => $missingActionLabel, 'href' => '#what-to-fix'],
             'type' => 'code',
             'value' => $found ? (string) ($data['data'] ?? '') : null,
             'copyLabel' => $copyLabel,
@@ -1022,7 +1065,8 @@ class DnsSectionPresenter
             'badgeLabel' => $card['status'] ?? 'Optional',
             'severity' => $style['severity'],
             'explanation' => $card['subtext'] ?? ($publicSummary['summary'] ?? 'Branding readiness — does not affect Email Security Score.'),
-            'open' => 'dns-bimi-detail' === $firstOpenId,
+            'needsAttention' => $this->detailNeedsAttention('bimi'),
+            'open' => $this->detailNeedsAttention('bimi'),
             'primaryAction' => null,
             'type' => 'bimi',
             'value' => $rawRecord !== '' ? $rawRecord : null,

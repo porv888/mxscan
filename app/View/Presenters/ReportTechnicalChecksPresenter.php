@@ -29,14 +29,13 @@ class ReportTechnicalChecksPresenter
      */
     public function groups(): array
     {
-        $firstOpenId = $this->firstOpenRowId();
         $byLabel = collect($this->dns->detailGroups())->keyBy('label');
 
         $groups = [];
 
         $auth = $byLabel->get('Authentication');
         if ($auth) {
-            $items = $this->mapItems($auth['items'] ?? [], $firstOpenId);
+            $items = $this->mapItems($auth['items'] ?? []);
             $groups[] = [
                 'label' => 'Authentication',
                 'icon' => $this->iconForGroup('Authentication'),
@@ -48,12 +47,12 @@ class ReportTechnicalChecksPresenter
         $infraItems = [];
         $routing = $byLabel->get('Mail routing & reporting');
         if ($routing) {
-            $infraItems = array_merge($infraItems, $this->mapItems($routing['items'] ?? [], $firstOpenId));
+            $infraItems = array_merge($infraItems, $this->mapItems($routing['items'] ?? []));
         }
         if ($this->blacklistEnabled) {
-            $infraItems[] = $this->blacklistRow($firstOpenId);
+            $infraItems[] = $this->blacklistRow();
         }
-        $infraItems[] = $this->renewalRow($firstOpenId);
+        $infraItems[] = $this->renewalRow();
         $groups[] = [
             'label' => 'Mail infrastructure',
             'icon' => $this->iconForGroup('Mail infrastructure'),
@@ -64,9 +63,9 @@ class ReportTechnicalChecksPresenter
         $transportItems = [];
         $transport = $byLabel->get('Transport security');
         if ($transport) {
-            $transportItems = $this->mapItems($transport['items'] ?? [], $firstOpenId);
+            $transportItems = $this->mapItems($transport['items'] ?? []);
         }
-        $transportItems[] = $this->sslRow($firstOpenId);
+        $transportItems[] = $this->sslRow();
         $groups[] = [
             'label' => 'Transport security',
             'icon' => $this->iconForGroup('Transport security'),
@@ -76,7 +75,7 @@ class ReportTechnicalChecksPresenter
 
         $branding = $byLabel->get('Optional branding');
         if ($branding) {
-            $items = $this->mapItems($branding['items'] ?? [], $firstOpenId);
+            $items = $this->mapItems($branding['items'] ?? []);
             $groups[] = [
                 'label' => 'Optional branding',
                 'icon' => $this->iconForGroup('Optional branding'),
@@ -92,36 +91,19 @@ class ReportTechnicalChecksPresenter
      * @param list<array<string, mixed>> $items
      * @return list<array<string, mixed>>
      */
-    protected function mapItems(array $items, ?string $firstOpenId): array
+    protected function mapItems(array $items): array
     {
         return array_map(
-            fn (array $detail) => $this->mapDetailToRow($detail, $firstOpenId),
+            fn (array $detail) => $this->mapDetailToRow($detail),
             $items
         );
-    }
-
-    protected function firstOpenRowId(): ?string
-    {
-        foreach ($this->dns->detailGroups() as $group) {
-            foreach ($group['items'] as $detail) {
-                if (($detail['open'] ?? false) === true) {
-                    return 'tech-' . ($detail['key'] ?? 'item');
-                }
-            }
-        }
-
-        if ($this->blacklistHits > 0) {
-            return 'tech-blacklist';
-        }
-
-        return null;
     }
 
     /**
      * @param array<string, mixed> $detail
      * @return array<string, mixed>
      */
-    protected function mapDetailToRow(array $detail, ?string $firstOpenId): array
+    protected function mapDetailToRow(array $detail): array
     {
         $key = $detail['key'] ?? 'item';
         $rowId = 'tech-' . $key;
@@ -141,9 +123,11 @@ class ReportTechnicalChecksPresenter
             }
         }
 
-        if ($key === 'spf' && ($detail['badgeLabel'] ?? '') === 'Missing') {
-            $action = $action ?? ['label' => 'Add record', 'href' => '#what-to-fix'];
+        if ($key === 'spf' && $this->displayBadgeLabel($key, $detail) === 'Missing') {
+            $action = $action ?? ['label' => 'Add SPF', 'href' => '#what-to-fix'];
         }
+
+        $badgeLabel = $this->displayBadgeLabel($key, $detail);
 
         return [
             'id' => $rowId,
@@ -151,17 +135,17 @@ class ReportTechnicalChecksPresenter
             'icon' => $this->iconForKey($key),
             'label' => $detail['label'] ?? ucfirst($key),
             'badgeVariant' => $detail['badgeVariant'] ?? 'neutral',
-            'badgeLabel' => $detail['badgeLabel'] ?? 'Unknown',
+            'badgeLabel' => $badgeLabel,
             'result' => $result,
             'metadata' => $this->metadataForDetail($detail, $key),
             'action' => $action,
-            'open' => $rowId === $firstOpenId,
+            'open' => (bool) ($detail['open'] ?? $detail['needsAttention'] ?? false),
             'detail' => $detail,
             'help' => ($this->dns->recordHelp())[$detail['helpKey'] ?? $key] ?? null,
         ];
     }
 
-    protected function blacklistRow(?string $firstOpenId): array
+    protected function blacklistRow(): array
     {
         $listed = $this->blacklistHits > 0;
         $usable = $this->blacklistTotal > 0;
@@ -178,13 +162,13 @@ class ReportTechnicalChecksPresenter
                 : 'No usable blacklist checks completed.',
             'metadata' => $usable ? $this->blacklistHits . '/' . $this->blacklistTotal . ' listed' : null,
             'action' => $listed ? ['label' => 'View details', 'href' => '#what-to-fix'] : null,
-            'open' => 'tech-blacklist' === $firstOpenId,
+            'open' => $listed,
             'detail' => ['type' => 'blacklist', 'hits' => $this->blacklistHits, 'total' => $this->blacklistTotal],
             'help' => null,
         ];
     }
 
-    protected function renewalRow(?string $firstOpenId): array
+    protected function renewalRow(): array
     {
         $days = $this->domainDays;
         $variant = $days === null ? 'neutral' : ($days < 7 ? 'danger' : ($days < 30 ? 'warning' : 'success'));
@@ -201,34 +185,34 @@ class ReportTechnicalChecksPresenter
                 : 'Expiry date not set.',
             'metadata' => $days === null ? null : $days . ' days',
             'action' => ['label' => 'Edit dates', 'href' => route('domains.hub.settings', $this->domain) . '#renewals'],
-            'open' => false,
+            'open' => $days !== null && $days < 30,
             'detail' => ['type' => 'renewal', 'domainDays' => $this->domainDays],
             'help' => null,
         ];
     }
 
-    protected function sslRow(?string $firstOpenId): array
+    protected function sslRow(): array
     {
         return (new CertificateSectionPresenter(
             certificatesInfo: $this->certificatesInfo,
             mtaStsInfo: $this->mtaStsInfo,
             domain: $this->domain,
-        ))->sslRow($firstOpenId);
+        ))->sslRow();
     }
 
     /**
      * @param list<array<string, mixed>> $items
-     * @return array{configured: int, attention: int, total: int, summary: string, statusVariant: string, statusLabel: string}
+     * @return array{passing: int, attention: int, total: int, summary: string, statusVariant: string, statusLabel: string}
      */
     public function categorySummary(array $items): array
     {
-        $configured = 0;
+        $passing = 0;
         $attention = 0;
 
         foreach ($items as $item) {
             $variant = $item['badgeVariant'] ?? 'neutral';
             if ($variant === 'success') {
-                $configured++;
+                $passing++;
             } elseif (in_array($variant, ['warning', 'danger'], true)) {
                 $attention++;
             }
@@ -237,8 +221,8 @@ class ReportTechnicalChecksPresenter
         $total = count($items);
         $parts = [];
 
-        if ($configured > 0) {
-            $parts[] = $configured . ' configured';
+        if ($passing > 0) {
+            $parts[] = $passing . ' passing';
         }
         if ($attention > 0) {
             $parts[] = $attention . ' need attention';
@@ -251,20 +235,119 @@ class ReportTechnicalChecksPresenter
             ? 'danger'
             : (collect($items)->pluck('badgeVariant')->contains('warning') ? 'warning' : 'success');
 
-        $statusLabel = match ($worstVariant) {
-            'danger' => 'Issues found',
-            'warning' => 'Review needed',
-            default => 'Healthy',
-        };
+        $statusLabel = $attention > 0
+            ? $attention . ' issue' . ($attention === 1 ? '' : 's')
+            : 'All checks passing';
 
         return [
-            'configured' => $configured,
+            'passing' => $passing,
             'attention' => $attention,
             'total' => $total,
             'summary' => implode(' · ', $parts),
             'statusVariant' => $worstVariant === 'success' && $attention === 0 ? 'success' : $worstVariant,
             'statusLabel' => $statusLabel,
         ];
+    }
+
+    /**
+     * @param array<string, mixed> $detail
+     */
+    protected function displayBadgeLabel(string $key, array $detail): string
+    {
+        $label = (string) ($detail['badgeLabel'] ?? 'Unknown');
+        $variant = (string) ($detail['badgeVariant'] ?? 'neutral');
+        $normalized = strtolower($label);
+
+        return match ($key) {
+            'spf' => match (true) {
+                $normalized === 'missing' => 'Missing',
+                in_array($normalized, ['invalid', 'over limit'], true) => 'Invalid',
+                in_array($normalized, ['could not evaluate', 'not checked', 'unknown'], true) => 'Unable to verify',
+                $variant === 'success', $normalized === 'ok' => 'Published',
+                default => $label,
+            },
+            'dkim' => match (true) {
+                $normalized === 'published', $variant === 'success' => 'Published',
+                in_array($normalized, ['missing', 'not detected'], true) => 'Not detected',
+                in_array($normalized, ['unknown', 'unable to verify'], true) => 'Unable to verify',
+                $normalized === 'invalid' => 'Invalid',
+                default => $label,
+            },
+            'dmarc' => $this->dmarcBadgeLabel($detail, $label, $variant),
+            'tlsrpt' => match (true) {
+                $normalized === 'missing' => 'Missing',
+                $normalized === 'invalid' => 'Invalid',
+                $variant === 'success' => 'Configured',
+                default => $label,
+            },
+            'ssl' => $this->sslBadgeLabel($detail, $label),
+            default => $label,
+        };
+    }
+
+    /**
+     * @param array<string, mixed> $detail
+     */
+    protected function dmarcBadgeLabel(array $detail, string $label, string $variant): string
+    {
+        if ($variant === 'danger') {
+            return match (strtolower($label)) {
+                'missing' => 'Missing',
+                'invalid' => 'Invalid',
+                default => $label,
+            };
+        }
+
+        $chip = strtolower((string) ($detail['chips'][0] ?? ''));
+
+        return match (true) {
+            str_contains($chip, 'reject') => 'Reject',
+            str_contains($chip, 'quarantine') => 'Quarantine',
+            str_contains($chip, 'none'), str_contains(strtolower($label), 'monitor') => 'Monitoring',
+            str_contains(strtolower($label), 'reject') => 'Reject',
+            str_contains(strtolower($label), 'quarantine') => 'Quarantine',
+            default => $label,
+        };
+    }
+
+    /**
+     * @param array<string, mixed> $detail
+     */
+    protected function sslBadgeLabel(array $detail, string $label): string
+    {
+        $analysis = is_array($detail['analysis'] ?? null) ? $detail['analysis'] : [];
+        $endpoints = is_array($analysis['endpoints'] ?? null) ? $analysis['endpoints'] : [];
+
+        foreach ($endpoints as $endpoint) {
+            if (!is_array($endpoint)) {
+                continue;
+            }
+
+            $verification = (string) ($endpoint['verification_state'] ?? $endpoint['certificate_status'] ?? '');
+            if ($verification === 'hostname_mismatch') {
+                return 'Hostname mismatch';
+            }
+        }
+
+        if (strtolower($label) === 'expired' || (is_numeric(str_replace(' days', '', $label)) && (int) str_replace(' days', '', $label) < 0)) {
+            return 'Expired';
+        }
+
+        if (is_numeric(str_replace(' days', '', $label))) {
+            $days = (int) str_replace(' days', '', $label);
+            if ($days >= 0 && $days < 30) {
+                return 'Expiring';
+            }
+            if ($days >= 0) {
+                return 'Valid';
+            }
+        }
+
+        if (strtolower($label) === 'unknown') {
+            return 'Unable to verify';
+        }
+
+        return $label;
     }
 
     protected function iconForGroup(string $label): string

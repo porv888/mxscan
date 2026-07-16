@@ -33,7 +33,7 @@
         <div class="mx-tech-check-action-slot">
             @if($action)
                 <a href="{{ $action['href'] ?? '#' }}"
-                   class="text-sm font-medium text-blue-700 hover:text-blue-800 hover:underline"
+                   class="mx-tech-check-action text-sm font-medium text-blue-700 hover:text-blue-800 hover:underline"
                    @if(str_starts_with($action['href'] ?? '', '#')) onclick="event.stopPropagation();" @endif>
                     {{ $action['label'] }}
                 </a>
@@ -53,7 +53,7 @@
                 @endif
                 @if($action)
                     <a href="{{ $action['href'] ?? '#' }}"
-                       class="min-h-[44px] inline-flex items-center text-sm font-medium text-blue-700 hover:text-blue-800"
+                       class="mx-tech-check-action min-h-[44px] inline-flex items-center text-sm font-medium text-blue-700 hover:text-blue-800"
                        @if(str_starts_with($action['href'] ?? '', '#')) onclick="event.stopPropagation();" @endif>
                         {{ $action['label'] }}
                     </a>

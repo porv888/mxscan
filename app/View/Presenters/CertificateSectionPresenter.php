@@ -98,7 +98,7 @@ class CertificateSectionPresenter
     /**
      * @return array<string, mixed>
      */
-    public function sslRow(?string $firstOpenId = null): array
+    public function sslRow(): array
     {
         $analysis = $this->resolvedAnalysis();
         $days = $this->sslDays();
@@ -140,7 +140,7 @@ class CertificateSectionPresenter
             'action' => $this->domain
                 ? ['label' => 'Edit dates', 'href' => route('domains.hub.settings', $this->domain) . '#renewals']
                 : null,
-            'open' => 'tech-ssl' === $firstOpenId,
+            'open' => in_array($variant, ['danger', 'warning'], true),
             'detail' => [
                 'type' => 'ssl',
                 'sslDays' => $days,

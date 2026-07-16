@@ -228,6 +228,6 @@ class ScanReportSectionsLayoutTest extends TestCase
         $auth = collect($groups)->firstWhere('label', 'Authentication');
         $this->assertNotNull($auth);
         $this->assertArrayHasKey('summary', $auth);
-        $this->assertStringContainsString('configured', strtolower($auth['summary']['summary']));
+        $this->assertStringContainsString('passing', strtolower($auth['summary']['summary']));
     }
 }

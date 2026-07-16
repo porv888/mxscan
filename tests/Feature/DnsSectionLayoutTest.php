@@ -106,7 +106,7 @@ class DnsSectionLayoutTest extends TestCase
         $html = $this->renderDnsSection($this->baseRecords());
 
         $this->assertStringContainsString('valid DKIM key', $html);
-        $this->assertStringContainsString('published DNS keys only', $html);
+        $this->assertStringContainsString('DNS publication confirmed', $html);
     }
 
     public function test_dmarc_reports_relink_copy_shown_once(): void

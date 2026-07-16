@@ -81,7 +81,7 @@ class MxscanMeRenderedDashboardTest extends TestCase
         $lower = strtolower($html);
 
         $this->assertStringContainsString('64', $html);
-        $this->assertStringContainsString('valid dkim key', $lower);
+        $this->assertStringContainsString('3 valid dkim selectors are published', $lower);
         $this->assertStringContainsString('default', $lower);
         $this->assertStringContainsString('quarantine', $lower);
         $this->assertStringContainsString('alignment not verified', $lower);
@@ -99,6 +99,10 @@ class MxscanMeRenderedDashboardTest extends TestCase
         $this->assertStringContainsString('mx-status-pill', $html);
         $this->assertStringContainsString('data-tech-category', $html);
         $this->assertStringContainsString('data-recommendation-card', $html);
-        $this->assertStringContainsString('v=dkim1', $lower);
+        $this->assertStringContainsString('mx-dkim-table', $html);
+        $this->assertStringNotContainsString('Hide resolved checks', $html);
+
+        $this->assertDoesNotMatchRegularExpression('/<details[^>]*id="tech-dkim"[^>]*\sopen/si', $html);
+        $this->assertMatchesRegularExpression('/<details[^>]*id="tech-spf"[^>]*\sopen/si', $html);
     }
 }

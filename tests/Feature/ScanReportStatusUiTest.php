@@ -139,7 +139,8 @@ class ScanReportStatusUiTest extends TestCase
         ])->render();
 
         $this->assertStringContainsString('valid DKIM key', $html);
-        $this->assertStringContainsString('published DNS keys only', $html);
+        $this->assertStringContainsString('DNS publication confirmed', $html);
+        $this->assertStringContainsString('DMARC-report evidence', $html);
         $this->assertStringNotContainsString('signing verified', strtolower($html));
     }
 

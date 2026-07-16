@@ -1,32 +1,34 @@
 <section id="technical-checks"
          class="space-y-5"
          x-data="{
-            showResolved: true,
+            hidePassing: false,
             setAllChecks(open) {
                 this.$el.querySelectorAll('[data-tech-check]').forEach((el) => { el.open = open; });
             }
          }">
-    <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+    <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
             <h2 class="mx-report-section-title">Technical checks</h2>
             <p class="mx-report-section-subtitle">Detailed DNS, policy and transport-security evidence from the latest scan.</p>
         </div>
-        <div class="flex flex-wrap items-center gap-2">
+        <div class="mx-tech-toolbar">
             <button type="button"
-                    class="min-h-[44px] rounded-lg border border-gray-200 bg-white px-3 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                    class="mx-tech-toolbar-btn"
                     @click="setAllChecks(true)">
                 Expand all
             </button>
+            <span class="mx-tech-toolbar-sep" aria-hidden="true">·</span>
             <button type="button"
-                    class="min-h-[44px] rounded-lg border border-gray-200 bg-white px-3 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                    class="mx-tech-toolbar-btn"
                     @click="setAllChecks(false)">
                 Collapse all
             </button>
-            <button type="button"
-                    class="min-h-[44px] rounded-lg border border-gray-200 bg-white px-3 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-                    @click="showResolved = !showResolved"
-                    x-text="showResolved ? 'Hide resolved checks' : 'Show resolved checks'">
-            </button>
+            <label class="mx-tech-toolbar-toggle">
+                <input type="checkbox"
+                       class="mx-tech-toolbar-checkbox"
+                       x-model="hidePassing">
+                <span>Hide passing checks</span>
+            </label>
         </div>
     </div>
 
@@ -41,7 +43,7 @@
                 :status-label="$summary['statusLabel'] ?? null"
             >
                 @foreach($group['items'] as $row)
-                    <div x-show="showResolved || '{{ $row['badgeVariant'] ?? 'neutral' }}' !== 'success'" x-cloak>
+                    <div x-show="!hidePassing || '{{ $row['badgeVariant'] ?? 'neutral' }}' !== 'success'" x-cloak>
                         <x-report.technical-check-row
                             :id="$row['id']"
                             :icon="$row['icon']"
