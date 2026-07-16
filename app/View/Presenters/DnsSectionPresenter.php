@@ -703,11 +703,12 @@ class DnsSectionPresenter
             if ($validAnalysisSelectors !== []) {
                 foreach ($validAnalysisSelectors as $row) {
                     $selectorName = $row['selector'] ?? 'unknown';
+                    $record = $this->dkimRecordForSelector($selectorName, $row, $data);
                     $selectors[] = [
                         'selector' => $selectorName,
                         'host' => ($row['hostname'] ?? ($selectorName . '._domainkey.' . $this->domainName())),
-                        'record' => '',
-                        'preview' => 'Valid DKIM key published',
+                        'record' => $record,
+                        'preview' => Str::limit($record, 80),
                         'key_type' => $row['key_type'] ?? null,
                         'key_bits' => $row['key_bits'] ?? null,
                     ];
@@ -1029,5 +1030,39 @@ class DnsSectionPresenter
             'previewUrl' => $bimiPresenter->previewUrl(),
             'chips' => $chips,
         ];
+    }
+
+    /**
+     * @param array<string, mixed>|null $dnsData
+     */
+    protected function dkimRecordForSelector(string $selector, array $analysisRow, ?array $dnsData): string
+    {
+        foreach (($dnsData['data'] ?? []) as $row) {
+            if (!is_array($row) || ($row['selector'] ?? '') !== $selector) {
+                continue;
+            }
+
+            $record = trim((string) ($row['record'] ?? ''));
+            if ($record !== '') {
+                return $record;
+            }
+        }
+
+        return $this->dkimRecordPreview($analysisRow);
+    }
+
+    /**
+     * @param array<string, mixed> $selector
+     */
+    protected function dkimRecordPreview(array $selector): string
+    {
+        $type = $selector['key_type'] ?? 'unknown';
+        $bits = $selector['key_bits'] ?? null;
+
+        if ($bits !== null) {
+            return "v=DKIM1; k={$type}; p=[{$bits}-bit public key]";
+        }
+
+        return "v=DKIM1; k={$type}; p=[public key]";
     }
 }

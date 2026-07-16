@@ -99,5 +99,6 @@ class MxscanMeRenderedDashboardTest extends TestCase
         $this->assertStringContainsString('mx-status-pill', $html);
         $this->assertStringContainsString('data-tech-category', $html);
         $this->assertStringContainsString('data-recommendation-card', $html);
+        $this->assertStringContainsString('v=dkim1', $lower);
     }
 }

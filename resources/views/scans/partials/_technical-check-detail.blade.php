@@ -105,7 +105,21 @@
                             <span class="text-[13px] text-gray-500">Public key available</span>
                         </div>
                         <div class="mt-2">
-                            <x-report.dns-value-block :value="$selector['record']" :clamp="160" />
+                            @if(!empty($selector['record']))
+                                <x-report.dns-value-block :value="$selector['record']" :clamp="160" />
+                            @else
+                                <p class="text-[13px] text-gray-500">DKIM record value unavailable for this selector.</p>
+                            @endif
+                            @if(!empty($selector['key_type']) || !empty($selector['key_bits']))
+                                <div class="mt-2 flex flex-wrap gap-2">
+                                    @if(!empty($selector['key_type']))
+                                        <span class="mx-chip">Key: {{ $selector['key_type'] }}</span>
+                                    @endif
+                                    @if(!empty($selector['key_bits']))
+                                        <span class="mx-chip">{{ $selector['key_bits'] }}-bit</span>
+                                    @endif
+                                </div>
+                            @endif
                         </div>
                     </li>
                 @endforeach
