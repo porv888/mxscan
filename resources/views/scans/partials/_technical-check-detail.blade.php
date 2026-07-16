@@ -11,7 +11,14 @@
     $key = $row['key'] ?? '';
 @endphp
 
-@if(($detail['type'] ?? '') === 'code')
+@if(in_array($row['presentationState'] ?? 'passing', ['failing', 'optional'], true))
+    @include('scans.partials._technical-check-remediation', [
+        'row' => $row,
+        'domain' => $domain,
+        'scan' => $scan,
+        'technicalRemediation' => $technicalRemediation ?? [],
+    ])
+@elseif(($detail['type'] ?? '') === 'code')
     @if($key === 'spf')
         <div class="mx-tech-detail-sections">
             <div class="mx-tech-detail-block">
@@ -170,6 +177,8 @@
                             <th>Priority</th>
                             <th>Host</th>
                             <th>Status</th>
+                            <th>IPv4</th>
+                            <th>IPv6</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -178,6 +187,8 @@
                                 <td class="font-medium text-gray-900">{{ $mxRows[0]['value'] ?? '—' }}</td>
                                 <td class="font-mono text-[13px] text-gray-900">{{ $mxRows[1]['value'] ?? '—' }}</td>
                                 <td class="text-gray-600">{{ $mxRows[2]['value'] ?? '—' }}</td>
+                                <td class="font-mono text-[13px] text-gray-700">{{ $mxRows[3]['value'] ?? '—' }}</td>
+                                <td class="font-mono text-[13px] text-gray-700">{{ $mxRows[4]['value'] ?? '—' }}</td>
                             </tr>
                         @endforeach
                     </tbody>

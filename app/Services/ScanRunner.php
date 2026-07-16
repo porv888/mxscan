@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Domain\EmailSecurity\Contracts\ScanPersisterInterface;
 use App\Domain\EmailSecurity\DTO\ScanOptionsDTO;
+use App\Domain\EmailSecurity\Remediation\SenderEvidenceSynchronizer;
 use App\Domain\EmailSecurity\Support\ScanPayloadBuilder;
 use App\Models\Domain;
 use App\Models\Scan;
@@ -21,6 +22,7 @@ class ScanRunner
         private ExpiryCoordinator $expiryCoordinator,
         private ScanFinalizer $scanFinalizer,
         private ScanPersisterInterface $persister,
+        private SenderEvidenceSynchronizer $senderEvidenceSynchronizer,
     ) {
     }
 
@@ -101,6 +103,7 @@ class ScanRunner
             );
 
             $this->persister->saveFinished($scan, $domain, $execution, $scanOptions, $facts);
+            $this->senderEvidenceSynchronizer->sync($domain, $execution->resultJson);
 
             Log::info('Synchronous scan completed successfully', [
                 'scan_id' => $scan->id,

@@ -1,11 +1,13 @@
+@include('scans.partials._technical-remediation-script', [
+    'domain' => $domain,
+    'scan' => $scan,
+    'techGroups' => $techGroups,
+    'technicalRemediation' => $technicalRemediation ?? [],
+])
+
 <section id="technical-checks"
          class="space-y-5"
-         x-data="{
-            hidePassing: false,
-            setAllChecks(open) {
-                this.$el.querySelectorAll('[data-tech-check]').forEach((el) => { el.open = open; });
-            }
-         }">
+         x-data="technicalChecksRemediation()">
     <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
             <h2 class="mx-report-section-title">Technical checks</h2>
@@ -54,12 +56,18 @@
                             :metadata="$row['metadata'] ?? null"
                             :action="$row['action'] ?? null"
                             :open="$row['open'] ?? false"
+                            :state="$row['presentationState'] ?? null"
+                            :severity="$row['severity'] ?? 'neutral'"
+                            :lost-points="$row['lostPoints'] ?? null"
+                            :optional="$row['optional'] ?? false"
                         >
                             @include('scans.partials._technical-check-detail', [
                                 'row' => $row,
                                 'domain' => $domain,
                                 'blacklistRows' => $blacklistRows,
                                 'enabled' => $enabled,
+                                'scan' => $scan,
+                                'technicalRemediation' => $technicalRemediation ?? [],
                             ])
                         </x-report.technical-check-row>
                     </div>

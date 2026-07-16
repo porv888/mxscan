@@ -133,6 +133,13 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // NEW: Synchronous scan endpoint
     Route::get('/domains/{domain}/scan-now', [App\Http\Controllers\ScanController::class, 'showScanNow'])->name('domains.scan.now.show');
     Route::post('/domains/{domain}/scan-now', [App\Http\Controllers\ScanController::class, 'runSync'])->name('domains.scan.now');
+
+    Route::post('/domains/{domain}/remediation/spf/preview', [App\Http\Controllers\DomainRemediationController::class, 'preview'])
+        ->name('domains.remediation.spf.preview');
+    Route::post('/domains/{domain}/remediation/spf/save', [App\Http\Controllers\DomainRemediationController::class, 'save'])
+        ->name('domains.remediation.spf.save');
+    Route::get('/domains/{domain}/remediation/mta-sts/{scan}/policy', [App\Http\Controllers\DomainRemediationController::class, 'mtaStsPolicy'])
+        ->name('domains.remediation.mta-sts.policy');
     
     // Expiry refresh endpoint
     Route::post('/domains/{domain}/expiry/refresh', [App\Http\Controllers\DomainController::class, 'refreshExpiry'])->name('domains.expiry.refresh');

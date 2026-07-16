@@ -74,7 +74,6 @@ class MxscanMeRenderedDashboardTest extends TestCase
         $viewData['bimiOk'] = false;
         $viewData['domainDays'] = 120;
         $viewData['sslDays'] = null;
-        $viewData['dmarcStatus'] = null;
         $viewData['scoreDeductions'] = [];
 
         $html = view('scans.show', $viewData)->render();
@@ -96,6 +95,10 @@ class MxscanMeRenderedDashboardTest extends TestCase
 
         $this->assertStringContainsString('mx-tech-category-card', $html);
         $this->assertStringContainsString('mx-evidence-panel', $html);
+        $this->assertStringContainsString('mx-tech-issue-panel', $html);
+        $this->assertStringContainsString('mx-tech-solution-panel', $html);
+        $this->assertStringContainsString('mx-tech-check-row--failing', $html);
+        $this->assertStringContainsString('mx-tech-check-row--passing', $html);
         $this->assertStringContainsString('mx-status-pill', $html);
         $this->assertStringContainsString('data-tech-category', $html);
         $this->assertStringContainsString('data-recommendation-card', $html);

@@ -673,6 +673,7 @@ class DnsSectionPresenter
             'value' => $found ? (string) ($data['data'] ?? '') : null,
             'copyLabel' => 'Copy SPF record',
             'footer' => null,
+            'detectedMailServers' => $this->detectedMailServers(),
         ];
 
         if ($found && $this->spfLookupCount !== null) {
@@ -902,10 +903,22 @@ class DnsSectionPresenter
 
         $targets = is_array($analysis['targets'] ?? null) ? $analysis['targets'] : [];
         foreach ($targets as $target) {
+            $ipv4 = collect($target['a_addresses'] ?? [])
+                ->map(fn ($address) => is_array($address) ? ($address['address'] ?? null) : $address)
+                ->filter()
+                ->values()
+                ->all();
+            $ipv6 = collect($target['aaaa_addresses'] ?? [])
+                ->map(fn ($address) => is_array($address) ? ($address['address'] ?? null) : $address)
+                ->filter()
+                ->values()
+                ->all();
             $rows[] = [
                 ['label' => 'Priority', 'value' => (string) ($target['preference'] ?? 'N/A')],
                 ['label' => 'Host', 'value' => (string) ($target['normalized_hostname'] ?? $target['hostname'] ?? 'Unknown')],
                 ['label' => 'Status', 'value' => (string) ($target['status'] ?? 'unknown')],
+                ['label' => 'IPv4', 'value' => implode(', ', $ipv4) ?: '—'],
+                ['label' => 'IPv6', 'value' => implode(', ', $ipv6) ?: '—'],
             ];
         }
 
@@ -924,6 +937,27 @@ class DnsSectionPresenter
             'type' => 'mx',
             'rows' => $rows,
         ];
+    }
+
+    /**
+     * @return list<array{hostname: string, ipv4: list<string>, ipv6: list<string>}>
+     */
+    protected function detectedMailServers(): array
+    {
+        $analysis = MxAnalysisReader::analysis($this->mxInfo)
+            ?? MxAnalysisReader::fromLegacyDnsRecord($this->records['MX'] ?? null, $this->mxInfo);
+
+        return collect($analysis['targets'] ?? [])->filter(fn ($target) => is_array($target))->map(
+            fn (array $target) => [
+                'hostname' => (string) ($target['normalized_hostname'] ?? $target['hostname'] ?? 'Unknown'),
+                'ipv4' => collect($target['a_addresses'] ?? [])
+                    ->map(fn ($address) => is_array($address) ? ($address['address'] ?? null) : $address)
+                    ->filter()->values()->all(),
+                'ipv6' => collect($target['aaaa_addresses'] ?? [])
+                    ->map(fn ($address) => is_array($address) ? ($address['address'] ?? null) : $address)
+                    ->filter()->values()->all(),
+            ]
+        )->values()->all();
     }
 
     protected function tlsRptDetail(?string $firstOpenId): array

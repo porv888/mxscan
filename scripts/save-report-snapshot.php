@@ -10,6 +10,10 @@ require __DIR__ . '/../vendor/autoload.php';
 $app = require __DIR__ . '/../bootstrap/app.php';
 $app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
 
+if ((string) env('SCREENSHOT_EPHEMERAL', '') === '1') {
+    Illuminate\Support\Facades\Artisan::call('migrate:fresh', ['--force' => true]);
+}
+
 $user = User::factory()->create();
 Auth::login($user);
 
@@ -56,10 +60,16 @@ $viewData['bimiHasData'] = false;
 $viewData['bimiOk'] = false;
 $viewData['domainDays'] = 120;
 $viewData['sslDays'] = null;
-$viewData['dmarcStatus'] = null;
 $viewData['scoreDeductions'] = [];
 
 $html = view('scans.show', $viewData)->render();
+$document = new DOMDocument();
+libxml_use_internal_errors(true);
+$document->loadHTML('<?xml encoding="utf-8" ?>' . $html);
+libxml_clear_errors();
+$technicalChecks = $document->getElementById('technical-checks');
+$technicalHtml = $technicalChecks ? $document->saveHTML($technicalChecks) : $html;
+$technicalHtml = str_replace(' x-cloak', '', $technicalHtml);
 
 $dir = storage_path('app/report-screenshots');
 if (!is_dir($dir)) {
@@ -78,7 +88,7 @@ $wrap = function (string $title, string $viewport, string $bodyHtml) use ($inlin
 <meta name="viewport" content="{$viewport}">
 <title>{$title}</title>
 <style>{$inlineCss}</style>
-<style>[x-cloak]{display:none!important} body{margin:0;background:#f9fafb;}</style>
+<style>[x-cloak]{display:none!important} .mx-dns-provider-steps{display:none!important} body{margin:0;background:#f9fafb;}</style>
 </head>
 <body>{$bodyHtml}</body>
 </html>
@@ -88,13 +98,13 @@ HTML;
 $desktop = $wrap(
     'mxscan.me report — desktop after',
     'width=device-width, initial-scale=1',
-    '<div style="max-width:1320px;margin:0 auto;padding:24px;">' . $html . '</div>',
+    '<div style="max-width:1320px;margin:0 auto;padding:24px;">' . $technicalHtml . '</div>',
 );
 
 $mobile = $wrap(
     'mxscan.me report — mobile after',
     'width=390, initial-scale=1',
-    '<div style="width:390px;padding:12px;">' . $html . '</div>',
+    '<div style="width:390px;padding:12px;box-sizing:border-box;">' . $technicalHtml . '</div>',
 );
 
 file_put_contents($dir . '/mxscan-me-report-after-desktop.html', $desktop);

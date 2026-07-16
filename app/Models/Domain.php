@@ -14,6 +14,8 @@ class Domain extends Model
         'domain',
         'environment',
         'provider_guess',
+        'dns_provider',
+        'dns_provider_confirmed_at',
         'score_last',
         'last_scanned_at',
         'status',
@@ -39,6 +41,7 @@ class Domain extends Model
     {
         return [
             'last_scanned_at' => 'datetime',
+            'dns_provider_confirmed_at' => 'datetime',
             'score_last' => 'integer',
             'spf_lookup_count' => 'integer',
             'domain_expires_at' => 'datetime',
@@ -64,6 +67,14 @@ class Domain extends Model
     public function scans()
     {
         return $this->hasMany(Scan::class);
+    }
+
+    /**
+     * Sending infrastructure detected or configured for this domain.
+     */
+    public function senders()
+    {
+        return $this->hasMany(DomainSender::class);
     }
 
     /**

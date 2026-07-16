@@ -112,6 +112,8 @@ class EntitlementService
 
         return match ($feature) {
             EntitlementFeature::DOMAIN_CREATE => $this->canAddDomain($user),
+            EntitlementFeature::DOMAIN_MANAGE,
+            EntitlementFeature::DOMAIN_ACTIVE,
             EntitlementFeature::MANUAL_FULL_SCAN => true,
             EntitlementFeature::PARTIAL_SCAN,
             EntitlementFeature::STANDALONE_TOOLS,

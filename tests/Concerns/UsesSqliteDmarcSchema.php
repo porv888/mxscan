@@ -44,6 +44,8 @@ trait UsesSqliteDmarcSchema
             $table->string('domain')->unique();
             $table->string('environment')->default('prod');
             $table->string('provider_guess')->nullable();
+            $table->string('dns_provider')->nullable();
+            $table->timestamp('dns_provider_confirmed_at')->nullable();
             $table->integer('score_last')->nullable();
             $table->timestamp('last_scanned_at')->nullable();
             $table->string('status')->default('active');
@@ -51,6 +53,24 @@ trait UsesSqliteDmarcSchema
             $table->timestamp('dmarc_last_report_at')->nullable();
             $table->timestamp('dmarc_rua_verified_at')->nullable();
             $table->text('dmarc_dns_record')->nullable();
+            $table->timestamps();
+        });
+
+        Schema::create('domain_senders', function (Blueprint $table) {
+            $table->id();
+            $table->unsignedBigInteger('domain_id');
+            $table->string('sender_type');
+            $table->string('provider')->nullable();
+            $table->string('mechanism');
+            $table->string('value');
+            $table->string('source');
+            $table->string('confidence')->default('unknown');
+            $table->string('confirmation_status')->default('pending');
+            $table->unsignedBigInteger('confirmed_by')->nullable();
+            $table->timestamp('confirmed_at')->nullable();
+            $table->timestamp('last_seen_at')->nullable();
+            $table->boolean('is_active')->default(true);
+            $table->string('fingerprint', 64);
             $table->timestamps();
         });
 

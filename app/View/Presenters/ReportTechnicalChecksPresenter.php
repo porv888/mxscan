@@ -21,6 +21,8 @@ class ReportTechnicalChecksPresenter
         protected bool $blacklistEnabled = true,
         protected ?array $certificatesInfo = null,
         protected ?array $mtaStsInfo = null,
+        protected array $scoreBreakdown = [],
+        protected array $remediation = [],
     ) {
     }
 
@@ -128,6 +130,15 @@ class ReportTechnicalChecksPresenter
         }
 
         $badgeLabel = $this->displayBadgeLabel($key, $detail);
+        $score = $this->scoreForKey($key);
+        $optional = ($score['possible'] ?? null) === 0 || $key === 'bimi';
+        $needsAttention = in_array($detail['badgeVariant'] ?? 'neutral', ['warning', 'danger'], true) && !$optional;
+        $remediationKey = match ($key) {
+            'dmarc_reports' => 'dmarc',
+            'mtasts' => 'mta_sts',
+            'tlsrpt' => 'tls_rpt',
+            default => $key,
+        };
 
         return [
             'id' => $rowId,
@@ -139,9 +150,17 @@ class ReportTechnicalChecksPresenter
             'result' => $result,
             'metadata' => $this->metadataForDetail($detail, $key),
             'action' => $action,
-            'open' => (bool) ($detail['open'] ?? $detail['needsAttention'] ?? false),
+            'open' => $optional ? false : (bool) ($detail['open'] ?? $detail['needsAttention'] ?? false),
             'detail' => $detail,
             'help' => ($this->dns->recordHelp())[$detail['helpKey'] ?? $key] ?? null,
+            'severity' => $optional ? 'optional' : ($detail['severity'] ?? $detail['badgeVariant'] ?? 'neutral'),
+            'score' => $score,
+            'lostPoints' => isset($score['possible'], $score['earned'])
+                ? max(0, (int) $score['possible'] - (int) $score['earned'])
+                : null,
+            'optional' => $optional,
+            'presentationState' => $optional ? 'optional' : ($needsAttention ? 'failing' : 'passing'),
+            'remediation' => $this->remediation[$remediationKey] ?? null,
         ];
     }
 
@@ -165,6 +184,12 @@ class ReportTechnicalChecksPresenter
             'open' => $listed,
             'detail' => ['type' => 'blacklist', 'hits' => $this->blacklistHits, 'total' => $this->blacklistTotal],
             'help' => null,
+            'severity' => $listed ? 'danger' : 'success',
+            'presentationState' => $listed ? 'failing' : 'passing',
+            'optional' => false,
+            'score' => $this->scoreForKey('blacklist'),
+            'lostPoints' => null,
+            'remediation' => null,
         ];
     }
 
@@ -188,16 +213,35 @@ class ReportTechnicalChecksPresenter
             'open' => $days !== null && $days < 30,
             'detail' => ['type' => 'renewal', 'domainDays' => $this->domainDays],
             'help' => null,
+            'severity' => $variant,
+            'presentationState' => in_array($variant, ['danger', 'warning'], true) ? 'failing' : 'passing',
+            'optional' => false,
+            'score' => $this->scoreForKey('renewal'),
+            'lostPoints' => null,
+            'remediation' => null,
         ];
     }
 
     protected function sslRow(): array
     {
-        return (new CertificateSectionPresenter(
+        $row = (new CertificateSectionPresenter(
             certificatesInfo: $this->certificatesInfo,
             mtaStsInfo: $this->mtaStsInfo,
             domain: $this->domain,
         ))->sslRow();
+
+        $row['severity'] = $row['badgeVariant'] ?? 'neutral';
+        $row['presentationState'] = in_array($row['badgeVariant'] ?? '', ['warning', 'danger'], true)
+            ? 'failing'
+            : 'passing';
+        $row['optional'] = false;
+        $row['score'] = $this->scoreForKey('ssl');
+        $row['lostPoints'] = isset($row['score']['possible'], $row['score']['earned'])
+            ? max(0, (int) $row['score']['possible'] - (int) $row['score']['earned'])
+            : null;
+        $row['remediation'] = $this->remediation['certificates'] ?? null;
+
+        return $row;
     }
 
     /**
@@ -210,6 +254,9 @@ class ReportTechnicalChecksPresenter
         $attention = 0;
 
         foreach ($items as $item) {
+            if (($item['optional'] ?? false) === true) {
+                continue;
+            }
             $variant = $item['badgeVariant'] ?? 'neutral';
             if ($variant === 'success') {
                 $passing++;
@@ -231,9 +278,10 @@ class ReportTechnicalChecksPresenter
             $parts[] = $total . ' check' . ($total === 1 ? '' : 's');
         }
 
-        $worstVariant = collect($items)->pluck('badgeVariant')->contains('danger')
+        $scoredItems = collect($items)->reject(fn ($item) => ($item['optional'] ?? false) === true);
+        $worstVariant = $scoredItems->pluck('badgeVariant')->contains('danger')
             ? 'danger'
-            : (collect($items)->pluck('badgeVariant')->contains('warning') ? 'warning' : 'success');
+            : ($scoredItems->pluck('badgeVariant')->contains('warning') ? 'warning' : 'success');
 
         $statusLabel = $attention > 0
             ? $attention . ' issue' . ($attention === 1 ? '' : 's')
@@ -402,5 +450,29 @@ class ReportTechnicalChecksPresenter
             'bimi' => 'image',
             default => 'file-text',
         };
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    protected function scoreForKey(string $key): array
+    {
+        $aliases = [
+            'tlsrpt' => ['tlsrpt', 'tls_rpt'],
+            'mtasts' => ['mtasts', 'mta_sts'],
+            'ssl' => ['ssl', 'certificates'],
+            'dmarc_reports' => ['dmarc_reports'],
+        ];
+        $keys = $aliases[$key] ?? [$key];
+
+        foreach ($this->scoreBreakdown as $row) {
+            if (in_array($row['key'] ?? '', $keys, true)) {
+                return $row;
+            }
+        }
+
+        return $key === 'bimi'
+            ? ['key' => 'bimi', 'earned' => 0, 'possible' => 0]
+            : [];
     }
 }

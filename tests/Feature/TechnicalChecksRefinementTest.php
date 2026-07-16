@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Domain\EmailSecurity\Contracts\ScanReportFactoryInterface;
 use App\Domain\EmailSecurity\Reporting\ScanReportStatusMapper;
 use App\Models\Domain;
+use App\Models\DomainSender;
 use App\Models\Scan;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -25,13 +26,31 @@ class TechnicalChecksRefinementTest extends TestCase
         $this->setUpPlanTables();
     }
 
-    protected function renderMxscanReportHtml(): string
+    protected function renderMxscanReportHtml(array $senders = []): string
     {
         $user = $this->createPremiumUser();
         $domain = Domain::factory()->create([
             'user_id' => $user->id,
             'domain' => 'mxscan.me',
         ]);
+
+        foreach ($senders as $sender) {
+            $domain->senders()->create($sender + [
+                'source' => DomainSender::SOURCE_DETECTED,
+                'confidence' => DomainSender::CONFIDENCE_CONFIRMED,
+                'confirmation_status' => DomainSender::STATUS_CONFIRMED,
+                'confirmed_by' => $user->id,
+                'confirmed_at' => now(),
+                'last_seen_at' => now(),
+                'is_active' => true,
+                'fingerprint' => DomainSender::fingerprint(
+                    $sender['sender_type'],
+                    $sender['provider'] ?? null,
+                    $sender['mechanism'],
+                    $sender['value'],
+                ),
+            ]);
+        }
 
         $resultJson = json_decode(
             file_get_contents(base_path('tests/Fixtures/EmailSecurity/mxscan-me-scan-result.json')),
@@ -74,7 +93,6 @@ class TechnicalChecksRefinementTest extends TestCase
         $viewData['bimiOk'] = false;
         $viewData['domainDays'] = 120;
         $viewData['sslDays'] = null;
-        $viewData['dmarcStatus'] = null;
         $viewData['scoreDeductions'] = [];
 
         return view('scans.show', $viewData)->render();
@@ -132,26 +150,69 @@ class TechnicalChecksRefinementTest extends TestCase
         $this->assertMatchesRegularExpression('/>\s*\d+\s+issues?\s*</i', $html);
     }
 
-    public function test_spf_panel_is_compact_without_duplicate_action_or_generated_record(): void
+    public function test_missing_spf_renders_sender_confirmation_and_solution_builder(): void
     {
         $html = $this->renderMxscanReportHtml();
         $spfSection = $this->extractCheckSection($html, 'tech-spf');
 
-        $this->assertStringContainsString('Why this matters', $spfSection);
-        $this->assertStringContainsString('SPF identifies which services may send email for this domain.', $spfSection);
-        $this->assertStringContainsString('View fix instructions', $spfSection);
-        $this->assertStringContainsString('#what-to-fix', $spfSection);
-        $this->assertStringNotContainsString('v=spf1', strtolower($spfSection));
-        $this->assertStringNotContainsString('google.com', strtolower($spfSection));
-        $this->assertStringNotContainsString('include:sendgrid', strtolower($spfSection));
+        $this->assertStringContainsString('mx-tech-issue-panel', $spfSection);
+        $this->assertStringContainsString('mx-tech-evidence-panel', $spfSection);
+        $this->assertStringContainsString('mx-tech-solution-panel', $spfSection);
+        $this->assertStringContainsString('No TXT record beginning with', $spfSection);
+        $this->assertStringContainsString('Detected infrastructure', $spfSection);
+        $this->assertStringContainsString('mail.mxscan.me', $spfSection);
+        $this->assertStringContainsString('89.149.243.245', $spfSection);
+        $this->assertStringContainsString('2001:1af8:5301:131:1c00:62ff:fe00:1efc', $spfSection);
+        $this->assertStringContainsString('Does this server also send outgoing email', $spfSection);
+        $this->assertStringContainsString('Yes, authorize it', $spfSection);
+        $this->assertStringContainsString('Not sure', $spfSection);
+        $this->assertStringContainsString('data-sender-confidence="pending"', $spfSection);
+        $this->assertStringContainsString('Type', $spfSection);
+        $this->assertStringContainsString('Host', $spfSection);
+        $this->assertStringContainsString('Value', $spfSection);
+        $this->assertStringContainsString('TTL', $spfSection);
+        $this->assertStringContainsString('Copy value', $spfSection);
+        $this->assertStringContainsString('Up to +20 points', $spfSection);
+        $this->assertStringContainsString('Cannot generate yet', $spfSection);
+        $this->assertStringNotContainsString('View fix instructions', $spfSection);
+        $this->assertSame(1, substr_count($spfSection, 'mx-tech-rescan-button'));
+    }
 
-        $panel = '';
-        if (preg_match('/id="tech-spf-panel"[^>]*>.*?<\/div>\s*<\/details>/si', $spfSection, $panelMatch)) {
-            $panel = $panelMatch[0];
-        }
+    public function test_confirmed_detected_senders_generate_soft_fail_spf_with_fifteen_points(): void
+    {
+        $html = $this->renderMxscanReportHtml([
+            ['sender_type' => 'own_server', 'provider' => null, 'mechanism' => 'ip4', 'value' => '89.149.243.245'],
+            ['sender_type' => 'own_server', 'provider' => null, 'mechanism' => 'ip6', 'value' => '2001:1af8:5301:131:1c00:62ff:fe00:1efc'],
+        ]);
+        $spfSection = $this->extractCheckSection($html, 'tech-spf');
 
-        $this->assertStringNotContainsString('Add SPF', $panel);
-        $this->assertStringContainsString('View fix instructions', $panel);
+        $this->assertStringContainsString(
+            'v=spf1 ip4:89.149.243.245 ip6:2001:1af8:5301:131:1c00:62ff:fe00:1efc ~all',
+            $spfSection,
+        );
+        $this->assertStringContainsString('15/20', $spfSection);
+        $this->assertStringContainsString('Suggested starting SPF record', $spfSection);
+        $this->assertStringNotContainsString('~all</code></dd></div></dl></div><strong>20/20', $spfSection);
+    }
+
+    public function test_mta_sts_and_dmarc_issues_render_generated_configuration(): void
+    {
+        $html = $this->renderMxscanReportHtml();
+        $mtaSts = $this->extractCheckSection($html, 'tech-mtasts');
+        $dmarcReports = $this->extractCheckSection($html, 'tech-dmarc_reports');
+
+        $this->assertStringContainsString('MTA-STS DNS record', $mtaSts);
+        $this->assertStringContainsString('v=STSv1; id=', $mtaSts);
+        $this->assertStringContainsString('https://mta-sts.mxscan.me/.well-known/mta-sts.txt', $mtaSts);
+        $this->assertStringContainsString('mode: testing', $mtaSts);
+        $this->assertStringContainsString('mx: mail.mxscan.me', $mtaSts);
+        $this->assertStringContainsString('Download policy file', $mtaSts);
+
+        $this->assertNotSame('', $dmarcReports);
+        $this->assertStringContainsString('Corrected DMARC record', $dmarcReports);
+        $this->assertStringContainsString('mailto:dmarc+', $dmarcReports);
+        $this->assertStringContainsString('@mxscan.me', $dmarcReports);
+        $this->assertStringContainsString('Re-scan domain', $dmarcReports);
     }
 
     public function test_summaries_do_not_contain_duplicate_periods(): void

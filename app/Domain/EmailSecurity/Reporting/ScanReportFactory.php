@@ -7,6 +7,7 @@ use App\Domain\EmailSecurity\Checks\Bimi\BimiStates;
 use App\Domain\EmailSecurity\Contracts\ScanReportFactoryInterface;
 use App\Domain\EmailSecurity\DTO\ScanReportViewModelDTO;
 use App\Domain\EmailSecurity\Recommendations\ScanRecommendationService;
+use App\Domain\EmailSecurity\Remediation\TechnicalRemediationBuilder;
 use App\Models\Domain;
 use App\Models\Scan;
 use App\Services\Dmarc\DmarcStatusService;
@@ -21,6 +22,7 @@ final class ScanReportFactory implements ScanReportFactoryInterface
         private ScanRecommendationService $recommendationService,
         private DmarcStatusService $dmarcStatusService,
         private ScanTrendService $scanTrendService,
+        private TechnicalRemediationBuilder $technicalRemediationBuilder,
     ) {
     }
 
@@ -152,6 +154,7 @@ final class ScanReportFactory implements ScanReportFactoryInterface
         $scoreBreakdown = $resultData['dns']['score_breakdown']
             ?? $this->scoreBreakdownService->buildFromDnsRecords($records);
         $scoreDeductions = $this->scoreBreakdownService->deductions($scoreBreakdown);
+        $technicalRemediation = $this->technicalRemediationBuilder->build($domain, $scan, $resultData);
 
         $statusCards = $this->statusMapper->buildStatusCards(
             $resultData,
@@ -222,6 +225,7 @@ final class ScanReportFactory implements ScanReportFactoryInterface
             'dmarcStatus',
             'scoreBreakdown',
             'scoreDeductions',
+            'technicalRemediation',
             'scoreTrend',
             'statusCards',
             'recommendations',
@@ -270,6 +274,7 @@ final class ScanReportFactory implements ScanReportFactoryInterface
             'dmarcStatus' => null,
             'scoreBreakdown' => [],
             'scoreDeductions' => [],
+            'technicalRemediation' => [],
             'scoreTrend' => ['labels' => [], 'scores' => []],
             'statusCards' => [],
             'recommendations' => [],

@@ -8,9 +8,21 @@
     'action' => null,
     'metadata' => null,
     'open' => false,
+    'state' => null,
+    'severity' => 'neutral',
+    'lostPoints' => null,
+    'optional' => false,
 ])
 
-<details id="{{ $id }}" {{ $open ? 'open' : '' }} class="mx-tech-check-row group" data-tech-check>
+@php
+    $state = $state ?? (in_array($badgeVariant, ['danger', 'warning'], true) ? 'failing' : 'passing');
+@endphp
+
+<details id="{{ $id }}"
+         {{ $open ? 'open' : '' }}
+         class="mx-tech-check-row mx-tech-check-row--{{ $state }} group"
+         data-tech-check
+         data-presentation-state="{{ $state }}">
     <summary class="mx-tech-check-summary"
              aria-controls="{{ $id }}-panel">
         <span class="mx-tech-check-icon" aria-hidden="true">
@@ -23,15 +35,22 @@
         </div>
 
         <div class="mx-tech-check-status-slot">
+            @if($optional)
+                <span class="mx-tech-optional-label">Optional</span>
+            @endif
             <x-report.status-pill :variant="$badgeVariant" :label="$badgeLabel" />
         </div>
 
         <div class="mx-tech-check-meta-slot">
-            {{ $metadata }}
+            @if($lostPoints)
+                <strong class="mx-tech-lost-points">-{{ $lostPoints }} pts</strong>
+            @else
+                {{ $metadata }}
+            @endif
         </div>
 
         <div class="mx-tech-check-action-slot">
-            @if($action)
+            @if($action && $state !== 'failing')
                 <a href="{{ $action['href'] ?? '#' }}"
                    class="mx-tech-check-action text-sm font-medium text-blue-700 hover:text-blue-800 hover:underline"
                    @if(str_starts_with($action['href'] ?? '', '#')) onclick="event.stopPropagation();" @endif>
@@ -51,7 +70,7 @@
                 @if($metadata)
                     <span class="text-xs text-gray-500">{{ $metadata }}</span>
                 @endif
-                @if($action)
+                @if($action && $state !== 'failing')
                     <a href="{{ $action['href'] ?? '#' }}"
                        class="mx-tech-check-action min-h-[44px] inline-flex items-center text-sm font-medium text-blue-700 hover:text-blue-800"
                        @if(str_starts_with($action['href'] ?? '', '#')) onclick="event.stopPropagation();" @endif>
@@ -65,9 +84,7 @@
         </div>
     </summary>
 
-    <div id="{{ $id }}-panel" class="pb-1" role="region" aria-label="{{ $label }} details">
-        <x-report.evidence-panel>
-            {{ $slot }}
-        </x-report.evidence-panel>
+    <div id="{{ $id }}-panel" class="mx-tech-check-detail" role="region" aria-label="{{ $label }} details">
+        {{ $slot }}
     </div>
 </details>

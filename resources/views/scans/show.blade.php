@@ -47,6 +47,8 @@
         blacklistEnabled: $enabled['blacklist'] ?? false,
         certificatesInfo: $resultData['certificates'] ?? null,
         mtaStsInfo: $resultData['mta_sts'] ?? null,
+        scoreBreakdown: $scoreBreakdown ?? [],
+        remediation: $technicalRemediation ?? [],
     );
 
     $techGroups = $techPresenter->groups();
@@ -71,6 +73,8 @@
             'blacklistRows' => $blacklistRows,
             'enabled' => $enabled,
             'domain' => $domain,
+            'scan' => $scan,
+            'technicalRemediation' => $technicalRemediation ?? [],
         ])
     @endif
 
