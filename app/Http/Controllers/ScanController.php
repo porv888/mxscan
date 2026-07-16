@@ -142,6 +142,28 @@ class ScanController extends Controller
     }
 
     /**
+     * Confirm and start a synchronous scan (GET landing page with fresh CSRF token).
+     */
+    public function showScanNow(Request $request, Domain $domain)
+    {
+        $mode = $request->string('mode', 'full')->toString();
+        if (!in_array($mode, ['full', 'dns', 'spf', 'blacklist'], true)) {
+            $mode = 'full';
+        }
+
+        if (in_array($mode, ['dns', 'spf', 'blacklist'], true)) {
+            $this->authorize('partialScan', $domain);
+        } else {
+            $this->authorize('scan', $domain);
+        }
+
+        return view('scans.scan-now', [
+            'domain' => $domain,
+            'mode' => $mode,
+        ]);
+    }
+
+    /**
      * NEW: Synchronous run that redirects to scan results when finished.
      * Accepts mode: full|dns|spf|blacklist (default: full)
      */

@@ -131,6 +131,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     });
     
     // NEW: Synchronous scan endpoint
+    Route::get('/domains/{domain}/scan-now', [App\Http\Controllers\ScanController::class, 'showScanNow'])->name('domains.scan.now.show');
     Route::post('/domains/{domain}/scan-now', [App\Http\Controllers\ScanController::class, 'runSync'])->name('domains.scan.now');
     
     // Expiry refresh endpoint
