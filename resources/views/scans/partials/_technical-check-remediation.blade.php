@@ -46,8 +46,13 @@
                 @empty
                     <p>No aggregate report destination was detected.</p>
                 @endforelse
+                <p><strong>MXScan linkage:</strong> {{ $solution['mxscan_link_state'] ?? 'Unable to verify' }}</p>
             @elseif($key === 'mtasts')
-                <p>{{ $row['result'] }}</p>
+                @if(empty(data_get($solution, 'analysis.discovery.record.raw')))
+                    <p>No <code>_mta-sts</code> TXT record was found. MTA-STS is not active for this domain.</p>
+                @else
+                    <p>{{ $row['result'] }}</p>
+                @endif
                 <div class="mx-evidence-record">
                     <strong>Policy probe</strong>
                     <code>{{ $solution['policy_url'] ?? '' }}</code>
@@ -98,31 +103,53 @@
                 @include('scans.partials.technical-checks._spf-solution', compact('row', 'technicalRemediation'))
             @elseif(in_array($key, ['dmarc', 'dmarc_reports'], true))
                 <h4>Publish the corrected DMARC record</h4>
-                <p>MXScan reporting address: <strong>{{ ($solution['mxscan_present'] ?? false) ? 'Present' : 'Missing' }}</strong></p>
-                <x-report.dns-solution-record
+                <p>MXScan reporting status: <strong>{{ $solution['mxscan_link_state'] ?? 'Unable to verify' }}</strong></p>
+                <x-report.record-diff
+                    :remove="data_get($solution, 'diff.remove', [])"
+                    :add="data_get($solution, 'diff.add', [])"
+                />
+                <x-report.generated-dns-record
                     :type="$solution['type'] ?? 'TXT'"
                     :host="$solution['host'] ?? '_dmarc'"
                     :value="$solution['corrected_value'] ?? ''"
                     :ttl="$solution['ttl'] ?? 'Auto'"
                     title="Corrected DMARC record"
                 />
-                @if(!empty($solution['external_authorization_hosts']))
-                    <div class="mx-tech-callout">
+                <div>
+                    <h5>Publish this corrected record in the DNS zone for {{ $domain->domain }}</h5>
+                    <x-report.dns-provider-instructions :providers="$technicalRemediation['dns_providers'] ?? []" :selected="$technicalRemediation['dns_provider'] ?? null" />
+                </div>
+                @foreach($solution['external_destinations'] ?? [] as $destination)
+                    <section class="report-warning-panel">
                         <strong>External destination authorization required</strong>
-                        <p>The destination domain must publish authorization for:</p>
-                        @foreach($solution['external_authorization_hosts'] as $host)<code>{{ $host }}</code>@endforeach
-                    </div>
-                @endif
-                <x-report.dns-provider-instructions :providers="$technicalRemediation['dns_providers'] ?? []" :selected="$technicalRemediation['dns_provider'] ?? null" />
+                        <p>The owner of <code>{{ $destination['owner'] }}</code> must authorize receiving reports from <code>{{ $domain->domain }}</code>.</p>
+                        <x-report.copy-field
+                            label="Required authorization record"
+                            :value="$destination['authorization_host']"
+                            copy-label="Copy required authorization record"
+                        />
+                        <div class="mx-tech-action-row">
+                            <x-report.rescan-button label="Verify authorization again" />
+                            <x-report.copy-button
+                                :value="$destination['corrected_without_destination']"
+                                label="Remove this destination from DMARC"
+                                copied-label="Corrected record copied"
+                                class="mx-btn-secondary !static"
+                            />
+                            <a href="https://{{ $destination['owner'] }}" rel="noopener noreferrer" target="_blank" class="mx-btn mx-btn-secondary">Contact the destination provider</a>
+                        </div>
+                    </section>
+                @endforeach
                 <x-report.rescan-button />
             @elseif($key === 'mtasts')
                 <h4>Publish the DNS record and policy file</h4>
-                <x-report.dns-solution-record
+                <x-report.generated-dns-record
                     :type="$solution['type'] ?? 'TXT'"
                     :host="$solution['host'] ?? '_mta-sts'"
                     :value="$solution['value'] ?? ''"
                     :ttl="$solution['ttl'] ?? 'Auto'"
                     title="MTA-STS DNS record"
+                    value-copy-label="Copy DNS value"
                 />
                 <div class="mx-policy-file">
                     <strong>Policy hostname</strong><code>{{ $solution['policy_hostname'] ?? '' }}</code>
@@ -132,8 +159,16 @@
                 <div class="mx-tech-action-row">
                     <x-report.copy-button :value="$solution['policy'] ?? ''" label="Copy policy" class="mx-btn-secondary !static" />
                     <a href="{{ route('domains.remediation.mta-sts.policy', [$domain, $scan]) }}" class="mx-btn mx-btn-secondary">Download policy file</a>
-                    <button type="button" class="mx-btn mx-btn-ghost" @click="dnsProvider = 'other'">View web-server instructions</button>
+                    <button type="button" class="mx-btn mx-btn-ghost" @click="$refs.mtaHosting.open = true">View hosting instructions</button>
                 </div>
+                <details x-ref="mtaHosting" class="mx-provider-setup">
+                    <summary>Hosting instructions</summary>
+                    <ol>
+                        <li>Serve the policy as plain text at the exact HTTPS URL shown above.</li>
+                        <li>Return HTTP 200 without redirects.</li>
+                        <li>Use a trusted certificate valid for {{ $solution['policy_hostname'] ?? '' }}.</li>
+                    </ol>
+                </details>
                 <x-report.dns-provider-instructions :providers="$technicalRemediation['dns_providers'] ?? []" :selected="$technicalRemediation['dns_provider'] ?? null" />
                 <x-report.rescan-button />
             @elseif($key === 'tlsrpt')

@@ -107,5 +107,40 @@ class MxscanMeRenderedDashboardTest extends TestCase
 
         $this->assertDoesNotMatchRegularExpression('/<details[^>]*id="tech-dkim"[^>]*\sopen/si', $html);
         $this->assertMatchesRegularExpression('/<details[^>]*id="tech-spf"[^>]*\sopen/si', $html);
+
+        $this->assertStringContainsString('SPF is missing', $html);
+        $this->assertLessThan(
+            strpos($html, 'DMARC reject policy'),
+            strpos($html, 'SPF is missing'),
+        );
+        $this->assertStringContainsString('Fix SPF', $html);
+        $this->assertStringContainsString('Checks passing', $html);
+        $this->assertStringContainsString('Checks needing action', $html);
+        $this->assertStringNotContainsString('Score change: +0', $html);
+        $this->assertStringContainsString('Published', $html);
+        $this->assertDoesNotMatchRegularExpression('/DKIM.{0,200}Configured/is', $html);
+
+        $dmarcPolicyStart = strpos($html, 'id="tech-dmarc"');
+        $dmarcReportsStart = strpos($html, 'id="tech-dmarc_reports"');
+        $this->assertNotFalse($dmarcPolicyStart);
+        $this->assertNotFalse($dmarcReportsStart);
+        $dmarcPolicy = substr($html, $dmarcPolicyStart, $dmarcReportsStart - $dmarcPolicyStart);
+        $this->assertStringContainsString('24/24 points', $dmarcPolicy);
+        $this->assertStringNotContainsString('−6 pts', $dmarcPolicy);
+
+        $dmarcReports = substr($html, $dmarcReportsStart, 30000);
+        $this->assertStringContainsString('0/6 points', $dmarcReports);
+        $this->assertStringContainsString('−6 pts', $dmarcReports);
+        $this->assertStringContainsString('Old MXScan address detected', $dmarcReports);
+        $this->assertStringContainsString('mxscan.me._report._dmarc.dmarc.brevo.com', $dmarcReports);
+        $this->assertStringContainsString('The owner of', $dmarcReports);
+        $this->assertStringContainsString('Copy host', $dmarcReports);
+        $this->assertStringContainsString('Copy value', $dmarcReports);
+        $this->assertStringContainsString('Copy full record', $dmarcReports);
+        $this->assertStringContainsString('data-copy-text', $html);
+        $this->assertStringContainsString('data-copy-feedback', $html);
+        $this->assertStringNotContainsString('<span class="sr-only">Copy host</span>', $html);
+        $this->assertDoesNotMatchRegularExpression('/<option value="godaddy"[^>]*selected/i', $html);
+        $this->assertStringContainsString('Select DNS provider', $html);
     }
 }

@@ -1,5 +1,7 @@
 @extends('layouts.app')
 
+@section('page-title', 'Email security report')
+
 @section('content')
 @if(in_array($scan->status, ['queued', 'running', 'failed'], true))
 <div class="mx-auto max-w-[1320px] px-6 lg:px-8">
@@ -7,20 +9,6 @@
 </div>
 @else
 @php
-    $presenter = new \App\View\Presenters\ScanReportPresenter(
-        domain: $domain,
-        score: $scan->score,
-        scoreDelta: $scoreDelta,
-        statusCards: $statusCards ?? [],
-        recommendations: $recommendations ?? [],
-        allClear: $allClear ?? ['state' => 'needs_fixes'],
-        scoreBreakdown: $scoreBreakdown ?? [],
-        scoreTrend: $scoreTrend ?? ['labels' => [], 'scores' => []],
-        blacklistHits: $blacklistHits,
-        blacklistTotal: $blacklistTotal,
-        dmarcPolicy: $dmarcPolicy,
-    );
-
     $dnsPresenter = new \App\View\Presenters\DnsSectionPresenter(
         records: $records,
         statusCards: $statusCards ?? [],
@@ -52,6 +40,28 @@
     );
 
     $techGroups = $techPresenter->groups();
+    $scoredChecks = collect($techGroups)
+        ->flatMap(fn ($group) => $group['items'] ?? [])
+        ->reject(fn ($row) => ($row['optional'] ?? false) === true);
+    $checkSummary = [
+        'passing' => $scoredChecks->where('presentationState', 'passing')->count(),
+        'needsAction' => $scoredChecks->where('presentationState', '!=', 'passing')->count(),
+    ];
+
+    $presenter = new \App\View\Presenters\ScanReportPresenter(
+        domain: $domain,
+        score: $scan->score,
+        scoreDelta: $scoreDelta,
+        statusCards: $statusCards ?? [],
+        recommendations: $recommendations ?? [],
+        allClear: $allClear ?? ['state' => 'needs_fixes'],
+        scoreBreakdown: $scoreBreakdown ?? [],
+        scoreTrend: $scoreTrend ?? ['labels' => [], 'scores' => []],
+        blacklistHits: $blacklistHits,
+        blacklistTotal: $blacklistTotal,
+        dmarcPolicy: $dmarcPolicy,
+        checkSummary: $checkSummary,
+    );
 @endphp
 
 <x-report.container>
@@ -111,16 +121,25 @@
         navigator.clipboard.writeText(text).then(() => {
             const copiedLabel = button.dataset.copiedLabel || 'Copied!';
             const copyLabel = button.dataset.copyLabel || button.getAttribute('aria-label') || 'Copy value';
+            const textLabel = button.querySelector('[data-copy-text]');
+            const feedback = button.querySelector('[data-copy-feedback]');
             button.setAttribute('aria-label', copiedLabel);
             button.title = copiedLabel;
+            if (textLabel) textLabel.textContent = copiedLabel;
+            if (feedback) feedback.textContent = copiedLabel;
             setTimeout(() => {
                 button.setAttribute('aria-label', copyLabel);
                 button.title = copyLabel;
+                if (textLabel) textLabel.textContent = copyLabel;
+                if (feedback) feedback.textContent = '';
             }, 1500);
         }).catch(() => {
             button.setAttribute('aria-label', 'Copy failed');
+            const feedback = button.querySelector('[data-copy-feedback]');
+            if (feedback) feedback.textContent = 'Copy failed';
             setTimeout(() => {
                 button.setAttribute('aria-label', button.dataset.copyLabel || 'Copy value');
+                if (feedback) feedback.textContent = '';
             }, 1500);
         });
     }

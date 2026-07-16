@@ -8,7 +8,7 @@
     'optional' => false,
 ])
 
-<section {{ $attributes->merge(['class' => 'mx-tech-issue-panel']) }} aria-label="Issue">
+<section {{ $attributes->merge(['class' => 'report-issue-panel mx-tech-issue-panel']) }} aria-label="Issue">
     <div class="mx-tech-panel-label">Issue</div>
     <div class="mx-tech-issue-heading">
         <div>

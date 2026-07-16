@@ -11,6 +11,7 @@
     'state' => null,
     'severity' => 'neutral',
     'lostPoints' => null,
+    'scoreLabel' => null,
     'optional' => false,
 ])
 
@@ -22,9 +23,12 @@
          {{ $open ? 'open' : '' }}
          class="mx-tech-check-row mx-tech-check-row--{{ $state }} group"
          data-tech-check
-         data-presentation-state="{{ $state }}">
+         data-presentation-state="{{ $state }}"
+         x-data="{ expanded: {{ $open ? 'true' : 'false' }} }"
+         @toggle="expanded = $el.open">
     <summary class="mx-tech-check-summary"
-             aria-controls="{{ $id }}-panel">
+             aria-controls="{{ $id }}-panel"
+             :aria-expanded="expanded.toString()">
         <span class="mx-tech-check-icon" aria-hidden="true">
             <i data-lucide="{{ $icon }}" class="h-4 w-4"></i>
         </span>
@@ -35,15 +39,15 @@
         </div>
 
         <div class="mx-tech-check-status-slot">
-            @if($optional)
-                <span class="mx-tech-optional-label">Optional</span>
-            @endif
-            <x-report.status-pill :variant="$badgeVariant" :label="$badgeLabel" />
+            <x-report.status-pill :variant="$badgeVariant" :label="$optional ? ('Optional · ' . $badgeLabel) : $badgeLabel" />
         </div>
 
         <div class="mx-tech-check-meta-slot">
             @if($lostPoints)
-                <strong class="mx-tech-lost-points">-{{ $lostPoints }} pts</strong>
+                @if($scoreLabel)<span class="mx-tech-score-label">{{ $scoreLabel }}</span>@endif
+                <strong class="mx-tech-lost-points">−{{ $lostPoints }} pts</strong>
+            @elseif($scoreLabel)
+                <span class="mx-tech-score-label">{{ $scoreLabel }}</span>
             @else
                 {{ $metadata }}
             @endif
@@ -67,6 +71,12 @@
 
         <div class="mx-tech-check-mobile-bar">
             <div class="flex min-w-0 flex-1 items-center gap-3">
+                @if($lostPoints)
+                    @if($scoreLabel)<span class="mx-tech-score-label">{{ $scoreLabel }}</span>@endif
+                    <strong class="mx-tech-lost-points">−{{ $lostPoints }} pts</strong>
+                @elseif($scoreLabel)
+                    <span class="mx-tech-score-label">{{ $scoreLabel }}</span>
+                @endif
                 @if($metadata)
                     <span class="text-xs text-gray-500">{{ $metadata }}</span>
                 @endif

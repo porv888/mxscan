@@ -11,7 +11,7 @@ class DmarcExternalDestinationValidatorTest extends TestCase
     public function test_external_destination_authorized(): void
     {
         $resolver = new FakeDmarcDnsResolver();
-        $resolver->setRecord('external.com._report._dmarc.example.test', 'v=DMARC1');
+        $resolver->setRecord('example.test._report._dmarc.external.com', 'v=DMARC1');
         $validator = new DmarcExternalDestinationValidator($resolver);
 
         $result = $validator->validateAggregateDestinations(
@@ -24,13 +24,14 @@ class DmarcExternalDestinationValidatorTest extends TestCase
         );
 
         $this->assertSame('authorized', $result['destinations'][0]['authorization_status'] ?? null);
+        $this->assertSame('example.test._report._dmarc.external.com', $result['destinations'][0]['authorization_lookup_name'] ?? null);
         $this->assertSame(0, $result['unauthorized_count']);
     }
 
     public function test_external_destination_unauthorized(): void
     {
         $resolver = new FakeDmarcDnsResolver();
-        $resolver->setRecord('external.com._report._dmarc.example.test', null);
+        $resolver->setRecord('example.test._report._dmarc.external.com', null);
         $validator = new DmarcExternalDestinationValidator($resolver);
 
         $result = $validator->validateAggregateDestinations(

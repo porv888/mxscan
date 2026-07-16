@@ -55,6 +55,35 @@ class ScanRecommendationServiceTest extends TestCase
         $this->assertLessThan($mtaPos, $spfPos);
     }
 
+    public function test_mxscan_missing_spf_is_hero_candidate_and_reject_hardening_is_locked(): void
+    {
+        $domain = new Domain(['domain' => 'mxscan.me']);
+        $fixture = json_decode(
+            file_get_contents(base_path('tests/Fixtures/EmailSecurity/mxscan-me-scan-result.json')),
+            true,
+            512,
+            JSON_THROW_ON_ERROR,
+        );
+
+        $recommendations = $this->makeService()->build($domain, $fixture);
+
+        $this->assertSame('spf_missing', $recommendations[0]['key']);
+        $this->assertSame('high', $recommendations[0]['severity']);
+
+        $hardening = collect($recommendations)->firstWhere('semantic_key', 'strengthen_dmarc_policy');
+        $this->assertNotNull($hardening);
+        $this->assertTrue($hardening['locked']);
+        $this->assertFalse($hardening['actionable']);
+        $this->assertSame('Locked until SPF and DKIM alignment are verified.', $hardening['explanation']);
+
+        $keys = array_column($recommendations, 'key');
+        $this->assertLessThan(array_search('certificates', $keys, true), array_search('mtasts', $keys, true));
+        $this->assertLessThan(
+            array_search('dmarc_strengthen', $keys, true),
+            array_search('mtasts', $keys, true),
+        );
+    }
+
     public function test_no_all_clear_when_spf_or_dkim_missing_or_blacklist_unchecked(): void
     {
         $service = $this->makeService();

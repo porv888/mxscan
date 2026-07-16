@@ -4,6 +4,7 @@
     'value',
     'ttl' => 'Auto',
     'title' => 'DNS record',
+    'valueCopyLabel' => 'Copy value',
 ])
 
 <div {{ $attributes->merge(['class' => 'mx-dns-solution-record']) }}>
@@ -16,7 +17,7 @@
     </dl>
     <div class="mx-tech-action-row">
         <x-report.copy-button :value="$host" label="Copy host" class="mx-btn-secondary !static" />
-        <x-report.copy-button :value="$value" label="Copy value" class="mx-btn-primary !static" />
+        <x-report.copy-button :value="$value" :label="$valueCopyLabel" class="mx-btn-primary !static" />
         <x-report.copy-button :value="$type . ' ' . $host . ' ' . $value" label="Copy full record" class="mx-btn-secondary !static" />
     </div>
 </div>

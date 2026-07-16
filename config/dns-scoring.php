@@ -18,11 +18,12 @@ return [
         'bonus_soft' => 0,
     ],
     'dkim' => ['label' => 'DKIM DNS configuration', 'max' => 20],
-    // Option A (approved): enforcement-only scoring via DmarcScoreRule.
-    // Reporting/RUA issues surface as recommendations, not score deductions.
+    // DMARC keeps its 30-point weight while attributing policy and reporting separately.
     'dmarc' => [
         'label' => 'DMARC',
         'base' => 30,
+        'policy_max' => 24,
+        'reporting_max' => 6,
         'bonus_reject' => 0,
         'bonus_quarantine' => 0,
     ],

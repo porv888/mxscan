@@ -110,7 +110,7 @@ class NativeSpfPipelineTest extends TestCase
             $execution->resultJson['spf'] ?? null,
         );
         $this->assertSame('warning', $card['state']);
-        $this->assertSame('At limit', $card['status']);
+        $this->assertSame('Published', $card['status']);
     }
 
     public function test_eleven_lookups_scores_zero(): void

@@ -100,7 +100,7 @@ class ScanReportStatusUiTest extends TestCase
             'domain' => $this->sampleDomain(),
         ])->render();
 
-        $this->assertStringContainsString('Not scanned', $html);
+        $this->assertStringContainsString('Unable to verify', $html);
         $this->assertStringNotContainsString('text-green-700 dark:text-green-300">
           Clean', $html);
         $this->assertDoesNotMatchRegularExpression('/text-green-[^"]*">\s*Clean\s*</', $html);

@@ -9,11 +9,13 @@ use App\Domain\EmailSecurity\Checks\Mx\Support\MxAnalysisReader;
 use App\Domain\EmailSecurity\Checks\TlsRpt\Support\TlsRptAnalysisReader;
 use App\Models\Domain;
 use App\Models\Scan;
+use App\Services\Dmarc\DmarcRuaClassifier;
 
 final class TechnicalRemediationBuilder
 {
     public function __construct(
         private SpfRemediationBuilder $spf,
+        private DmarcRuaClassifier $dmarcRuaClassifier,
     ) {
     }
 
@@ -37,7 +39,7 @@ final class TechnicalRemediationBuilder
             'sender_providers' => config('remediation.senders', []),
             'dns_providers' => config('remediation.dns_providers', []),
             'dns_provider' => $domain->dns_provider,
-            'dmarc' => $this->dmarc($domain, $records),
+            'dmarc' => $this->dmarc($domain, $records, $resultData),
             'mta_sts' => $this->mtaSts($domain, $scan, $resultData),
             'tls_rpt' => $this->tlsRpt($domain, $resultData),
             'dkim' => $this->dkim($resultData),
@@ -51,54 +53,111 @@ final class TechnicalRemediationBuilder
      * @param array<string, mixed> $records
      * @return array<string, mixed>
      */
-    private function dmarc(Domain $domain, array $records): array
+    private function dmarc(Domain $domain, array $records, array $resultData): array
     {
         $current = (($records['DMARC']['status'] ?? '') === 'found')
             ? (string) ($records['DMARC']['data'] ?? '')
             : '';
-        preg_match('/(?:^|;)\s*rua=([^;]+)/i', $current, $match);
-        $destinations = array_values(array_filter(array_map(
-            fn (string $value) => trim($value),
-            explode(',', $match[1] ?? ''),
-        )));
-        $expected = 'mailto:' . $domain->dmarc_rua_email;
-        $present = collect($destinations)->contains(fn ($value) => strtolower($value) === strtolower($expected));
-        $allDestinations = array_values(array_unique(array_merge($destinations, [$expected])));
+        $canonicalEmail = strtolower($domain->dmarc_rua_email);
+        $expected = 'mailto:' . $canonicalEmail;
+        $rewrite = $current === ''
+            ? [
+                'updated' => "v=DMARC1; p=none; rua={$expected}",
+                'action' => 'add_rua',
+                'rua_link_state' => DmarcRuaClassifier::LINK_NOT_CONNECTED,
+            ]
+            : $this->dmarcRuaClassifier->rewriteRua($current, $canonicalEmail);
+        $classification = $current === ''
+            ? [
+                'recipients' => [],
+                'mxscan_recipients' => [],
+                'external_recipients' => [],
+                'has_any_mxscan_rua' => false,
+                'has_canonical_mxscan_rua' => false,
+                'rua_link_state' => DmarcRuaClassifier::LINK_NOT_CONNECTED,
+            ]
+            : $this->dmarcRuaClassifier->classify($current, $canonicalEmail);
 
-        if ($current === '') {
-            $corrected = 'v=DMARC1; p=none; rua=' . implode(',', $allDestinations);
-        } elseif ($match !== []) {
-            $corrected = preg_replace(
-                '/((?:^|;)\s*rua=)[^;]+/i',
-                '$1' . implode(',', $allDestinations),
-                $current,
-                1,
-            ) ?? $current;
-        } else {
-            $corrected = rtrim(trim($current), ';') . '; rua=' . implode(',', $allDestinations);
-        }
+        $mxscanRecipients = $classification['mxscan_recipients'];
+        $foreignConnection = collect($mxscanRecipients)->contains(function (array $recipient) use ($domain): bool {
+            return Domain::query()
+                ->whereKeyNot($domain->id)
+                ->get()
+                ->contains(fn (Domain $other) => strtolower($other->dmarc_rua_email) === strtolower($recipient['email']));
+        });
+        $genericPresent = collect($mxscanRecipients)->contains(
+            fn (array $recipient) => $recipient['email'] === 'dmarc@mxscan.me'
+        );
+        $staleTokenPresent = collect($mxscanRecipients)->contains(
+            fn (array $recipient) => $recipient['email'] !== 'dmarc@mxscan.me'
+                && $recipient['email'] !== $canonicalEmail
+        );
+        $linkState = match (true) {
+            $classification['has_canonical_mxscan_rua'] => 'MXScan address present and linked',
+            $foreignConnection => 'Address belongs to another report connection',
+            $staleTokenPresent => 'Old MXScan address detected',
+            $genericPresent => 'MXScan address present but not recognized',
+            default => 'MXScan address absent',
+        };
 
+        $removed = collect($mxscanRecipients)
+            ->reject(fn (array $recipient) => $recipient['email'] === $canonicalEmail)
+            ->pluck('uri')
+            ->values()
+            ->all();
+        $added = $classification['has_canonical_mxscan_rua'] ? [] : [$expected];
+
+        $analysis = \App\Domain\EmailSecurity\Checks\DMARC\Support\DmarcAnalysisReader::analysis(
+            is_array($resultData['dmarc'] ?? null) ? $resultData['dmarc'] : null
+        ) ?? [];
+        $nativeDestinations = data_get($analysis, 'aggregate_reporting.destinations', []);
         $external = [];
-        foreach ($allDestinations as $destination) {
-            $email = preg_replace('/^mailto:/i', '', $destination) ?? '';
-            $destinationDomain = strtolower((string) strrchr($email, '@'));
-            $destinationDomain = ltrim($destinationDomain, '@');
-            if ($destinationDomain !== '' && $destinationDomain !== strtolower($domain->domain) && $destinationDomain !== 'mxscan.me') {
-                $external[] = $domain->domain . '._report._dmarc.' . $destinationDomain;
-            }
+        foreach ($classification['external_recipients'] as $recipient) {
+            $destinationDomain = strtolower(substr($recipient['email'], strrpos($recipient['email'], '@') + 1));
+            $native = collect($nativeDestinations)->first(
+                fn ($item) => is_array($item) && strtolower((string) ($item['normalized_destination'] ?? '')) === $recipient['email']
+            );
+            $external[] = [
+                'uri' => $recipient['uri'],
+                'email' => $recipient['email'],
+                'destination_domain' => $destinationDomain,
+                'owner' => $destinationDomain,
+                'authorization_host' => $domain->domain . '._report._dmarc.' . $destinationDomain,
+                'authorization_status' => $native['authorization_status'] ?? 'unknown',
+                'customer_controls_zone' => false,
+                'corrected_without_destination' => $this->removeRuaDestination($rewrite['updated'], $recipient['uri']),
+            ];
         }
 
         return [
             'current_value' => $current,
-            'current_rua' => $destinations,
+            'current_rua' => collect($classification['recipients'])->pluck('uri')->all(),
             'mxscan_address' => $expected,
-            'mxscan_present' => $present,
-            'corrected_value' => $corrected,
-            'external_authorization_hosts' => $external,
+            'mxscan_present' => $classification['has_any_mxscan_rua'],
+            'mxscan_link_state' => $linkState,
+            'corrected_value' => $rewrite['updated'],
+            'diff' => ['remove' => $removed, 'add' => $added],
+            'external_destinations' => $external,
             'type' => 'TXT',
             'host' => '_dmarc',
             'ttl' => 'Auto',
         ];
+    }
+
+    private function removeRuaDestination(string $record, string $destination): string
+    {
+        $quoted = preg_quote($destination, '/');
+        $updated = preg_replace(
+            [
+                '/(' . $quoted . ')\s*,\s*/i',
+                '/,\s*(' . $quoted . ')/i',
+            ],
+            '',
+            $record,
+            1,
+        );
+
+        return $updated ?? $record;
     }
 
     /**

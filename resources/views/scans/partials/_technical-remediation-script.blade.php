@@ -32,12 +32,18 @@ window.technicalChecksRemediation = function () {
         busy: false,
         saving: false,
         saveError: '',
+        copyStatus: '',
+        spfStep: 1,
+        showProviderPicker: false,
+        providerSearch: '',
+        selectedProvider: '',
         policy: '~all',
         dnsProvider: {{ \Illuminate\Support\Js::from($technicalRemediation['dns_provider'] ?? '') }},
         senders: {{ \Illuminate\Support\Js::from($initialSenders->values()->all()) }},
         providers: {{ \Illuminate\Support\Js::from($technicalRemediation['sender_providers'] ?? []) }},
         spf: {{ \Illuminate\Support\Js::from($technicalRemediation['spf'] ?? []) }},
         customIp: '',
+        customInclude: '',
         previewUrl: {{ \Illuminate\Support\Js::from(route('domains.remediation.spf.preview', $domain)) }},
         saveUrl: {{ \Illuminate\Support\Js::from(route('domains.remediation.spf.save', $domain)) }},
         csrf: {{ \Illuminate\Support\Js::from(csrf_token()) }},
@@ -117,6 +123,29 @@ window.technicalChecksRemediation = function () {
             this.customIp = '';
             this.preview();
         },
+        addCustomInclude() {
+            const value = this.customInclude.trim().toLowerCase();
+            if (!value) return;
+            if (!this.senders.some((sender) => sender.mechanism === 'include' && sender.value === value)) {
+                this.senders.push({
+                    sender_type: 'provider',
+                    provider: 'custom',
+                    mechanism: 'include',
+                    value,
+                    source: 'user_added',
+                    confidence: 'confirmed',
+                    confirmation_status: 'confirmed',
+                    is_active: true,
+                });
+            }
+            this.customInclude = '';
+            this.preview();
+        },
+        addSelectedProvider() {
+            if (!this.selectedProvider) return;
+            this.toggleProvider(this.selectedProvider, true);
+            this.selectedProvider = '';
+        },
         payload() {
             return { senders: this.senders, policy: this.policy, dns_provider: this.dnsProvider || null };
         },
@@ -166,7 +195,12 @@ window.technicalChecksRemediation = function () {
             this.busy = false;
         },
         copy(value) {
-            navigator.clipboard.writeText(value || '');
+            navigator.clipboard.writeText(value || '').then(() => {
+                this.copyStatus = 'Copied';
+                setTimeout(() => { this.copyStatus = ''; }, 1500);
+            }).catch(() => {
+                this.copyStatus = 'Copy failed';
+            });
         },
     };
 };

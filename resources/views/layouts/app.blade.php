@@ -17,6 +17,7 @@
     <script defer src="https://unpkg.com/alpinejs@3.14.8/dist/cdn.min.js"></script>
 </head>
 <body class="bg-gray-50">
+    <a href="#main-content" class="report-skip-link">Skip to main content</a>
     @php($currentUser = auth()->user())
     <div class="min-h-screen" 
          x-data="{
@@ -59,7 +60,7 @@
                     <i data-lucide="shield-check" class="h-8 w-8 text-blue-600"></i>
                     <h1 class="ml-3 text-xl font-bold text-gray-900">MXScan</h1>
                 </div>
-                <button @click="sidebarOpen = false" class="p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100">
+                <button @click="sidebarOpen = false" aria-label="Close navigation menu" class="p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100">
                     <i data-lucide="x" class="h-6 w-6"></i>
                 </button>
             </div>
@@ -202,7 +203,9 @@
                         <!-- Mobile menu button -->
                         <button type="button" 
                                 class="md:hidden inline-flex items-center justify-center p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500"
-                                @click="sidebarOpen = true">
+                                @click="sidebarOpen = true"
+                                aria-label="Open navigation menu"
+                                :aria-expanded="sidebarOpen.toString()">
                             <i data-lucide="menu" class="h-6 w-6"></i>
                         </button>
 
@@ -345,7 +348,7 @@
                 @endif
 
                 <!-- Main content area -->
-                <main class="w-full min-w-0 flex-1 overflow-x-hidden p-4 sm:p-6 lg:p-8">
+                <main id="main-content" class="w-full min-w-0 flex-1 overflow-x-hidden p-4 sm:p-6 lg:p-8">
                     @yield('content')
                 </main>
             </div>

@@ -112,9 +112,12 @@ class CertificateSectionPresenter
         };
 
         $badgeLabel = match (true) {
-            $days === null => 'Unknown',
-            $days < 0 => 'Expired',
-            default => $days . ' days',
+            $state === CertificateStates::UNKNOWN, $state === CertificateStates::NOT_CHECKED => 'Unable to verify',
+            $days !== null && $days < 0 => 'Expired',
+            $state === CertificateStates::FAIL => 'Action required',
+            $state === CertificateStates::WARNING => 'Expiring soon',
+            $state === CertificateStates::PASS => 'Valid',
+            default => 'Unable to verify',
         };
 
         $earliest = is_array($analysis['earliest_expiry'] ?? null) ? $analysis['earliest_expiry'] : null;
@@ -132,11 +135,11 @@ class CertificateSectionPresenter
             'id' => 'tech-ssl',
             'key' => 'ssl',
             'icon' => 'lock',
-            'label' => 'SSL',
+            'label' => 'Certificate status',
             'badgeVariant' => $variant,
             'badgeLabel' => $badgeLabel,
             'result' => $result,
-            'metadata' => $days === null ? null : $days . ' days',
+            'metadata' => $days === null ? null : 'Expiry: ' . $days . ' days',
             'action' => $this->domain
                 ? ['label' => 'Edit dates', 'href' => route('domains.hub.settings', $this->domain) . '#renewals']
                 : null,

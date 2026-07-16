@@ -132,7 +132,7 @@ class ReportTechnicalChecksPresenter
         $badgeLabel = $this->displayBadgeLabel($key, $detail);
         $score = $this->scoreForKey($key);
         $optional = ($score['possible'] ?? null) === 0 || $key === 'bimi';
-        $needsAttention = in_array($detail['badgeVariant'] ?? 'neutral', ['warning', 'danger'], true) && !$optional;
+        $needsAttention = ($detail['badgeVariant'] ?? 'neutral') !== 'success' && !$optional;
         $remediationKey = match ($key) {
             'dmarc_reports' => 'dmarc',
             'mtasts' => 'mta_sts',
@@ -155,6 +155,9 @@ class ReportTechnicalChecksPresenter
             'help' => ($this->dns->recordHelp())[$detail['helpKey'] ?? $key] ?? null,
             'severity' => $optional ? 'optional' : ($detail['severity'] ?? $detail['badgeVariant'] ?? 'neutral'),
             'score' => $score,
+            'scoreLabel' => isset($score['earned'], $score['possible'])
+                ? ((int) $score['earned'] . '/' . (int) $score['possible'] . ' points')
+                : null,
             'lostPoints' => isset($score['possible'], $score['earned'])
                 ? max(0, (int) $score['possible'] - (int) $score['earned'])
                 : null,
@@ -175,11 +178,11 @@ class ReportTechnicalChecksPresenter
             'icon' => 'ban',
             'label' => 'Blacklist',
             'badgeVariant' => $listed ? 'danger' : ($usable ? 'success' : 'info'),
-            'badgeLabel' => $listed ? 'Listed' : ($usable ? 'Clean' : 'Not scanned'),
+            'badgeLabel' => $listed ? 'Listed' : ($usable ? 'Clean' : 'Unable to verify'),
             'result' => $usable
-                ? "Checked against {$this->blacklistTotal} usable provider results."
+                ? "{$this->blacklistHits} of {$this->blacklistTotal} checked lists contained the domain/IP."
                 : 'No usable blacklist checks completed.',
-            'metadata' => $usable ? $this->blacklistHits . '/' . $this->blacklistTotal . ' listed' : null,
+            'metadata' => null,
             'action' => $listed ? ['label' => 'View details', 'href' => '#what-to-fix'] : null,
             'open' => $listed,
             'detail' => ['type' => 'blacklist', 'hits' => $this->blacklistHits, 'total' => $this->blacklistTotal],
@@ -204,7 +207,7 @@ class ReportTechnicalChecksPresenter
             'icon' => 'calendar',
             'label' => 'Domain renewal',
             'badgeVariant' => $variant,
-            'badgeLabel' => $days === null ? 'Unknown' : ($days . ' days'),
+            'badgeLabel' => $days === null ? 'Unable to verify' : ($variant === 'danger' ? 'Action required' : ($variant === 'warning' ? 'Expiring soon' : 'Valid')),
             'result' => $this->domain->domain_expires_at
                 ? 'Expires ' . \Carbon\Carbon::parse($this->domain->domain_expires_at)->toFormattedDateString()
                 : 'Expiry date not set.',
@@ -260,7 +263,7 @@ class ReportTechnicalChecksPresenter
             $variant = $item['badgeVariant'] ?? 'neutral';
             if ($variant === 'success') {
                 $passing++;
-            } elseif (in_array($variant, ['warning', 'danger'], true)) {
+            } else {
                 $attention++;
             }
         }
@@ -281,7 +284,9 @@ class ReportTechnicalChecksPresenter
         $scoredItems = collect($items)->reject(fn ($item) => ($item['optional'] ?? false) === true);
         $worstVariant = $scoredItems->pluck('badgeVariant')->contains('danger')
             ? 'danger'
-            : ($scoredItems->pluck('badgeVariant')->contains('warning') ? 'warning' : 'success');
+            : ($scoredItems->pluck('badgeVariant')->contains('warning')
+                ? 'warning'
+                : ($attention > 0 ? 'info' : 'success'));
 
         $statusLabel = $attention > 0
             ? $attention . ' issue' . ($attention === 1 ? '' : 's')
@@ -322,6 +327,7 @@ class ReportTechnicalChecksPresenter
                 default => $label,
             },
             'dmarc' => $this->dmarcBadgeLabel($detail, $label, $variant),
+            'bimi' => in_array($normalized, ['not set up', 'missing', 'not detected'], true) ? 'Not configured' : $label,
             'tlsrpt' => match (true) {
                 $normalized === 'missing' => 'Missing',
                 $normalized === 'invalid' => 'Invalid',
@@ -458,6 +464,7 @@ class ReportTechnicalChecksPresenter
     protected function scoreForKey(string $key): array
     {
         $aliases = [
+            'dmarc' => ['dmarc_policy'],
             'tlsrpt' => ['tlsrpt', 'tls_rpt'],
             'mtasts' => ['mtasts', 'mta_sts'],
             'ssl' => ['ssl', 'certificates'],
@@ -468,6 +475,12 @@ class ReportTechnicalChecksPresenter
         foreach ($this->scoreBreakdown as $row) {
             if (in_array($row['key'] ?? '', $keys, true)) {
                 return $row;
+            }
+
+            foreach ($row['subcomponents'] ?? [] as $subcomponent) {
+                if (in_array($subcomponent['key'] ?? '', $keys, true)) {
+                    return $subcomponent;
+                }
             }
         }
 

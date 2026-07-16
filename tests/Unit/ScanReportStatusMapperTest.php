@@ -24,14 +24,14 @@ class ScanReportStatusMapperTest extends TestCase
         ]);
 
         $this->assertSame(ScanReportStatusMapper::NOT_CHECKED, $card['state']);
-        $this->assertSame('Not scanned', $card['label']);
+        $this->assertSame('Unable to verify', $card['label']);
     }
 
     public function test_blacklist_missing_payload_is_not_scanned(): void
     {
         $card = $this->mapper->mapBlacklist(null);
         $this->assertSame(ScanReportStatusMapper::NOT_CHECKED, $card['state']);
-        $this->assertSame('Not scanned', $card['label']);
+        $this->assertSame('Unable to verify', $card['label']);
     }
 
     public function test_blacklist_clean_when_checks_and_zero_listings(): void
@@ -43,7 +43,7 @@ class ScanReportStatusMapperTest extends TestCase
 
         $this->assertSame(ScanReportStatusMapper::PASS, $card['state']);
         $this->assertSame('Clean', $card['label']);
-        $this->assertStringContainsString('12 lists checked', $card['subtext']);
+        $this->assertSame('0 of 12 checked lists contained the domain/IP.', $card['subtext']);
     }
 
     public function test_blacklist_listed(): void
@@ -101,12 +101,12 @@ class ScanReportStatusMapperTest extends TestCase
     public static function spfLookupProvider(): array
     {
         return [
-            [0, ScanReportStatusMapper::PASS, 'OK'],
-            [6, ScanReportStatusMapper::PASS, 'OK'],
-            [7, ScanReportStatusMapper::WARNING, 'Near limit'],
-            [9, ScanReportStatusMapper::WARNING, 'Near limit'],
-            [10, ScanReportStatusMapper::WARNING, 'At limit'],
-            [11, ScanReportStatusMapper::FAIL, 'Over limit'],
+            [0, ScanReportStatusMapper::PASS, 'Published'],
+            [6, ScanReportStatusMapper::PASS, 'Published'],
+            [7, ScanReportStatusMapper::WARNING, 'Published'],
+            [9, ScanReportStatusMapper::WARNING, 'Published'],
+            [10, ScanReportStatusMapper::WARNING, 'Published'],
+            [11, ScanReportStatusMapper::FAIL, 'Invalid'],
         ];
     }
 
@@ -118,7 +118,7 @@ class ScanReportStatusMapperTest extends TestCase
         );
 
         $this->assertSame(ScanReportStatusMapper::NOT_CHECKED, $card['state']);
-        $this->assertSame('Not checked', $card['status']);
+        $this->assertSame('Unable to verify', $card['status']);
     }
 
     public function test_dkim_quarantine_policy_maps_to_pass_not_monitoring(): void

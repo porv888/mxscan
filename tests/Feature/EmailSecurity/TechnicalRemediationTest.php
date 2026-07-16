@@ -91,6 +91,29 @@ class TechnicalRemediationTest extends TestCase
         $this->assertNotNull($domain->fresh()->dns_provider_confirmed_at);
     }
 
+    public function test_spf_preview_is_non_persistent_and_reports_copy_ready_score(): void
+    {
+        $user = $this->createPremiumUser();
+        $domain = Domain::factory()->create(['user_id' => $user->id]);
+
+        $response = $this->actingAs($user)->postJson(route('domains.remediation.spf.preview', $domain), [
+            'policy' => '~all',
+            'dns_provider' => null,
+            'senders' => [$this->sender('ip4', '203.0.113.30', DomainSender::STATUS_CONFIRMED)],
+        ]);
+
+        $response
+            ->assertOk()
+            ->assertJsonPath('spf.score', 15)
+            ->assertJsonPath('spf.policy', '~all');
+        $this->assertStringEndsWith('~all', $response->json('spf.record'));
+        $this->assertDatabaseMissing('domain_senders', [
+            'domain_id' => $domain->id,
+            'value' => '203.0.113.30',
+        ]);
+        $this->assertNull($domain->fresh()->dns_provider);
+    }
+
     /**
      * @return array<string, mixed>
      */

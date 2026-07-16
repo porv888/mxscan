@@ -153,6 +153,7 @@ final class ScanReportFactory implements ScanReportFactoryInterface
 
         $scoreBreakdown = $resultData['dns']['score_breakdown']
             ?? $this->scoreBreakdownService->buildFromDnsRecords($records);
+        $scoreBreakdown = $this->withDmarcSubcomponents($scoreBreakdown, $dmarcAnalysis);
         $scoreDeductions = $this->scoreBreakdownService->deductions($scoreBreakdown);
         $technicalRemediation = $this->technicalRemediationBuilder->build($domain, $scan, $resultData);
 
@@ -281,5 +282,67 @@ final class ScanReportFactory implements ScanReportFactoryInterface
             'allClear' => ['state' => 'needs_fixes', 'message' => null],
             'isFirstFinishedScan' => false,
         ];
+    }
+
+    /**
+     * @param list<array<string, mixed>> $breakdown
+     * @param array<string, mixed> $analysis
+     * @return list<array<string, mixed>>
+     */
+    private function withDmarcSubcomponents(array $breakdown, array $analysis): array
+    {
+        foreach ($breakdown as &$row) {
+            if (($row['key'] ?? '') !== 'dmarc' || !empty($row['subcomponents'])) {
+                continue;
+            }
+
+            $policy = is_array($analysis['policy'] ?? null) ? $analysis['policy'] : [];
+            $enforcement = $policy['enforcement'] ?? 'unknown';
+            $effectivePolicy = $policy['effective_policy'] ?? null;
+            $pct = (int) ($policy['pct'] ?? 100);
+            $testing = (bool) ($policy['testing_mode'] ?? false);
+            $policyEarned = match (true) {
+                $testing, $effectivePolicy === 'none', $pct === 0, $enforcement === 'monitoring' => 12,
+                $enforcement === 'partial_enforcement' && $effectivePolicy === 'quarantine' => 20,
+                in_array($enforcement, ['partial_enforcement', 'quarantine', 'reject'], true) => 24,
+                default => 0,
+            };
+
+            $reporting = is_array($analysis['aggregate_reporting'] ?? null)
+                ? $analysis['aggregate_reporting']
+                : [];
+            $destinations = is_array($reporting['destinations'] ?? null)
+                ? $reporting['destinations']
+                : [];
+            $authorized = $destinations !== [] && collect($destinations)->every(
+                fn ($destination) => is_array($destination)
+                    && in_array($destination['authorization_status'] ?? 'unknown', ['authorized', 'not_required'], true)
+            );
+            $expectation = is_array($reporting['mxscan_expectation'] ?? null)
+                ? $reporting['mxscan_expectation']
+                : [];
+            $linked = ($expectation['expected_address'] ?? null) === null || ($expectation['present'] ?? false) === true;
+            $reportsEarned = ($reporting['configured'] ?? false) && $authorized && $linked ? 6 : 0;
+
+            $row['subcomponents'] = [
+                [
+                    'key' => 'dmarc_policy',
+                    'label' => 'DMARC Policy',
+                    'earned' => $policyEarned,
+                    'possible' => 24,
+                    'status' => $policyEarned === 24 ? 'ok' : 'partial',
+                ],
+                [
+                    'key' => 'dmarc_reports',
+                    'label' => 'DMARC Reports',
+                    'earned' => $reportsEarned,
+                    'possible' => 6,
+                    'status' => $reportsEarned === 6 ? 'ok' : 'partial',
+                ],
+            ];
+        }
+        unset($row);
+
+        return $breakdown;
     }
 }

@@ -12,6 +12,7 @@ final class ScoreComponentDTO
         public readonly string $status,
         public readonly ?string $reason,
         public readonly string $modelVersion = 'spf-v2',
+        public readonly array $subcomponents = [],
     ) {
     }
 
@@ -20,7 +21,7 @@ final class ScoreComponentDTO
      */
     public function toBreakdownRow(): array
     {
-        return [
+        $payload = [
             'key' => $this->key,
             'label' => $this->label,
             'earned' => $this->earned,
@@ -29,5 +30,11 @@ final class ScoreComponentDTO
             'hint' => $this->reason,
             'model_version' => $this->modelVersion,
         ];
+
+        if ($this->subcomponents !== []) {
+            $payload['subcomponents'] = $this->subcomponents;
+        }
+
+        return $payload;
     }
 }

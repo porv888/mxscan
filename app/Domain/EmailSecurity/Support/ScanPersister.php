@@ -6,6 +6,7 @@ use App\Domain\EmailSecurity\Contracts\ScanPersisterInterface;
 use App\Domain\EmailSecurity\DTO\ScanExecutionResultDTO;
 use App\Domain\EmailSecurity\DTO\ScanOptionsDTO;
 use App\Domain\EmailSecurity\Scoring\ScoreInvariantGuard;
+use App\Domain\EmailSecurity\Recommendations\RecommendationRanker;
 use App\Models\Domain;
 use App\Models\Scan;
 
@@ -13,6 +14,7 @@ final class ScanPersister implements ScanPersisterInterface
 {
     public function __construct(
         private ScoreInvariantGuard $scoreInvariantGuard,
+        private RecommendationRanker $recommendationRanker,
     ) {
     }
 
@@ -35,7 +37,7 @@ final class ScanPersister implements ScanPersisterInterface
             'score' => $execution->score,
             'facts_json' => $factsJson,
             'result_json' => $execution->resultJson,
-            'recommendations_json' => $execution->recommendations,
+            'recommendations_json' => $this->recommendationRanker->sort($execution->recommendations),
             'finished_at' => now(),
             'duration_ms' => $execution->durationMs,
         ]);

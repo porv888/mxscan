@@ -20,6 +20,16 @@
                 :possible="$row['possible']"
                 :status="$row['status'] ?? 'ok'"
             />
+            @foreach($row['subcomponents'] ?? [] as $subcomponent)
+                <div class="ml-4 border-l-2 border-gray-100 pl-4">
+                    <x-report.score-breakdown-row
+                        :label="$subcomponent['label']"
+                        :earned="$subcomponent['earned']"
+                        :possible="$subcomponent['possible']"
+                        :status="$subcomponent['status'] ?? 'ok'"
+                    />
+                </div>
+            @endforeach
         @endforeach
     </div>
 

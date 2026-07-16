@@ -38,7 +38,7 @@ final class DmarcExternalDestinationValidator
                 continue;
             }
 
-            $lookupName = $domain . '._report._dmarc.' . $policyDomain;
+            $lookupName = $policyDomain . '._report._dmarc.' . $domain;
             $query = $this->resolver->txt($lookupName);
             $destination['internal'] = false;
             $destination['authorization_required'] = true;

@@ -1,14 +1,14 @@
 {
     "score": 84,
     "recommendation_keys": [
-        "dmarc_strengthen",
         "dmarc_rua_unauthorized",
         "dmarc_mxscan_rua",
-        "mx",
-        "dkim_verify",
-        "certificates",
-        "tlsrpt",
         "mtasts",
+        "tlsrpt",
+        "certificates",
+        "dkim_verify",
+        "mx",
+        "dmarc_strengthen",
         "bimi"
     ],
     "status_card_labels": {
@@ -99,7 +99,23 @@
                     "possible": 30,
                     "status": "partial",
                     "hint": "DMARC enforcement is enabled with a quarantine policy.",
-                    "model_version": "dmarc-v1"
+                    "model_version": "dmarc-v2",
+                    "subcomponents": [
+                        {
+                            "key": "dmarc_policy",
+                            "label": "DMARC Policy",
+                            "earned": 24,
+                            "possible": 24,
+                            "status": "ok"
+                        },
+                        {
+                            "key": "dmarc_reports",
+                            "label": "DMARC Reports",
+                            "earned": 0,
+                            "possible": 6,
+                            "status": "partial"
+                        }
+                    ]
                 },
                 {
                     "key": "tlsrpt",
@@ -234,7 +250,7 @@
                             "destination_domain": "example.test",
                             "internal": false,
                             "authorization_required": true,
-                            "authorization_lookup_name": "example.test._report._dmarc.scenario.test",
+                            "authorization_lookup_name": "scenario.test._report._dmarc.example.test",
                             "authorization_status": "unauthorized",
                             "size_limit": null
                         }

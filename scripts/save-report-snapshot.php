@@ -62,14 +62,15 @@ $viewData['domainDays'] = 120;
 $viewData['sslDays'] = null;
 $viewData['scoreDeductions'] = [];
 
+$label = preg_replace('/[^a-z0-9_-]/i', '', (string) env('REPORT_SNAPSHOT_LABEL', 'after')) ?: 'after';
 $html = view('scans.show', $viewData)->render();
 $document = new DOMDocument();
 libxml_use_internal_errors(true);
 $document->loadHTML('<?xml encoding="utf-8" ?>' . $html);
 libxml_clear_errors();
-$technicalChecks = $document->getElementById('technical-checks');
-$technicalHtml = $technicalChecks ? $document->saveHTML($technicalChecks) : $html;
-$technicalHtml = str_replace(' x-cloak', '', $technicalHtml);
+$main = $document->getElementsByTagName('main')->item(0);
+$reportHtml = $main ? $document->saveHTML($main) : $html;
+$reportHtml = str_replace(' x-cloak', '', $reportHtml);
 
 $dir = storage_path('app/report-screenshots');
 if (!is_dir($dir)) {
@@ -95,19 +96,27 @@ $wrap = function (string $title, string $viewport, string $bodyHtml) use ($inlin
 HTML;
 };
 
-$desktop = $wrap(
-    'mxscan.me report — desktop after',
+$snapshot = $wrap(
+    "mxscan.me report — {$label}",
     'width=device-width, initial-scale=1',
-    '<div style="max-width:1320px;margin:0 auto;padding:24px;">' . $technicalHtml . '</div>',
+    $reportHtml,
 );
 
-$mobile = $wrap(
-    'mxscan.me report — mobile after',
-    'width=390, initial-scale=1',
-    '<div style="width:390px;padding:12px;box-sizing:border-box;">' . $technicalHtml . '</div>',
+$payload = [
+    'score' => $viewData['score'] ?? null,
+    'statusCards' => $viewData['statusCards'] ?? [],
+    'recommendations' => $viewData['recommendations'] ?? [],
+    'allClear' => $viewData['allClear'] ?? [],
+    'scoreBreakdown' => $viewData['scoreBreakdown'] ?? [],
+    'technicalRemediation' => $viewData['technicalRemediation'] ?? [],
+    'dmarcPolicy' => $viewData['dmarcPolicy'] ?? null,
+    'dmarcAlignmentVerification' => $viewData['dmarcAlignmentVerification'] ?? null,
+];
+
+file_put_contents($dir . "/mxscan-me-report-{$label}.html", $snapshot);
+file_put_contents(
+    $dir . "/mxscan-me-view-model-{$label}.json",
+    json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR) . "\n",
 );
 
-file_put_contents($dir . '/mxscan-me-report-after-desktop.html', $desktop);
-file_put_contents($dir . '/mxscan-me-report-after-mobile.html', $mobile);
-
-echo "Saved snapshots to {$dir}\n";
+echo "Saved {$label} report and payload snapshots to {$dir}\n";

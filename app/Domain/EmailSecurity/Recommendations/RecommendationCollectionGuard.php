@@ -45,10 +45,7 @@ final class RecommendationCollectionGuard
             }
         }
 
-        $deduped = array_values($winners);
-        usort($deduped, fn (array $a, array $b) => ($a['priority'] ?? 99) <=> ($b['priority'] ?? 99));
-
-        return $deduped;
+        return (new RecommendationRanker())->sort(array_values($winners));
     }
 
     /**

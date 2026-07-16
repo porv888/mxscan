@@ -5,9 +5,9 @@
 
 <div class="mx-dns-provider-instructions">
     <label>
-        <span>Choose DNS provider</span>
+        <span>Select DNS provider</span>
         <select x-model="dnsProvider" @change="preview()">
-            <option value="">Select provider</option>
+            <option value="">Select DNS provider</option>
             @foreach($providers as $key => $provider)
                 <option value="{{ $key }}" @selected($selected === $key)>{{ $provider['name'] }}</option>
             @endforeach

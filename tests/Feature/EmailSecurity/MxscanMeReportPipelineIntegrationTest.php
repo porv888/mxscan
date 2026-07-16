@@ -72,6 +72,26 @@ class MxscanMeReportPipelineIntegrationTest extends TestCase
         $this->assertSame('quarantine', $dmarc['policy']);
         $this->assertSame(ScanReportStatusMapper::PASS, $dmarc['state']);
         $this->assertNull($viewData['dmarcAligned']);
+        $dmarcScore = collect($breakdown)->firstWhere('key', 'dmarc');
+        $this->assertSame(24, $dmarcScore['earned']);
+        $this->assertSame(24, $dmarcScore['subcomponents'][0]['earned']);
+        $this->assertSame(24, $dmarcScore['subcomponents'][0]['possible']);
+        $this->assertSame(0, $dmarcScore['subcomponents'][1]['earned']);
+        $this->assertSame(6, $dmarcScore['subcomponents'][1]['possible']);
+
+        $dmarcRemediation = $viewData['technicalRemediation']['dmarc'];
+        $canonical = $dmarcRemediation['mxscan_address'];
+        $this->assertSame('Old MXScan address detected', $dmarcRemediation['mxscan_link_state']);
+        $this->assertSame(1, substr_count(strtolower($dmarcRemediation['corrected_value']), strtolower($canonical)));
+        $this->assertStringContainsString('mailto:rua@dmarc.brevo.com', $dmarcRemediation['corrected_value']);
+        $this->assertNotEmpty($dmarcRemediation['diff']['remove']);
+        $this->assertSame([$canonical], $dmarcRemediation['diff']['add']);
+        $this->assertSame('dmarc.brevo.com', $dmarcRemediation['external_destinations'][0]['owner']);
+        $this->assertSame(
+            'mxscan.me._report._dmarc.dmarc.brevo.com',
+            $dmarcRemediation['external_destinations'][0]['authorization_host'],
+        );
+        $this->assertFalse($dmarcRemediation['external_destinations'][0]['customer_controls_zone']);
 
         $presenter = new ScanReportPresenter(
             domain: $domain,
@@ -88,7 +108,7 @@ class MxscanMeReportPipelineIntegrationTest extends TestCase
         );
 
         $auth = collect($presenter->authStripItems())->keyBy('key');
-        $this->assertSame('Configured', $auth['dkim']['status']);
+        $this->assertSame('Published', $auth['dkim']['status']);
         $this->assertStringContainsString('selector', $auth['dkim']['explanation']);
         $this->assertStringNotContainsString('No DKIM selectors discovered', $auth['dkim']['explanation']);
         $this->assertStringNotContainsString('monitoring only', strtolower($auth['dmarc']['explanation']));

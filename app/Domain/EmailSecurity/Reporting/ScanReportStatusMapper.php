@@ -80,7 +80,7 @@ class ScanReportStatusMapper
         if ($blacklist === null) {
             return [
                 'state' => self::NOT_CHECKED,
-                'label' => 'Not scanned',
+                'label' => 'Unable to verify',
                 'subtext' => 'Blacklist check did not run',
             ];
         }
@@ -96,7 +96,7 @@ class ScanReportStatusMapper
             BlacklistReputationStatus::CLEAN => [
                 'state' => self::PASS,
                 'label' => 'Clean',
-                'subtext' => $usable . ' lists checked',
+                'subtext' => "0 of {$usable} checked lists contained the domain/IP.",
             ],
             BlacklistReputationStatus::LISTED => [
                 'state' => self::FAIL,
@@ -105,17 +105,17 @@ class ScanReportStatusMapper
             ],
             BlacklistReputationStatus::PARTIAL => [
                 'state' => self::WARNING,
-                'label' => 'Partial',
+                'label' => 'Unable to verify',
                 'subtext' => 'No listings on completed checks; some providers unavailable',
             ],
             BlacklistReputationStatus::UNKNOWN => [
                 'state' => self::UNKNOWN,
-                'label' => 'Unknown',
+                'label' => 'Unable to verify',
                 'subtext' => $planned > 0 ? '0 usable checks completed' : 'Blacklist could not be evaluated',
             ],
             default => [
                 'state' => self::NOT_CHECKED,
-                'label' => 'Not scanned',
+                'label' => 'Unable to verify',
                 'subtext' => $usable === 0 ? '0 lists checked' : ($analysis['summary'] ?? 'Blacklist check did not run'),
             ],
         };
@@ -160,7 +160,7 @@ class ScanReportStatusMapper
             return [
                 'card_label' => $cardLabel,
                 'state' => self::UNKNOWN,
-                'status' => 'Could not evaluate',
+                'status' => 'Unable to verify',
                 'subtext' => SpfAnalysisReader::summary($spfInfo)
                     ?? 'SPF configuration could not be fully evaluated',
             ];
@@ -170,7 +170,7 @@ class ScanReportStatusMapper
             return [
                 'card_label' => $cardLabel,
                 'state' => self::NOT_CHECKED,
-                'status' => 'Not checked',
+                'status' => 'Unable to verify',
                 'subtext' => 'Lookup calculation did not run',
             ];
         }
@@ -180,7 +180,7 @@ class ScanReportStatusMapper
             return [
                 'card_label' => $cardLabel,
                 'state' => self::FAIL,
-                'status' => 'Over limit',
+                'status' => 'Invalid',
                 'subtext' => $lookups . ' of 10 DNS lookups',
             ];
         }
@@ -188,7 +188,7 @@ class ScanReportStatusMapper
             return [
                 'card_label' => $cardLabel,
                 'state' => self::WARNING,
-                'status' => 'At limit',
+                'status' => 'Published',
                 'subtext' => $lookups . ' of 10 DNS lookups',
             ];
         }
@@ -196,7 +196,7 @@ class ScanReportStatusMapper
             return [
                 'card_label' => $cardLabel,
                 'state' => self::WARNING,
-                'status' => 'Near limit',
+                'status' => 'Published',
                 'subtext' => $lookups . ' of 10 DNS lookups',
             ];
         }
@@ -204,7 +204,7 @@ class ScanReportStatusMapper
         return [
             'card_label' => $cardLabel,
             'state' => self::PASS,
-            'status' => 'OK',
+            'status' => 'Published',
             'subtext' => $lookups . ' of 10 DNS lookups',
         ];
     }
@@ -278,7 +278,7 @@ class ScanReportStatusMapper
         if ($state === DmarcStates::UNKNOWN) {
             return [
                 'state' => self::UNKNOWN,
-                'status' => 'Unknown',
+                'status' => 'Unable to verify',
                 'policy' => $policy,
             ];
         }

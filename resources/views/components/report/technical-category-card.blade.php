@@ -20,7 +20,7 @@
             </div>
         </div>
         @if($statusVariant && $statusLabel)
-            <x-report.status-pill :variant="$statusVariant" :label="$statusLabel" class="hidden sm:inline-flex" />
+            <x-report.status-pill :variant="$statusVariant" :label="$statusLabel" />
         @endif
     </header>
 

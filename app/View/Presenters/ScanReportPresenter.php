@@ -30,6 +30,7 @@ class ScanReportPresenter
         protected int $blacklistHits = 0,
         protected int $blacklistTotal = 0,
         protected ?string $dmarcPolicy = null,
+        protected array $checkSummary = [],
     ) {
     }
 
@@ -39,9 +40,9 @@ class ScanReportPresenter
     public function scoreMeta(): array
     {
         $score = (int) ($this->score ?? 0);
-        $openIssues = collect($this->coreRecommendations())
+        $openIssues = (int) ($this->checkSummary['needsAction'] ?? collect($this->coreRecommendations())
             ->whereIn('severity', ['critical', 'high'])
-            ->count();
+            ->count());
 
         $label = match (true) {
             $score >= 90 => 'Excellent',
@@ -77,6 +78,7 @@ class ScanReportPresenter
                 'title' => 'No critical fixes needed',
                 'explanation' => $this->allClear['message'] ?? 'Core email authentication checks passed.',
                 'impact' => null,
+                'scoreImpact' => null,
                 'cta' => null,
                 'ctaHref' => null,
                 'whyHref' => null,
@@ -92,13 +94,16 @@ class ScanReportPresenter
         return [
             'severity' => $rec['severity'] ?? 'medium',
             'badge' => ucfirst($rec['severity'] ?? 'medium'),
-            'title' => $rec['title'],
-            'explanation' => $rec['explanation'],
+            'title' => ($rec['key'] ?? '') === 'spf_missing' ? 'SPF is missing' : $rec['title'],
+            'explanation' => ($rec['key'] ?? '') === 'spf_missing'
+                ? 'Receiving servers cannot verify which systems are authorized to send email for this domain.'
+                : $rec['explanation'],
             'impact' => $this->impactForKey($rec['key'] ?? ''),
+            'scoreImpact' => $this->scoreOpportunityForKey($rec['key'] ?? ''),
             'cta' => $rec['action'] ?? $rec['title'],
-            'ctaHref' => '#what-to-fix',
-            'whyHref' => '#technical-checks',
-            'technicalTarget' => $this->technicalTargetForKey($rec['key'] ?? ''),
+            'ctaHref' => '#' . ($rec['technical_target'] ?? $this->technicalTargetForKey($rec['key'] ?? '') ?? 'what-to-fix'),
+            'whyHref' => '#' . ($rec['technical_target'] ?? $this->technicalTargetForKey($rec['key'] ?? '') ?? 'technical-checks'),
+            'technicalTarget' => $rec['technical_target'] ?? $this->technicalTargetForKey($rec['key'] ?? ''),
         ];
     }
 
@@ -117,29 +122,52 @@ class ScanReportPresenter
                 'key' => 'spf',
                 'icon' => 'shield',
                 'label' => 'SPF',
-                'status' => $spf['status'] ?? 'Unknown',
+                'status' => match ($spf['state'] ?? '') {
+                    ScanReportStatusMapper::MISSING => 'Missing',
+                    ScanReportStatusMapper::FAIL => 'Invalid',
+                    ScanReportStatusMapper::UNKNOWN, ScanReportStatusMapper::NOT_CHECKED => 'Unable to verify',
+                    default => 'Published',
+                },
                 'explanation' => $this->authExplanation('spf', $spf),
                 'variant' => $this->variantForState($spf['state'] ?? 'unknown'),
+                'target' => 'tech-spf',
+                'score' => $this->scoreForKey('spf'),
             ],
             [
                 'key' => 'dkim',
                 'icon' => 'key-round',
                 'label' => 'DKIM DNS',
-                'status' => ($dkim['state'] ?? '') === ScanReportStatusMapper::PASS
-                    ? 'Configured'
-                    : ($dkim['status'] ?? 'Missing'),
+                'status' => (($dkim['count'] ?? 0) > 0 && in_array($dkim['state'] ?? '', [ScanReportStatusMapper::PASS, ScanReportStatusMapper::WARNING], true))
+                    ? 'Published'
+                    : match ($dkim['state'] ?? '') {
+                        ScanReportStatusMapper::MISSING => 'Not detected',
+                        ScanReportStatusMapper::FAIL => 'Invalid',
+                        default => 'Unable to verify',
+                    },
                 'explanation' => $this->authExplanation('dkim', $dkim),
                 'variant' => $this->variantForState($dkim['state'] ?? 'unknown'),
+                'target' => 'tech-dkim',
+                'score' => $this->scoreForKey('dkim'),
             ],
             [
                 'key' => 'dmarc',
                 'icon' => 'shield-check',
                 'label' => 'DMARC',
-                'status' => $this->dmarcPolicy
-                    ? ucfirst($this->dmarcPolicy)
-                    : ($dmarc['status'] ?? 'Missing'),
+                'status' => match ($dmarc['state'] ?? '') {
+                    ScanReportStatusMapper::MISSING => 'Missing',
+                    ScanReportStatusMapper::FAIL => 'Invalid',
+                    ScanReportStatusMapper::UNKNOWN, ScanReportStatusMapper::NOT_CHECKED => 'Unable to verify',
+                    default => match ($this->dmarcPolicy) {
+                        'none' => 'Monitoring',
+                        'quarantine' => 'Quarantine',
+                        'reject' => 'Reject',
+                        default => 'Unable to verify',
+                    },
+                },
                 'explanation' => $this->authExplanation('dmarc', $dmarc),
                 'variant' => $this->variantForState($dmarc['state'] ?? 'unknown'),
+                'target' => 'tech-dmarc',
+                'score' => $this->scoreForKey('dmarc'),
             ],
             [
                 'key' => 'blacklist',
@@ -148,6 +176,8 @@ class ScanReportPresenter
                 'status' => $bl['label'] ?? 'Not scanned',
                 'explanation' => $bl['subtext'] ?? 'Blacklist check did not run.',
                 'variant' => $this->variantForState($bl['state'] ?? 'unknown'),
+                'target' => 'tech-blacklist',
+                'score' => null,
             ],
         ];
     }
@@ -265,9 +295,11 @@ class ScanReportPresenter
     {
         return match (true) {
             str_starts_with($key, 'spf'),
-            in_array($key, ['dkim_dns', 'dmarc_missing', 'dmarc_policy', 'dmarc_alignment'], true) => 'Authentication',
-            in_array($key, ['tlsrpt', 'mtasts', 'blacklist'], true) => 'Mail infrastructure',
-            $key === 'certificates' || str_contains($key, 'certificate') => 'Transport security',
+            $key === 'dkim_dns',
+            str_starts_with($key, 'dmarc') => 'Authentication',
+            str_starts_with($key, 'blacklist'), $key === 'mx' => 'Mail infrastructure',
+            in_array($key, ['tlsrpt', 'mtasts', 'certificates'], true),
+            str_contains($key, 'certificate') => 'Transport security',
             default => null,
         };
     }
@@ -276,7 +308,8 @@ class ScanReportPresenter
     {
         $breakdownKey = match ($key) {
             'spf_missing', 'spf_invalid', 'spf_lookups' => 'spf',
-            'dmarc_missing', 'dmarc_policy', 'dmarc_alignment' => 'dmarc',
+            'dmarc_missing', 'dmarc_policy', 'dmarc_alignment' => 'dmarc_policy',
+            'dmarc_rua_missing', 'dmarc_rua_unauthorized', 'dmarc_mxscan_rua' => 'dmarc_reports',
             'dkim_dns' => 'dkim',
             'tlsrpt' => 'tlsrpt',
             'mtasts' => 'mtasts',
@@ -289,11 +322,15 @@ class ScanReportPresenter
         }
 
         foreach ($this->scoreBreakdown as $row) {
-            if (($row['key'] ?? '') !== $breakdownKey) {
+            $candidate = ($row['key'] ?? '') === $breakdownKey ? $row : null;
+            if ($candidate === null) {
+                $candidate = collect($row['subcomponents'] ?? [])->firstWhere('key', $breakdownKey);
+            }
+            if ($candidate === null) {
                 continue;
             }
 
-            $remaining = max(0, (int) ($row['possible'] ?? 0) - (int) ($row['earned'] ?? 0));
+            $remaining = max(0, (int) ($candidate['possible'] ?? 0) - (int) ($candidate['earned'] ?? 0));
             if ($remaining <= 0) {
                 return null;
             }
@@ -301,6 +338,28 @@ class ScanReportPresenter
             $label = $this->categoryForRecommendationKey($key) ?? ucfirst($breakdownKey);
 
             return $label . ' · +' . $remaining . ' possible points';
+        }
+
+        return null;
+    }
+
+    /**
+     * @return array{passing: int, needsAction: int}
+     */
+    public function reportSummary(): array
+    {
+        return [
+            'passing' => (int) ($this->checkSummary['passing'] ?? 0),
+            'needsAction' => (int) ($this->checkSummary['needsAction'] ?? count($this->coreRecommendations())),
+        ];
+    }
+
+    protected function scoreForKey(string $key): ?array
+    {
+        foreach ($this->scoreBreakdown as $row) {
+            if (($row['key'] ?? '') === $key) {
+                return $row;
+            }
         }
 
         return null;

@@ -83,7 +83,23 @@
                     "possible": 30,
                     "status": "partial",
                     "hint": "DMARC enforcement is enabled with a quarantine policy.",
-                    "model_version": "dmarc-v1"
+                    "model_version": "dmarc-v2",
+                    "subcomponents": [
+                        {
+                            "key": "dmarc_policy",
+                            "label": "DMARC Policy",
+                            "earned": 24,
+                            "possible": 24,
+                            "status": "ok"
+                        },
+                        {
+                            "key": "dmarc_reports",
+                            "label": "DMARC Reports",
+                            "earned": 0,
+                            "possible": 6,
+                            "status": "partial"
+                        }
+                    ]
                 },
                 {
                     "key": "tlsrpt",
@@ -1514,13 +1530,13 @@
         "bimi_evaluation_complete": true
     },
     "recommendation_keys": [
-        "dmarc_strengthen",
         "dmarc_mxscan_rua",
-        "mx",
-        "dkim_verify",
-        "certificates",
-        "tlsrpt",
         "mtasts",
+        "tlsrpt",
+        "certificates",
+        "dkim_verify",
+        "mx",
+        "dmarc_strengthen",
         "bimi"
     ]
 }

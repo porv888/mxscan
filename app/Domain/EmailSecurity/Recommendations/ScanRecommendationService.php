@@ -8,6 +8,8 @@ use App\Domain\EmailSecurity\Checks\Blacklist\Recommendations\BlacklistRecommend
 use App\Domain\EmailSecurity\Checks\DKIM\Recommendations\DkimRecommendationEvaluator;
 use App\Domain\EmailSecurity\Checks\DKIM\Support\DkimAnalysisReader;
 use App\Domain\EmailSecurity\Checks\DMARC\Recommendations\DmarcRecommendationEvaluator;
+use App\Domain\EmailSecurity\Checks\DMARC\DmarcAlignmentVerification;
+use App\Domain\EmailSecurity\Checks\DMARC\Support\DmarcAnalysisReader;
 use App\Domain\EmailSecurity\Checks\MtaSts\Recommendations\MtaStsRecommendationEvaluator;
 use App\Domain\EmailSecurity\Checks\Mx\Recommendations\MxRecommendationEvaluator;
 use App\Domain\EmailSecurity\Checks\Mx\Support\MxAnalysisReader;
@@ -90,7 +92,11 @@ class ScanRecommendationService
                     'fix_invalid_dmarc', 'fix_multiple_dmarc_records' => 'Fix DMARC',
                     'move_dmarc_from_none' => 'Upgrade to quarantine',
                     'add_dmarc_aggregate_reporting', 'add_mxscan_dmarc_reporting' => 'Add reporting',
-                    default => 'Review DMARC',
+                    'authorize_external_dmarc_reporting' => 'Verify authorization',
+                    'increase_dmarc_percentage' => 'Increase coverage',
+                    'review_dmarc_failure_reporting' => 'Check failure-report support',
+                    'strengthen_dmarc_policy' => 'Verify alignment prerequisites',
+                    default => 'Open DMARC solution',
                 },
                 recordName: '_dmarc.' . $domain->domain,
                 value: $dmarcItem['suggested'],
@@ -113,7 +119,7 @@ class ScanRecommendationService
                 severity: $spfItem['severity'],
                 title: $spfItem['title'],
                 explanation: $spfItem['body'],
-                action: $spfItem['legacy_key'] === 'spf_missing' ? 'Add SPF' : ($spfItem['legacy_key'] === 'spf_invalid' ? 'Fix SPF' : 'Flatten SPF'),
+                action: in_array($spfItem['legacy_key'], ['spf_missing', 'spf_invalid'], true) ? 'Fix SPF' : 'Flatten SPF',
                 recordName: $domain->domain,
                 value: $spfItem['suggested'],
                 state: $spfItem['card_state'],
@@ -209,7 +215,7 @@ class ScanRecommendationService
                 action: match ($mtaStsItem['semantic_key']) {
                     'add_mta_sts' => 'Add MTA-STS',
                     'publish_mta_sts_policy' => 'Publish policy',
-                    default => 'Review MTA-STS',
+                    default => 'Open MTA-STS solution',
                 },
                 recordName: '_mta-sts.' . $domain->domain,
                 value: $mtaStsItem['suggested'],
@@ -251,7 +257,7 @@ class ScanRecommendationService
                     'add_bimi_mark_certificate', 'review_bimi_provider_requirements' => 9,
                     default => 8,
                 },
-                severity: $bimiItem['severity'],
+                severity: 'optional',
                 title: $bimiItem['title'],
                 explanation: $bimiItem['body'],
                 action: $bimiItem['title'],
@@ -261,7 +267,25 @@ class ScanRecommendationService
             );
         }
 
-        usort($items, fn ($a, $b) => $a['priority'] <=> $b['priority']);
+        $dmarcAnalysis = DmarcAnalysisReader::analysis(is_array($dmarcInfo) ? $dmarcInfo : null) ?? [];
+        $alignmentVerified = ($dmarcAnalysis['alignment_verification'] ?? DmarcAlignmentVerification::NOT_VERIFIED)
+            === DmarcAlignmentVerification::ALIGNED;
+        $spfReady = in_array($spfCard['state'] ?? null, [ScanReportStatusMapper::PASS, ScanReportStatusMapper::WARNING], true);
+        $dkimReady = in_array($dkimCard['state'] ?? null, [ScanReportStatusMapper::PASS, ScanReportStatusMapper::WARNING], true)
+            && ($dkimCard['count'] ?? 0) > 0;
+
+        foreach ($items as &$item) {
+            if (($item['semantic_key'] ?? '') === 'strengthen_dmarc_policy' && !($spfReady && $dkimReady && $alignmentVerified)) {
+                $item['title'] = 'DMARC reject policy';
+                $item['explanation'] = 'Locked until SPF and DKIM alignment are verified.';
+                $item['action'] = null;
+                $item['locked'] = true;
+                $item['actionable'] = false;
+            }
+        }
+        unset($item);
+
+        $items = (new RecommendationRanker())->sort($items);
 
         return $items;
     }
@@ -378,6 +402,22 @@ class ScanRecommendationService
             'record_name' => $recordName,
             'value' => $value,
             'state' => $state,
+            'actionable' => true,
+            'locked' => false,
+            'technical_target' => $this->technicalTarget($legacyKey),
         ];
+    }
+
+    protected function technicalTarget(string $key): ?string
+    {
+        return match (true) {
+            str_starts_with($key, 'spf') => 'tech-spf',
+            str_starts_with($key, 'dkim') => 'tech-dkim',
+            str_starts_with($key, 'dmarc') => str_contains($key, 'rua') ? 'tech-dmarc_reports' : 'tech-dmarc',
+            $key === 'mtasts' => 'tech-mtasts',
+            $key === 'tlsrpt' => 'tech-tlsrpt',
+            str_starts_with($key, 'blacklist') => 'tech-blacklist',
+            default => null,
+        };
     }
 }

@@ -72,14 +72,14 @@ class DmarcNativePipelineTest extends TestCase
     public function test_reject_full(): void
     {
         $execution = $this->runPipeline('dmarc-reject.test', 'v=DMARC1; p=reject; pct=100; rua=mailto:a@b.com');
-        $this->assertSame(30, $this->dmarcEarned($execution));
+        $this->assertSame(24, $this->dmarcEarned($execution));
         $this->assertScoreInvariant($execution);
     }
 
     public function test_reject_partial_pct(): void
     {
         $execution = $this->runPipeline('dmarc-reject-pct.test', 'v=DMARC1; p=reject; pct=25; rua=mailto:a@b.com');
-        $this->assertSame(27, $this->dmarcEarned($execution));
+        $this->assertSame(24, $this->dmarcEarned($execution));
         $this->assertScoreInvariant($execution);
     }
 
@@ -262,7 +262,7 @@ class DmarcNativePipelineTest extends TestCase
         $record = 'v=DMARC1; p=quarantine; rua=mailto:reports@external.com';
         $resolver = new FakeDmarcDnsResolver();
         $resolver->setRecord('_dmarc.' . $domainName, $record);
-        $resolver->setRecord('external.com._report._dmarc.' . $domainName, 'v=DMARC1');
+        $resolver->setRecord($domainName . '._report._dmarc.external.com', 'v=DMARC1');
         $execution = $this->runPipeline($domainName, $record, resolver: $resolver);
         $destinations = $execution->resultJson['dmarc']['analysis']['aggregate_reporting']['destinations'] ?? [];
         $this->assertSame('authorized', $destinations[0]['authorization_status'] ?? null);
@@ -274,7 +274,7 @@ class DmarcNativePipelineTest extends TestCase
         $record = 'v=DMARC1; p=quarantine; rua=mailto:reports@external.com';
         $resolver = new FakeDmarcDnsResolver();
         $resolver->setRecord('_dmarc.' . $domainName, $record);
-        $resolver->setRecord('external.com._report._dmarc.' . $domainName, null);
+        $resolver->setRecord($domainName . '._report._dmarc.external.com', null);
         $execution = $this->runPipeline($domainName, $record, resolver: $resolver);
         $analysis = $execution->resultJson['dmarc']['analysis'] ?? [];
         $this->assertSame(1, $analysis['external_authorization']['unauthorized_count'] ?? 0);

@@ -9,7 +9,7 @@ use Tests\TestCase;
 
 class DmarcScoreRuleTest extends TestCase
 {
-    public function test_reject_full_enforcement_scores_thirty(): void
+    public function test_reject_policy_without_reporting_scores_twenty_four(): void
     {
         $native = $this->native([
             'protocolStatus' => DmarcProtocolStatus::VALID,
@@ -23,8 +23,36 @@ class DmarcScoreRuleTest extends TestCase
 
         $component = (new DmarcScoreRule())->score($native);
 
+        $this->assertSame(24, $component->earned);
+        $this->assertSame('dmarc-v2', $component->modelVersion);
+        $this->assertSame(24, $component->subcomponents[0]['earned']);
+        $this->assertSame(0, $component->subcomponents[1]['earned']);
+    }
+
+    public function test_complete_policy_and_reporting_scores_thirty(): void
+    {
+        $native = $this->native([
+            'protocolStatus' => DmarcProtocolStatus::VALID,
+            'policy' => [
+                'effective_policy' => 'quarantine',
+                'enforcement' => 'quarantine',
+                'pct' => 100,
+                'testing_mode' => false,
+            ],
+            'aggregateReporting' => [
+                'configured' => true,
+                'destinations' => [[
+                    'normalized_destination' => 'dmarc@example.test',
+                    'authorization_status' => 'not_required',
+                ]],
+                'mxscan_expectation' => ['expected_address' => null, 'present' => false],
+            ],
+        ]);
+
+        $component = (new DmarcScoreRule())->score($native);
+
         $this->assertSame(30, $component->earned);
-        $this->assertSame('dmarc-v1', $component->modelVersion);
+        $this->assertSame(6, $component->subcomponents[1]['earned']);
     }
 
     public function test_missing_scores_zero(): void
@@ -72,7 +100,7 @@ class DmarcScoreRuleTest extends TestCase
             discovery: [],
             policy: $overrides['policy'],
             alignment: ['dkim' => 'relaxed', 'spf' => 'relaxed'],
-            aggregateReporting: ['configured' => false, 'destinations' => []],
+            aggregateReporting: $overrides['aggregateReporting'] ?? ['configured' => false, 'destinations' => []],
             failureReporting: ['configured' => false, 'destinations' => []],
             externalAuthorization: ['destinations_checked' => 0, 'unauthorized_count' => 0],
             errors: [],

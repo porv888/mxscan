@@ -59,6 +59,7 @@
                             :state="$row['presentationState'] ?? null"
                             :severity="$row['severity'] ?? 'neutral'"
                             :lost-points="$row['lostPoints'] ?? null"
+                            :score-label="$row['scoreLabel'] ?? null"
                             :optional="$row['optional'] ?? false"
                         >
                             @include('scans.partials._technical-check-detail', [
