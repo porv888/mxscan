@@ -142,222 +142,75 @@
     </section>
     @else
 
-    @if(($finishedScanCount ?? 0) > 0 && $latestFinishedScan)
-    <section class="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-        <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-            <div>
-                <p class="text-xs font-medium uppercase tracking-wide text-gray-500">Latest Email Security Score</p>
-                <p class="mt-1 text-3xl font-bold text-gray-900">{{ $latestFinishedScan->score ?? '—' }}<span class="text-base font-normal text-gray-500">/100</span></p>
-                <p class="mt-1 text-sm text-gray-500">{{ $latestFinishedScan->domain?->domain }}</p>
-            </div>
-            @if($primaryFindingAction)
-            <a href="{{ $primaryFindingAction['url'] }}"
-               class="mx-btn mx-btn-primary">
-                {{ $primaryFindingAction['label'] }}
-            </a>
-            @endif
+    <header class="dashboard-page-heading">
+        <div>
+            <p class="dashboard-eyebrow">Overview</p>
+            <h1>Dashboard</h1>
+            <p>Your latest email-security posture and the actions that matter most.</p>
         </div>
-        @if(($latestFindings ?? collect())->isNotEmpty())
-        <ul class="mt-4 space-y-2 border-t border-gray-100 pt-4">
-            @foreach($latestFindings as $finding)
-                <li class="text-sm text-gray-700">
-                    <span class="font-medium text-gray-900">{{ $finding['title'] }}</span>
-                    <span class="block text-gray-500">{{ $finding['explanation'] }}</span>
-                </li>
-            @endforeach
-        </ul>
+    </header>
+
+    @if(($finishedScanCount ?? 0) > 0 && $latestFinishedScan)
+        <x-dashboard.dashboard-hero :hero="$dashboardHero" />
+    @endif
+
+    @if(($dashboardRecommendations ?? collect())->isNotEmpty())
+    <section class="dashboard-priority-section" aria-labelledby="dashboard-priority-heading">
+        <div class="dashboard-section-heading">
+            <div>
+                <h2 id="dashboard-priority-heading">What to fix first</h2>
+                <p>Highest-impact action for your domain</p>
+            </div>
+        </div>
+        <x-dashboard.dashboard-priority-action :recommendation="$dashboardRecommendations->first()" />
+
+        @if($dashboardRecommendations->count() > 1)
+        <div class="dashboard-next-actions">
+            <h3>Next actions</h3>
+            <div class="dashboard-recommendation-list">
+                @foreach($dashboardRecommendations->skip(1) as $recommendation)
+                    <x-dashboard.dashboard-recommendation-row :recommendation="$recommendation" />
+                @endforeach
+            </div>
+        </div>
         @endif
-        <a href="{{ route('reports.show', $latestFinishedScan) }}" class="mt-4 inline-flex text-sm font-medium text-blue-700 hover:underline focus:outline-none focus:ring-2 focus:ring-blue-500 rounded">
-            View full report
-        </a>
     </section>
     @endif
 
-    <!-- Incident Alert Banner - FIRST (most important) -->
+    <section class="dashboard-metrics-section" aria-labelledby="dashboard-metrics-heading">
+        <div class="dashboard-section-heading">
+            <div>
+                <h2 id="dashboard-metrics-heading">Domain health</h2>
+                <p>Configuration, monitoring, and operational status at a glance.</p>
+            </div>
+        </div>
+        <div class="dashboard-metric-grid">
+            @foreach($dashboardMetrics as $metric)
+                <x-dashboard.dashboard-metric-card :metric="$metric" />
+            @endforeach
+        </div>
+    </section>
+
+    <x-dashboard.dashboard-score-history
+        :history="$dashboardScoreHistory"
+        :latest-score="$dashboardHero['score'] ?? null"
+        :latest-scan-id="$dashboardHero['scan_id'] ?? null"
+    />
+
     @if(($incidentCount ?? 0) > 0)
-    <div class="bg-gradient-to-r from-red-50 to-amber-50 border border-red-200 rounded-lg p-4">
-        <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div class="flex min-w-0 items-center">
-                <div class="flex-shrink-0 p-2 bg-red-100 rounded-lg">
-                    <i data-lucide="alert-triangle" class="h-5 w-5 text-red-600"></i>
-                </div>
-                <div class="ml-4">
-                    <h3 class="text-sm font-semibold text-gray-900">{{ $incidentCount }} Active {{ Str::plural('Incident', $incidentCount) }}</h3>
-                    <p class="text-sm text-gray-600">Security issues detected that need your attention</p>
-                </div>
-            </div>
-            <a href="{{ auth()->user()->canUseMonitoring() ? route('monitoring.incidents') : route('reports.index') }}" 
-               class="mx-btn mx-btn-danger w-full sm:w-auto">
-                <i data-lucide="eye" class="w-4 h-4"></i>
-                View All
-            </a>
+    <section class="dashboard-incident-alert" aria-labelledby="dashboard-incidents-heading">
+        <div>
+            <p class="dashboard-eyebrow">Operational event</p>
+            <h2 id="dashboard-incidents-heading">
+                {{ $incidentCount }} active security {{ Str::plural('incident', $incidentCount) }}
+            </h2>
+            <p>Operational alerts and detected security events. Configuration findings are listed separately.</p>
         </div>
-        @if($unresolvedIncidents->count() > 0)
-        <div class="mt-3 pt-3 border-t border-red-200 space-y-1">
-            @foreach($unresolvedIncidents->take(3) as $incident)
-            <a href="{{ $incident->action_url ?? route('monitoring.incidents') }}"
-               class="flex min-w-0 items-center gap-2 px-3 py-2 rounded-lg hover:bg-white/60 transition-colors group">
-                <span class="w-1.5 h-1.5 rounded-full shrink-0 {{ $incident->severity === 'incident' ? 'bg-red-500' : 'bg-amber-500' }}"></span>
-                <span class="min-w-0 text-sm text-gray-800 truncate flex-1 group-hover:text-gray-900">{{ Str::limit($incident->message, 56) }}</span>
-                <span class="hidden text-xs text-gray-500 shrink-0 sm:inline">{{ $incident->domain->domain ?? '' }}</span>
-                <i data-lucide="chevron-right" class="w-4 h-4 text-gray-400 shrink-0"></i>
-            </a>
-            @endforeach
-            @if($unresolvedIncidents->count() > 3)
-            <p class="text-xs text-gray-500 px-3 pt-1">+{{ $unresolvedIncidents->count() - 3 }} more in incident list</p>
-            @endif
-            @if(auth()->user()->canUseMonitoring())
-            <a href="{{ route('settings.notifications') }}" class="inline-flex items-center text-xs text-blue-700 hover:text-blue-800 px-3 pt-2">
-                <i data-lucide="bell" class="w-3 h-3 mr-1"></i>
-                Configure Slack &amp; webhooks
-            </a>
-            @endif
-        </div>
-        @endif
-    </div>
-    @endif
-
-    <!-- Priority Actions Section -->
-    @if($priorityActions->count() > 0)
-    <div class="bg-white rounded-lg shadow-sm overflow-hidden">
-        <div class="px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-indigo-50">
-            <div class="flex items-center">
-                <i data-lucide="zap" class="w-5 h-5 text-blue-600 mr-2"></i>
-                <h2 class="text-lg font-semibold text-gray-900">What to Fix First</h2>
-            </div>
-            <p class="text-sm text-gray-600 mt-1">Priority actions to improve your email security</p>
-        </div>
-        <div class="divide-y divide-gray-100">
-            @foreach($priorityActions as $action)
-            <div class="p-4 hover:bg-gray-50 transition-colors">
-                <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <div class="flex min-w-0 items-center space-x-4">
-                        <div class="flex-shrink-0 w-10 h-10 rounded-lg flex items-center justify-center
-                            {{ $action['severity'] === 'critical' ? 'bg-red-100' : 'bg-amber-100' }}">
-                            <i data-lucide="{{ $action['icon'] }}" class="w-5 h-5 
-                                {{ $action['severity'] === 'critical' ? 'text-red-600' : 'text-amber-600' }}"></i>
-                        </div>
-                        <div class="min-w-0">
-                            <div class="flex items-center gap-2">
-                                <h3 class="text-sm font-semibold text-gray-900">{{ $action['title'] }}</h3>
-                                <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium
-                                    {{ $action['severity'] === 'critical' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700' }}">
-                                    {{ ucfirst($action['severity']) }}
-                                </span>
-                            </div>
-                            <p class="text-sm text-gray-600">{{ $action['description'] }}</p>
-                        </div>
-                    </div>
-                    <a href="{{ $action['action_url'] }}" 
-                       class="mx-btn w-full sm:w-auto {{ $action['severity'] === 'critical' ? 'mx-btn-danger' : 'mx-btn-primary' }}">
-                        {{ $action['action_label'] }}
-                        <i data-lucide="arrow-right" class="w-4 h-4"></i>
-                    </a>
-                </div>
-            </div>
-            @endforeach
-        </div>
-    </div>
-    @endif
-
-    <!-- Risk-Based KPIs (action-driving metrics) -->
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <!-- Domains at Risk -->
-        <div class="bg-white rounded-lg shadow-sm p-5 border-l-4 {{ ($domainsAtRisk ?? 0) > 0 ? 'border-red-500' : 'border-green-500' }}">
-            <div class="flex items-center justify-between">
-                <div>
-                    <p class="text-xs font-medium text-gray-500 uppercase tracking-wide">Domains at Risk</p>
-                    <p class="text-3xl font-bold {{ ($domainsAtRisk ?? 0) > 0 ? 'text-red-600' : 'text-green-600' }}">{{ $domainsAtRisk ?? 0 }}</p>
-                    <p class="text-xs text-gray-500 mt-1">Score &lt;70 or blacklisted</p>
-                </div>
-                <div class="p-3 rounded-full {{ ($domainsAtRisk ?? 0) > 0 ? 'bg-red-100' : 'bg-green-100' }}">
-                    <i data-lucide="{{ ($domainsAtRisk ?? 0) > 0 ? 'shield-alert' : 'shield-check' }}" class="w-6 h-6 {{ ($domainsAtRisk ?? 0) > 0 ? 'text-red-600' : 'text-green-600' }}"></i>
-                </div>
-            </div>
-            @if(($domainsAtRisk ?? 0) > 0)
-            <a href="{{ route('dashboard.domains') }}" class="mt-3 inline-flex items-center text-xs font-medium text-red-600 hover:text-red-700">
-                View domains <i data-lucide="arrow-right" class="w-3 h-3 ml-1"></i>
-            </a>
-            @endif
-        </div>
-
-        <!-- Expiring Soon -->
-        <div class="bg-white rounded-lg shadow-sm p-5 border-l-4 {{ ($expiringSoon ?? 0) > 0 ? 'border-amber-500' : 'border-green-500' }}">
-            <div class="flex items-center justify-between">
-                <div>
-                    <p class="text-xs font-medium text-gray-500 uppercase tracking-wide">Expiring Soon</p>
-                    <p class="text-3xl font-bold {{ ($expiringSoon ?? 0) > 0 ? 'text-amber-600' : 'text-green-600' }}">{{ $expiringSoon ?? 0 }}</p>
-                    <p class="text-xs text-gray-500 mt-1">Domain or SSL &lt;30 days</p>
-                </div>
-                <div class="p-3 rounded-full {{ ($expiringSoon ?? 0) > 0 ? 'bg-amber-100' : 'bg-green-100' }}">
-                    <i data-lucide="{{ ($expiringSoon ?? 0) > 0 ? 'calendar-x' : 'calendar-check' }}" class="w-6 h-6 {{ ($expiringSoon ?? 0) > 0 ? 'text-amber-600' : 'text-green-600' }}"></i>
-                </div>
-            </div>
-            @if(($expiringSoon ?? 0) > 0)
-            <a href="{{ route('dashboard.domains') }}" class="mt-3 inline-flex items-center text-xs font-medium text-amber-600 hover:text-amber-700">
-                View domains <i data-lucide="arrow-right" class="w-3 h-3 ml-1"></i>
-            </a>
-            @endif
-        </div>
-
-        <!-- Monitoring gap -->
-        <div class="bg-white rounded-lg shadow-sm p-5 border-l-4 {{ ($monitoringGap ?? 0) > 0 ? 'border-blue-500' : 'border-green-500' }}">
-            <div class="flex items-center justify-between">
-                <div>
-                    <p class="text-xs font-medium text-gray-500 uppercase tracking-wide">Monitoring Gap</p>
-                    <p class="text-3xl font-bold {{ ($monitoringGap ?? 0) > 0 ? 'text-blue-600' : 'text-green-600' }}">{{ $monitoringGap ?? 0 }}</p>
-                    <p class="text-xs text-gray-500 mt-1">
-                        @if(($monitoringGap ?? 0) > 0)
-                            Automated scan overdue
-                        @else
-                            All domains monitored on schedule
-                        @endif
-                    </p>
-                </div>
-                <div class="p-3 rounded-full {{ ($monitoringGap ?? 0) > 0 ? 'bg-blue-100' : 'bg-green-100' }}">
-                    <i data-lucide="{{ ($monitoringGap ?? 0) > 0 ? 'clock' : 'check-circle' }}" class="w-6 h-6 {{ ($monitoringGap ?? 0) > 0 ? 'text-blue-600' : 'text-green-600' }}"></i>
-                </div>
-            </div>
-            @if(($monitoringGap ?? 0) > 0)
-            <a href="{{ route('domains') }}" class="mt-3 inline-flex items-center text-xs font-medium text-blue-600 hover:text-blue-700">
-                Review domains <i data-lucide="arrow-right" class="w-3 h-3 ml-1"></i>
-            </a>
-            @endif
-        </div>
-    </div>
-
-    <!-- DMARC + monitoring summary -->
-    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <a href="{{ ($dmarcDashboard['has_data'] ?? false) ? route('dmarc.index') : ($dmarcEmptyState['url'] ?? route('dmarc.index')) }}"
-           class="bg-white rounded-lg shadow-sm p-4 border border-gray-200 hover:border-blue-300 transition-colors">
-            <p class="text-xs font-medium text-gray-500 uppercase tracking-wide">DMARC</p>
-            @if($dmarcDashboard['has_data'] ?? false)
-                <p class="text-2xl font-bold text-gray-900 mt-1">{{ number_format($dmarcDashboard['total_volume']) }}</p>
-                <p class="text-xs text-gray-500 mt-1">{{ $dmarcDashboard['alignment_rate'] }}% aligned (7d)</p>
-            @elseif(($dmarcEmptyState['kind'] ?? null) === 'detected_unlinked')
-                <p class="text-sm text-gray-600 mt-2">{{ $dmarcEmptyState['copy'] }}</p>
-                <p class="text-xs font-medium text-blue-600 mt-2">{{ $dmarcEmptyState['cta'] }}</p>
-            @elseif(($dmarcEmptyState['kind'] ?? null) === 'not_connected')
-                <p class="text-sm text-gray-600 mt-2">{{ $dmarcEmptyState['copy'] }}</p>
-                <p class="text-xs font-medium text-blue-600 mt-2">{{ $dmarcEmptyState['cta'] }}</p>
-            @else
-                <p class="text-sm text-gray-600 mt-2">{{ $dmarcEmptyState['copy'] ?? 'Waiting for the first aggregate report. Reports commonly arrive within 24–48 hours.' }}</p>
-            @endif
+        <a href="{{ auth()->user()->canUseMonitoring() ? route('monitoring.incidents') : route('reports.index') }}"
+           class="mx-btn mx-btn-danger">
+            View incidents
         </a>
-        <a href="{{ route('monitoring.incidents') }}" class="bg-white rounded-lg shadow-sm p-4 border border-gray-200 hover:border-red-300 transition-colors">
-            <p class="text-xs font-medium text-gray-500 uppercase tracking-wide">Active incidents</p>
-            <p class="text-2xl font-bold {{ ($incidentCount ?? 0) > 0 ? 'text-red-600' : 'text-green-600' }} mt-1">{{ $incidentCount ?? 0 }}</p>
-            <p class="text-xs text-gray-500 mt-1">Unresolved security issues</p>
-        </a>
-        <a href="{{ route('automations.index') }}" class="bg-white rounded-lg shadow-sm p-4 border border-gray-200 hover:border-blue-300 transition-colors">
-            <p class="text-xs font-medium text-gray-500 uppercase tracking-wide">Automations</p>
-            <p class="text-2xl font-bold text-gray-900 mt-1">{{ $domains->where(fn($d) => $d->activeSchedule)->count() }}</p>
-            <p class="text-xs text-gray-500 mt-1">Domains with scheduled scans</p>
-        </a>
-    </div>
-
-    @if(!empty($scoreTrend['labels']))
-    @include('dashboard.partials._score-trend', ['scoreTrend' => $scoreTrend, 'chartId' => 'dashboardScoreTrend'])
+    </section>
     @endif
 
     <!-- Recent Activity (demoted - collapsible) -->

@@ -1531,10 +1531,10 @@
     },
     "recommendation_keys": [
         "dmarc_mxscan_rua",
+        "dkim_verify",
         "mtasts",
         "tlsrpt",
         "certificates",
-        "dkim_verify",
         "mx",
         "dmarc_strengthen",
         "bimi"

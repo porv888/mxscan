@@ -13,7 +13,9 @@ import urllib.parse
 import urllib.request
 
 ROOT = "/home/mxscan/public_html/dev.mxscan.me"
-OUTPUT = os.path.join(ROOT, "storage/app/report-screenshots")
+PROFILE = os.getenv("SNAPSHOT_PROFILE", "report")
+PREFIX = "mxscan-dashboard" if PROFILE == "dashboard" else "mxscan-me-report"
+OUTPUT = os.path.join(ROOT, "storage/app/dashboard-screenshots" if PROFILE == "dashboard" else "storage/app/report-screenshots")
 CHROME = "/home/mxscan/.cache/puppeteer/chrome/linux-131.0.6778.204/chrome-linux64/chrome"
 LABEL = "".join(character for character in os.getenv("REPORT_SNAPSHOT_LABEL", "after") if character.isalnum() or character in "_-") or "after"
 VALIDATE = os.getenv("REPORT_VALIDATE", "1") != "0"
@@ -119,12 +121,12 @@ def capture(devtools, width, height, save):
         "screenHeight": height,
     })
     devtools.send("Page.enable")
-    url = "file://" + os.path.join(OUTPUT, f"mxscan-me-report-{LABEL}.html")
+    url = "file://" + os.path.join(OUTPUT, f"{PREFIX}-{LABEL}.html")
     devtools.send("Page.navigate", {"url": url})
     time.sleep(0.5)
 
     expression = """(() => {
-      const cards = [...document.querySelectorAll('.report-summary-card')];
+      const cards = [...document.querySelectorAll('.report-summary-card, .dashboard-metric-card')];
       const buttons = [...document.querySelectorAll('button:not([hidden]), .mx-btn:not([hidden])')]
         .filter(el => getComputedStyle(el).display !== 'none');
       const issue = document.querySelector('.report-issue-panel');
@@ -133,7 +135,7 @@ def capture(devtools, width, height, save):
       return {
         viewport: document.documentElement.clientWidth,
         scrollWidth: document.documentElement.scrollWidth,
-        summaryColumns: new Set(cards.slice(0, 4).map(el => Math.round(el.getBoundingClientRect().left))).size,
+        summaryColumns: new Set(cards.slice(0, 6).map(el => Math.round(el.getBoundingClientRect().left))).size,
         smallTargets: buttons.filter(el => {
           const rect = el.getBoundingClientRect();
           return rect.width > 0 && rect.height > 0 && (rect.width < 44 || rect.height < 44);
@@ -152,14 +154,16 @@ def capture(devtools, width, height, save):
         raise RuntimeError(f"{width}px touch targets below 44px: {metrics['smallTargets']}")
     if VALIDATE and width == 320 and metrics["summaryColumns"] != 1:
         raise RuntimeError(f"320px summary cards must stack: {metrics}")
-    if VALIDATE and width in (375, 390) and metrics["summaryColumns"] != 2:
+    if VALIDATE and PROFILE == "report" and width in (375, 390) and metrics["summaryColumns"] != 2:
         raise RuntimeError(f"{width}px summary cards must use two columns: {metrics}")
-    if VALIDATE and width < 768 and not metrics["panelsStacked"]:
+    if VALIDATE and PROFILE == "dashboard" and width in (375, 390) and metrics["summaryColumns"] != 1:
+        raise RuntimeError(f"{width}px dashboard metric cards must stack: {metrics}")
+    if VALIDATE and PROFILE == "report" and width < 768 and not metrics["panelsStacked"]:
         raise RuntimeError(f"{width}px remediation panels are not stacked")
 
     if save:
         screenshot = devtools.send("Page.captureScreenshot", {"format": "png", "fromSurface": True})
-        filename = os.path.join(OUTPUT, f"mxscan-me-report-{LABEL}-{width}.png")
+        filename = os.path.join(OUTPUT, f"{PREFIX}-{LABEL}-{width}.png")
         with open(filename, "wb") as output:
             output.write(base64.b64decode(screenshot["data"]))
         print(f"Captured {filename}")

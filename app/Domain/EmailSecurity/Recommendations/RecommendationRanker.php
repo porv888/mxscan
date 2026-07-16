@@ -21,19 +21,15 @@ final class RecommendationRanker
             $aSeverity = $severityOrder[$a['severity'] ?? 'medium'] ?? 2;
             $bSeverity = $severityOrder[$b['severity'] ?? 'medium'] ?? 2;
 
-            // Critical/high findings can never sit below low/optional work.
-            if (($aSeverity <= 1 && $bSeverity >= 3) || ($bSeverity <= 1 && $aSeverity >= 3)) {
-                return $aSeverity <=> $bSeverity;
+            // Severity is always the first ordering invariant.
+            $severity = $aSeverity <=> $bSeverity;
+            if ($severity !== 0) {
+                return $severity;
             }
 
             $remediation = $this->remediationOrder($a) <=> $this->remediationOrder($b);
             if ($remediation !== 0) {
                 return $remediation;
-            }
-
-            $severity = $aSeverity <=> $bSeverity;
-            if ($severity !== 0) {
-                return $severity;
             }
 
             return ($a['_source_order'] ?? 0) <=> ($b['_source_order'] ?? 0);

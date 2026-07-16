@@ -28,6 +28,7 @@
             sidebarOpen: false
          }"
          @open-upgrade.window="showUpgrade = true"
+         @keydown.escape.window="sidebarOpen = false"
          @toast.window="showToast = true; toastText = $event.detail.text; toastType = $event.detail.type; setTimeout(() => showToast = false, 5000)"
          @if(session('toast'))
          x-init='$nextTick(() => { showToast = true; toastText = @json(session("toast.text")); toastType = @json(session("toast.type", "info")); setTimeout(() => showToast = false, 5000); })'
@@ -43,6 +44,7 @@
              x-transition:leave-end="opacity-0"
              class="fixed inset-0 bg-gray-600 bg-opacity-75 z-40 md:hidden"
              @click="sidebarOpen = false"
+             aria-hidden="true"
              x-cloak></div>
 
         <!-- Mobile sidebar -->
@@ -54,13 +56,16 @@
              x-transition:leave-start="translate-x-0"
              x-transition:leave-end="-translate-x-full"
              class="fixed inset-y-0 left-0 z-50 w-64 bg-white shadow-xl md:hidden"
+             role="dialog"
+             aria-modal="true"
+             aria-label="Mobile navigation"
              x-cloak>
             <div class="flex items-center justify-between px-4 pt-5 pb-4 border-b border-gray-200">
                 <div class="flex items-center">
                     <i data-lucide="shield-check" class="h-8 w-8 text-blue-600"></i>
                     <h1 class="ml-3 text-xl font-bold text-gray-900">MXScan</h1>
                 </div>
-                <button @click="sidebarOpen = false" aria-label="Close navigation menu" class="p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100">
+                <button x-ref="mobileSidebarClose" @click="sidebarOpen = false" aria-label="Close navigation menu" class="p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100">
                     <i data-lucide="x" class="h-6 w-6"></i>
                 </button>
             </div>
@@ -203,7 +208,7 @@
                         <!-- Mobile menu button -->
                         <button type="button" 
                                 class="md:hidden inline-flex items-center justify-center p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500"
-                                @click="sidebarOpen = true"
+                                @click="sidebarOpen = true; $nextTick(() => $refs.mobileSidebarClose?.focus())"
                                 aria-label="Open navigation menu"
                                 :aria-expanded="sidebarOpen.toString()">
                             <i data-lucide="menu" class="h-6 w-6"></i>

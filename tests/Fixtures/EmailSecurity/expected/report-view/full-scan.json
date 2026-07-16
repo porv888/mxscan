@@ -3,10 +3,10 @@
     "recommendation_keys": [
         "dmarc_rua_unauthorized",
         "dmarc_mxscan_rua",
+        "dkim_verify",
         "mtasts",
         "tlsrpt",
         "certificates",
-        "dkim_verify",
         "mx",
         "dmarc_strengthen",
         "bimi"

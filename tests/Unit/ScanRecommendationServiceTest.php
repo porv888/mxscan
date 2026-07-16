@@ -77,7 +77,7 @@ class ScanRecommendationServiceTest extends TestCase
         $this->assertSame('Locked until SPF and DKIM alignment are verified.', $hardening['explanation']);
 
         $keys = array_column($recommendations, 'key');
-        $this->assertLessThan(array_search('certificates', $keys, true), array_search('mtasts', $keys, true));
+        $this->assertLessThan(array_search('mtasts', $keys, true), array_search('certificates', $keys, true));
         $this->assertLessThan(
             array_search('dmarc_strengthen', $keys, true),
             array_search('mtasts', $keys, true),

@@ -10,6 +10,31 @@ use Illuminate\Support\Collection;
 class ScanTrendService
 {
     /**
+     * Sparse scan history for dashboard charts.
+     *
+     * @return array{labels: list<string>, scores: list<int>, statuses: list<string>, scan_ids: list<string>, count: int}
+     */
+    public function getDomainScanHistory(int $domainId, int $days = 30): array
+    {
+        $scans = Scan::query()
+            ->where('domain_id', $domainId)
+            ->where('status', 'finished')
+            ->whereNotNull('score')
+            ->where('finished_at', '>=', now()->subDays($days - 1)->startOfDay())
+            ->orderBy('finished_at')
+            ->orderBy('created_at')
+            ->get(['id', 'finished_at', 'created_at', 'score', 'status']);
+
+        return [
+            'labels' => $scans->map(fn (Scan $scan) => ($scan->finished_at ?? $scan->created_at)->format('M j, H:i'))->values()->all(),
+            'scores' => $scans->pluck('score')->map(fn ($score) => (int) $score)->values()->all(),
+            'statuses' => $scans->pluck('status')->values()->all(),
+            'scan_ids' => $scans->pluck('id')->map(fn ($id) => (string) $id)->values()->all(),
+            'count' => $scans->count(),
+        ];
+    }
+
+    /**
      * Average Email Security Score per day for all user domains.
      *
      * @return array{labels: list<string>, scores: list<int|null>, incident_counts: list<int>}

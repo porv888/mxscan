@@ -1,9 +1,10 @@
 @props([
     'severity' => 'medium',
+    'label' => null,
 ])
 
 @php
-    $label = ucfirst($severity);
+    $displayLabel = $label ?? ucfirst($severity);
     $variant = match ($severity) {
         'critical' => 'danger',
         'high' => 'warning',
@@ -13,4 +14,4 @@
     };
 @endphp
 
-<x-report.status-pill :variant="$variant" :label="$label" {{ $attributes }} />
+<x-report.status-pill :variant="$variant" :label="$displayLabel" {{ $attributes }} />
