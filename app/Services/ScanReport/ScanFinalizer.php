@@ -305,7 +305,7 @@ class ScanFinalizer
         if ($existing) {
             $existing->update([
                 'occurred_at' => now(),
-                'severity' => (string) ($alert['severity'] ?? 'warning'),
+                'severity' => $this->mapBimiIncidentSeverity((string) ($alert['severity'] ?? 'warning')),
                 'message' => (string) ($alert['message'] ?? 'BIMI configuration change'),
             ]);
 
@@ -315,7 +315,7 @@ class ScanFinalizer
         $incident = Incident::create([
             'domain_id' => $domain->id,
             'type' => 'bimi_change',
-            'severity' => (string) ($alert['severity'] ?? 'warning'),
+            'severity' => $this->mapBimiIncidentSeverity((string) ($alert['severity'] ?? 'warning')),
             'message' => (string) ($alert['message'] ?? 'BIMI configuration change'),
             'meta' => [
                 'dedup_key' => $dedupKey,
@@ -341,5 +341,12 @@ class ScanFinalizer
             ->whereNull('resolved_at')
             ->where('meta->dedup_key', $dedupKey)
             ->update(['resolved_at' => now()]);
+    }
+
+    private function mapBimiIncidentSeverity(string $alertSeverity): string
+    {
+        return in_array($alertSeverity, ['critical', 'high', 'incident'], true)
+            ? 'incident'
+            : 'warning';
     }
 }

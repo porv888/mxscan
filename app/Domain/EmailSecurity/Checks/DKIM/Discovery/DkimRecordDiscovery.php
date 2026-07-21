@@ -45,7 +45,7 @@ final class DkimRecordDiscovery
                 rawRecord: $dkimRecords[0],
                 ttl: $query->ttl,
                 resolverDiagnostics: $diagnostics,
-                cnameTarget: $query->cnamePath !== [] ? end($query->cnamePath) : null,
+                cnameTarget: $this->resolveCnameTarget($query),
             );
         }
 
@@ -57,7 +57,7 @@ final class DkimRecordDiscovery
                 rawRecord: $dkimRecords[0],
                 ttl: $query->ttl,
                 resolverDiagnostics: $diagnostics,
-                cnameTarget: $query->cnamePath !== [] ? end($query->cnamePath) : null,
+                cnameTarget: $this->resolveCnameTarget($query),
             );
         }
 
@@ -68,5 +68,19 @@ final class DkimRecordDiscovery
                 : $query->outcome,
             resolverDiagnostics: $diagnostics,
         );
+    }
+
+    private function resolveCnameTarget(DkimDnsQueryResult $query): ?string
+    {
+        if ($query->cnameTarget !== null && $query->cnameTarget !== '') {
+            return $query->cnameTarget;
+        }
+
+        $path = $query->cnamePath;
+        if ($path === []) {
+            return null;
+        }
+
+        return $path[array_key_last($path)];
     }
 }
